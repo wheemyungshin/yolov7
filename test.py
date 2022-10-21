@@ -140,7 +140,7 @@ def test(data,
 
             # Predictions
             predn = pred.clone()
-            scale_coords(img[si].shape[1:], predn[:, :4], shapes[si][0], shapes[si][1])  # native-space pred
+            scale_coords(img.shape[1:], predn[:, :4], shapes[0], shapes[1])  # native-space pred
 
             # Append to text file
             if save_txt:

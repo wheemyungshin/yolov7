@@ -357,7 +357,12 @@ class TracedModel(nn.Module):
         self.detect_layer = self.model.model[-1]
         self.model.traced = True
         
-        rand_example = torch.rand(1, 3, img_size, img_size)
+        if isinstance(img_size, int):
+            rand_example = torch.rand(1, 3, img_size, img_size)
+        elif isinstance(img_size, tuple):
+            rand_example = torch.rand(1, 3, img_size[0], img_size[1])
+        else:
+            assert isinstance(img_size, int) or isinstance(img_size, tuple)  
         
         traced_script_module = torch.jit.trace(self.model, rand_example, strict=False)
         #traced_script_module = torch.jit.script(self.model)
