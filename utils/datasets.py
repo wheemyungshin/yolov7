@@ -63,7 +63,7 @@ def exif_size(img):
 
 
 def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=False, cache=False, pad=0.0, rect=False,
-                      rank=-1, world_size=1, workers=8, image_weights=False, quad=False, prefix=''):
+                      rank=-1, world_size=1, workers=8, image_weights=False, quad=False, prefix='', valid_idx=None):
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache
     with torch_distributed_zero_first(rank):
         dataset = LoadImagesAndLabels(path, imgsz, batch_size,
@@ -75,7 +75,8 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
                                       stride=int(stride),
                                       pad=pad,
                                       image_weights=image_weights,
-                                      prefix=prefix)
+                                      prefix=prefix,
+                                      valid_idx=valid_idx)
 
     batch_size = min(batch_size, len(dataset))
     nw = min([os.cpu_count() // world_size, batch_size if batch_size > 1 else 0, workers])  # number of workers
@@ -87,7 +88,7 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
                         num_workers=nw,
                         sampler=sampler,
                         pin_memory=True,
-                        collate_fn=LoadImagesAndLabels.collate_fn4 if quad else LoadImagesAndLabels.collate_fn)
+                        collate_fn=LoadImagesAndLabels.collate_fn4 if quad else LoadImagesAndLabels.collate_fn,)
     return dataloader, dataset
 
 
@@ -352,7 +353,7 @@ def img2label_paths(img_paths):
 
 class LoadImagesAndLabels(Dataset):  # for training/testing
     def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, image_weights=False,
-                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix=''):
+                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix='',valid_idx=None):
         self.img_size = img_size
         self.augment = augment
         self.hyp = hyp
@@ -410,11 +411,50 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         self.shapes = np.array(shapes, dtype=np.float64)
         self.img_files = list(cache.keys())  # update
         self.label_files = img2label_paths(cache.keys())  # update
+
+        '''
+        print(len(self.labels))
+        print(len(self.shapes))
+        print(len(self.img_files))
+        print(len(self.label_files))
+
+        print("X:", x)
+        #print("x0: ", x[:, 0])
+        #print("x0: ", type(x[:, 0]))
+        print("shapes:", self.shapes[i])
+        print("img_files: ", self.img_files[i])
+        print("label_files: ", self.label_files[i])
+        '''
+        if valid_idx is not None:
+            print("Filtering non-valid samples")
+            new_labels = []
+            new_segments = []
+            for i, x in enumerate(self.labels):
+                new_x = []
+                new_seg = []
+                seg = self.segments[i]
+                for j, x_line in enumerate(x):
+                    for id_index, v_id in enumerate(valid_idx):
+                        if x_line[0] == v_id:
+                            new_x.append(np.array([id_index, x_line[1], x_line[2], x_line[3], x_line[4]]))
+                            new_seg.append(seg[j])
+                
+                new_labels.append(np.array(new_x))
+                new_segments.append(np.array(new_seg))
+            self.labels = new_labels
+            self.segments = new_segments
+            
+            self.label_files = [self.label_files[i] for i, x in enumerate(self.labels) if len(x)>0]
+            self.img_files = [self.img_files[i] for i, x in enumerate(self.labels) if len(x)>0]
+            self.shapes = np.array([self.shapes[i] for i, x in enumerate(self.labels) if len(x)>0])
+            self.segments = tuple([self.segments[i] for i, x in enumerate(self.labels) if len(x)>0])
+            self.labels = [self.labels[i] for i, x in enumerate(self.labels) if len(x)>0]
+        
         if single_cls:
             for x in self.labels:
                 x[:, 0] = 0
 
-        n = len(shapes)  # number of images
+        n = len(self.shapes)  # number of images
         bi = np.floor(np.arange(n) / batch_size).astype(np.int)  # batch index
         nb = bi[-1] + 1  # number of batches
         self.batch = bi  # batch index of image
