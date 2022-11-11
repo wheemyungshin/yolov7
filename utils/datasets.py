@@ -19,6 +19,7 @@ import torch.nn.functional as F
 from PIL import Image, ExifTags
 from torch.utils.data import Dataset
 from tqdm import tqdm
+import json
 
 import pickle
 from copy import deepcopy
@@ -29,6 +30,8 @@ from torchvision.ops import roi_pool, roi_align, ps_roi_pool, ps_roi_align
 from utils.general import check_requirements, xyxy2xywh, xywh2xyxy, xywhn2xyxy, xyn2xy, segment2box, segments2boxes, \
     resample_segments, clean_str
 from utils.torch_utils import torch_distributed_zero_first
+
+from collections import defaultdict
 
 # Parameters
 help_url = 'https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
@@ -63,7 +66,7 @@ def exif_size(img):
 
 
 def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=False, cache=False, pad=0.0, rect=False,
-                      rank=-1, world_size=1, workers=8, image_weights=False, quad=False, prefix='', valid_idx=None):
+                      rank=-1, world_size=1, workers=8, image_weights=False, quad=False, prefix='', valid_idx=None, pose_data=None):
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache
     with torch_distributed_zero_first(rank):
         dataset = LoadImagesAndLabels(path, imgsz, batch_size,
@@ -76,7 +79,8 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
                                       pad=pad,
                                       image_weights=image_weights,
                                       prefix=prefix,
-                                      valid_idx=valid_idx)
+                                      valid_idx=valid_idx,
+                                      pose_data=pose_data)
 
     batch_size = min(batch_size, len(dataset))
     nw = min([os.cpu_count() // world_size, batch_size if batch_size > 1 else 0, workers])  # number of workers
@@ -353,7 +357,7 @@ def img2label_paths(img_paths):
 
 class LoadImagesAndLabels(Dataset):  # for training/testing
     def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, image_weights=False,
-                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix='',valid_idx=None):
+                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix='',valid_idx=None, pose_data=None):
         self.img_size = img_size
         self.augment = augment
         self.hyp = hyp
@@ -362,8 +366,33 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         self.mosaic = self.augment and not self.rect  # load 4 images at a time into a mosaic (only during training)
         self.mosaic_border = [-img_size // 2, -img_size // 2]
         self.stride = stride
-        self.path = path        
+        self.path = path      
         #self.albumentations = Albumentations() if augment else None
+        
+        if pose_data is not None:
+            self.pose_data = defaultdict(list)
+            with open(pose_data[0], 'r') as f:
+                train_pose = json.load(f)['annotations']
+                for p_dict in train_pose:
+                    p_list = np.zeros([17,2])
+                    for i in range(17):
+                        if p_dict['keypoints'][i*3+2]!= 0:
+                            p_list[i,0] = p_dict['keypoints'][i*3]
+                            p_list[i,1] = p_dict['keypoints'][i*3+1]
+                    if np.sum(p_list) > 0:
+                        self.pose_data[p_dict['image_id']].append(p_list)
+            with open(pose_data[1], 'r') as f:
+                test_pose = json.load(f)['annotations']
+                for p_dict in test_pose:
+                    p_list = np.zeros([17,2])
+                    for i in range(17):
+                        if p_dict['keypoints'][i*3+2]!= 0:
+                            p_list[i,0] = p_dict['keypoints'][i*3]
+                            p_list[i,1] = p_dict['keypoints'][i*3+1]
+                    if np.sum(p_list) > 0:
+                        self.pose_data[p_dict['image_id']].append(p_list)
+        else:
+            self.pose_data = None
 
         try:
             f = []  # image files
@@ -437,7 +466,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     for id_index, v_id in enumerate(valid_idx):
                         if x_line[0] == v_id:
                             new_x.append(np.array([id_index, x_line[1], x_line[2], x_line[3], x_line[4]]))
-                            new_seg.append(seg[j])
+                            if len(seg) > j:
+                                new_seg.append(seg[j])
                 
                 new_labels.append(np.array(new_x))
                 new_segments.append(np.array(new_seg))
@@ -449,7 +479,27 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             self.shapes = np.array([self.shapes[i] for i, x in enumerate(self.labels) if len(x)>0])
             self.segments = tuple([self.segments[i] for i, x in enumerate(self.labels) if len(x)>0])
             self.labels = [self.labels[i] for i, x in enumerate(self.labels) if len(x)>0]
-        
+
+        if self.pose_data is not None:
+            new_pose_data = []
+            for i, img_file in enumerate(self.img_files):
+                image_id = int(img_file.split("/")[-1].split(".")[0])
+                rescale_pose_data = []
+                for p_data in self.pose_data[image_id]:
+                    rescale_pose_data.append(p_data / self.shapes[i])
+                new_pose_data.append(rescale_pose_data)
+            self.pose_data = new_pose_data
+
+        '''
+        for i in range(len(self.labels)):
+            print("Labels: ", self.labels[i])
+            print("img_files: ", self.img_files[i])
+            print("label_files: ", self.label_files[i])
+            print("pose_data: ", self.pose_data[i])
+            print("shapes: ", self.shapes[i])
+        #exit()
+        '''
+
         if single_cls:
             for x in self.labels:
                 x[:, 0] = 0
@@ -661,6 +711,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         labels_out = torch.zeros((nL, 6))
         if nL:
             labels_out[:, 1:] = torch.from_numpy(labels)
+        
 
         # Convert
         img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
@@ -748,7 +799,7 @@ def hist_equalize(img, clahe=True, bgr=False):
 def load_mosaic(self, index):
     # loads images in a 4-mosaic
 
-    labels4, segments4 = [], []
+    labels4, segments4, pose_data4 = [], [], []
     s = self.img_size
     yc, xc = [int(random.uniform(-x, 2 * s + x)) for x in self.mosaic_border]  # mosaic center x, y
     indices = [index] + random.choices(self.indices, k=3)  # 3 additional image indices
@@ -771,17 +822,23 @@ def load_mosaic(self, index):
             x1a, y1a, x2a, y2a = xc, yc, min(xc + w, s * 2), min(s * 2, yc + h)
             x1b, y1b, x2b, y2b = 0, 0, min(w, x2a - x1a), min(y2a - y1a, h)
 
-        img4[y1a:y2a, x1a:x2a] = img[y1b:y2b, x1b:x2b]  # img4[ymin:ymax, xmin:xmax]
+        img4[y1a:y2a, x1a:x2a] = img[y1b:y2b, x1b:x2b] # img4[ymin:ymax, xmin:xmax]
         padw = x1a - x1b
         padh = y1a - y1b
 
         # Labels
         labels, segments = self.labels[index].copy(), self.segments[index].copy()
+        if self.pose_data is not None:
+            pose_data = self.pose_data[index].copy()
         if labels.size:
             labels[:, 1:] = xywhn2xyxy(labels[:, 1:], w, h, padw, padh)  # normalized xywh to pixel xyxy format
             segments = [xyn2xy(x, w, h, padw, padh) for x in segments]
+            if self.pose_data is not None:
+                pose_data = [xyn2xy(x, w, h, padw, padh) for x in pose_data]
         labels4.append(labels)
         segments4.extend(segments)
+        if self.pose_data is not None:
+            pose_data4.extend(pose_data)
 
     # Concat/clip labels
     labels4 = np.concatenate(labels4, 0)
@@ -789,6 +846,10 @@ def load_mosaic(self, index):
         np.clip(x, 0, 2 * s, out=x)  # clip when using random_perspective()
     # img4, labels4 = replicate(img4, labels4)  # replicate
 
+    if self.pose_data is not None:
+        for x in pose_data4:
+            np.clip(x, 0, 2 * s, out=x)
+            
     # Augment
     #img4, labels4, segments4 = remove_background(img4, labels4, segments4)
     #sample_segments(img4, labels4, segments4, probability=self.hyp['copy_paste'])
@@ -800,7 +861,6 @@ def load_mosaic(self, index):
                                        shear=self.hyp['shear'],
                                        perspective=self.hyp['perspective'],
                                        border=self.mosaic_border)  # border to remove
-
     return img4, labels4
 
 
