@@ -393,8 +393,8 @@ def train(hyp, opt, device, tb_writer=None):
             # Forward
             with amp.autocast(enabled=cuda):
                 with torch.no_grad():
-                    _, sup_features = sup_model(imgs, get_feature=True)  # forward
-                pred, kd_loss, kd_loss_items = model(imgs, t_info=sup_features, get_feature=True)  # forward          
+                    sup_pred, sup_features = sup_model(imgs, get_feature=True)  # forward
+                pred, kd_loss, kd_loss_items = model(imgs, t_info=(sup_pred, sup_features), get_feature=True)  # forward          
 
                 if 'loss_ota' not in hyp or hyp['loss_ota'] == 1:
                     loss, loss_items = compute_loss_ota(pred, targets.to(device), imgs)  # loss scaled by batch_size

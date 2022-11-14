@@ -9,7 +9,7 @@ import torch
 from models.common import *
 from models.experimental import *
 from utils.autoanchor import check_anchor_order
-from utils.general import make_divisible, check_file, set_logging
+from utils.general import bbox_iou, make_divisible, check_file, set_logging
 from utils.torch_utils import time_synchronized, fuse_conv_and_bn, model_info, scale_img, initialize_weights, \
     select_device, copy_attr
 from utils.loss import SigmoidBin
@@ -692,7 +692,7 @@ class Model(nn.Module):
             nn.Linear(256, 256),
             nn.Linear(512, 512),
             nn.Linear(1024, 1024),
-            nn.Linear(1024, 1024)
+            nn.Linear(1536, 1536)
         ])
 
         self.spatial_wise_adaptation = nn.ModuleList([
@@ -706,37 +706,21 @@ class Model(nn.Module):
             nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(1024, 1536, kernel_size=1, stride=1, padding=0)
         ])
 
         self.adaptation_layers = nn.ModuleList([
             nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(1024, 1536, kernel_size=1, stride=1, padding=0)
         ])
 
-        self.student_non_local = nn.ModuleList(
-            [
-                NonLocalBlockND(in_channels=128, inter_channels=64, downsample_stride=8),
-                NonLocalBlockND(in_channels=256, inter_channels=64, downsample_stride=4),
-                NonLocalBlockND(in_channels=512),
-                NonLocalBlockND(in_channels=1024)
-            ]
-        )
-        self.teacher_non_local = nn.ModuleList(
-            [
-                NonLocalBlockND(in_channels=256, inter_channels=64, downsample_stride=8),
-                NonLocalBlockND(in_channels=512, inter_channels=64, downsample_stride=4),
-                NonLocalBlockND(in_channels=1024),
-                NonLocalBlockND(in_channels=1024)
-            ]
-        )
         self.non_local_adaptation = nn.ModuleList([
             nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(1024, 1536, kernel_size=1, stride=1, padding=0)
         ])
 
     def forward(self, x, augment=False, profile=False, get_feature=False, t_info=None):
@@ -758,16 +742,21 @@ class Model(nn.Module):
             return torch.cat(y, 1), None  # augmented inference, train
         else:
             if t_info is not None:
-                t_feats = t_info
+                t_pred = t_info[0]
+                t_feats = t_info[1]
                 pred, features = self.forward_once(x, profile, get_feature=True)
                 device = features[0].device
+
+                #for _i in range(len(features)):
+                #    print("S: ", features[_i].size())
+                #    print("T: ", t_feats[_i].size())
 
                 t = 0.1
                 kd_feat_loss, kd_channel_loss, kd_spatial_loss = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
                 total_masks = []
 
                 # feature distillation by using attention mask
-                for _i in range(len(t_feats)):
+                for _i in range(len(features)):
                     adap_s_feature = self.adaptation_layers[_i](features[_i])
 
                     # Global part
@@ -806,9 +795,10 @@ class Model(nn.Module):
                                                                 adap_s_feature.size(3))
                     kd_spatial_loss += torch.dist(t_spatial_pool, self.spatial_wise_adaptation[_i](s_spatial_pool)) * 4e-3 * 6
 
-                kd_feat_loss *= ((img_size[0] / 640) * (img_size[1] / 640) / len(t_info))
-                kd_channel_loss *= (1 / len(t_info))
-                kd_spatial_loss *= ((img_size[0] / 640) * (img_size[1] / 640) / len(t_info))
+                kd_feat_loss *= ((img_size[0] / 640) * (img_size[1] / 640) / len(features))
+                kd_channel_loss *= (1 / len(features))
+                kd_spatial_loss *= ((img_size[0] / 640) * (img_size[1] / 640) / len(features))
+
                 kd_loss = kd_feat_loss + kd_channel_loss + kd_spatial_loss
                 kd_loss_items = torch.cat((kd_feat_loss, kd_channel_loss, kd_spatial_loss)).detach()
 
