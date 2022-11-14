@@ -40,8 +40,8 @@ logger = logging.getLogger(__name__)
 
 def train(hyp, opt, device, tb_writer=None):
     logger.info(colorstr('hyperparameters: ') + ', '.join(f'{k}={v}' for k, v in hyp.items()))
-    save_dir, epochs, batch_size, total_batch_size, weights, rank, freeze = \
-        Path(opt.save_dir), opt.epochs, opt.batch_size, opt.total_batch_size, opt.weights, opt.global_rank, opt.freeze
+    save_dir, epochs, batch_size, total_batch_size, weights, sup_weights, rank, freeze = \
+        Path(opt.save_dir), opt.epochs, opt.batch_size, opt.total_batch_size, opt.weights, opt.sup_weights, opt.global_rank, opt.freeze
 
     # Directories
     wdir = save_dir / 'weights'
@@ -93,6 +93,21 @@ def train(hyp, opt, device, tb_writer=None):
         logger.info('Transferred %g/%g items from %s' % (len(state_dict), len(model.state_dict()), weights))  # report
     else:
         model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+
+    # Teacher Model
+    sup_pretrained = sup_weights.endswith('.pt')
+    if sup_pretrained:
+        with torch_distributed_zero_first(rank):
+            attempt_download(sup_weights)  # download if not found locally
+        sup_ckpt = torch.load(sup_weights, map_location=device)  # load checkpoint
+        sup_model = Model(opt.sup_cfg or sup_ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+        exclude = ['anchor'] if (opt.sup_cfg or hyp.get('anchors')) and not opt.resume else []  # exclude keys
+        sup_state_dict = sup_ckpt['model'].float().state_dict()  # to FP32
+        sup_state_dict = intersect_dicts(sup_state_dict, sup_model.state_dict(), exclude=exclude)  # intersect
+        sup_model.load_state_dict(sup_state_dict, strict=False)  # load
+    else:
+        assert "Wrong teacher model file"
+    
     with torch_distributed_zero_first(rank):
         check_dataset(data_dict)  # check
     train_path = data_dict['train']
@@ -235,10 +250,12 @@ def train(hyp, opt, device, tb_writer=None):
     # DP mode
     if cuda and rank == -1 and torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
+        sup_model = torch.nn.DataParallel(sup_model)
 
     # SyncBatchNorm
     if opt.sync_bn and cuda and rank != -1:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model).to(device)
+        sup_model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(sup_model).to(device)
         logger.info('Using SyncBatchNorm()')
 
     valid_idx = data_dict.get('valid_idx', None)
@@ -276,10 +293,14 @@ def train(hyp, opt, device, tb_writer=None):
             if not opt.noautoanchor:
                 check_anchors(dataset, model=model, thr=hyp['anchor_t'], imgsz=imgsz)
             model.half().float()  # pre-reduce anchor precision
+            sup_model.half().float()  # pre-reduce anchor precision
 
     # DDP mode
     if cuda and rank != -1:
         model = DDP(model, device_ids=[opt.local_rank], output_device=opt.local_rank,
+                    # nn.MultiheadAttention incompatibility with DDP https://github.com/pytorch/pytorch/issues/26698
+                    find_unused_parameters=True)
+        sup_model = DDP(sup_model, device_ids=[opt.local_rank], output_device=opt.local_rank,
                     # nn.MultiheadAttention incompatibility with DDP https://github.com/pytorch/pytorch/issues/26698
                     find_unused_parameters=True)
 
@@ -293,6 +314,13 @@ def train(hyp, opt, device, tb_writer=None):
     model.gr = 1.0  # iou loss ratio (obj_loss = 1.0 or iou)
     model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device) * nc  # attach class weights
     model.names = names
+
+    # Model parameters
+    sup_model.nc = nc  # attach number of classes to model
+    sup_model.hyp = hyp  # attach hyperparameters to model
+    sup_model.gr = 1.0  # iou loss ratio (obj_loss = 1.0 or iou)
+    sup_model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device) * nc  # attach class weights
+    sup_model.names = names
 
     # Start training
     t0 = time.time()
@@ -311,6 +339,7 @@ def train(hyp, opt, device, tb_writer=None):
     torch.save(model, wdir / 'init.pt')
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         model.train()
+        sup_model.train()
 
         # Update image weights (optional)
         if opt.image_weights:
@@ -330,11 +359,11 @@ def train(hyp, opt, device, tb_writer=None):
         # b = int(random.uniform(0.25 * imgsz, 0.75 * imgsz + gs) // gs * gs)
         # dataset.mosaic_border = [b - imgsz, -b]  # height, width borders
 
-        mloss = torch.zeros(4, device=device)  # mean losses
+        mloss = torch.zeros(7, device=device)  # mean losses
         if rank != -1:
             dataloader.sampler.set_epoch(epoch)
         pbar = enumerate(dataloader)
-        logger.info(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'box', 'obj', 'cls', 'total', 'labels', 'img_size'))
+        logger.info(('\n' + '%10s' * 11) % ('Epoch', 'gpu_mem', 'box', 'obj', 'cls', 'total', 'kdf', 'kdc', 'kds', 'labels', 'img_size'))
         if rank in [-1, 0]:
             pbar = tqdm(pbar, total=nb)  # progress bar
         optimizer.zero_grad()
@@ -363,17 +392,23 @@ def train(hyp, opt, device, tb_writer=None):
 
             # Forward
             with amp.autocast(enabled=cuda):
-                pred = model(imgs)  # forward
-                
+                with torch.no_grad():
+                    _, sup_features = sup_model(imgs, get_feature=True)  # forward
+                pred, kd_loss, kd_loss_items = model(imgs, t_info=sup_features, get_feature=True)  # forward          
+
                 if 'loss_ota' not in hyp or hyp['loss_ota'] == 1:
                     loss, loss_items = compute_loss_ota(pred, targets.to(device), imgs)  # loss scaled by batch_size
                 else:
                     loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
+
+                loss = loss + kd_loss
+                loss_items = torch.cat((loss_items, kd_loss_items))
+
                 if rank != -1:
                     loss *= opt.world_size  # gradient averaged between devices in DDP mode
                 if opt.quad:
                     loss *= 4.
-  
+
             # Backward
             scaler.scale(loss).backward()
 
@@ -389,7 +424,7 @@ def train(hyp, opt, device, tb_writer=None):
             if rank in [-1, 0]:
                 mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
                 mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
-                s = ('%10s' * 2 + '%10.4g' * 6) % (
+                s = ('%10s' * 2 + '%10.4g' * 9) % (
                     '%g/%g' % (epoch, epochs - 1), mem, *mloss, targets.shape[0], imgs.shape[-1])
                 pbar.set_description(s)
 
@@ -533,7 +568,9 @@ def train(hyp, opt, device, tb_writer=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', type=str, default='yolo7.pt', help='initial weights path')
+    parser.add_argument('--sup-weights', type=str, default='yolo7.pt', help='teacher weights path')
     parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
+    parser.add_argument('--sup-cfg', type=str, default='', help='model.yaml path for teacher')
     parser.add_argument('--data', type=str, default='data/coco.yaml', help='data.yaml path')
     parser.add_argument('--hyp', type=str, default='data/hyp.scratch.p5.yaml', help='hyperparameters path')
     parser.add_argument('--epochs', type=int, default=300)
@@ -590,8 +627,8 @@ if __name__ == '__main__':
         logger.info('Resuming training from %s' % ckpt)
     else:
         # opt.hyp = opt.hyp or ('hyp.finetune.yaml' if opt.weights else 'hyp.scratch.yaml')
-        opt.data, opt.cfg, opt.hyp = check_file(opt.data), check_file(opt.cfg), check_file(opt.hyp)  # check files
-        assert len(opt.cfg) or len(opt.weights), 'either --cfg or --weights must be specified'
+        opt.data, opt.cfg, opt.hyp, opt.sup_cfg = check_file(opt.data), check_file(opt.cfg), check_file(opt.hyp), check_file(opt.sup_cfg)  # check files
+        assert len(opt.cfg) or len(opt.weights) or len(opt.sup_cfg), 'either --cfg or --weights must be specified'
         opt.img_size.extend([opt.img_size[-1]] * (2 - len(opt.img_size)))  # extend to 2 sizes (train, test)
         opt.name = 'evolve' if opt.evolve else opt.name
         opt.save_dir = increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok | opt.evolve)  # increment run

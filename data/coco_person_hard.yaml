@@ -7,8 +7,8 @@ download: bash ./scripts/get_coco.sh
 train: ./coco/train2017.txt  # 118287 images
 val: ./coco/val2017.txt  # 5000 images
 test: ./coco/test-dev2017.txt  # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
-pose_train: /coco/annotations/person_keypoints_train2017.json
-pose_val: /coco/annotations/person_keypoints_val2017.json
+#pose_train: /coco/annotations/person_keypoints_train2017.json
+#pose_val: /coco/annotations/person_keypoints_val2017.json
 
 # number of classes
 nc: 1
