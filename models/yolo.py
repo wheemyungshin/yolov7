@@ -19,6 +19,116 @@ try:
 except ImportError:
     thop = None
 
+def masked_softmax(x, dim=2):
+    weight = torch.sum((x != 0), dim=dim, keepdim=True)
+    x[x == 0] = -float("inf")
+    return torch.softmax(x, dim=dim) * weight
+
+def dist2(tensor_a, tensor_b, attention_mask=None, channel_attention_mask=None):
+    diff = (tensor_a - tensor_b) ** 2
+    if attention_mask is not None:
+        diff = diff * attention_mask
+    if channel_attention_mask is not None:
+        diff = diff * channel_attention_mask
+    diff = torch.sum(diff) ** 0.5
+    return diff
+
+def pairwise_dist2(tensor_a, tensor_b, attention_mask=None, channel_attention_mask=None):
+    patch_num = tensor_a.shape[3]
+
+    diff = (tensor_a - tensor_b) ** 2
+    diff = diff * attention_mask
+    diff = diff * channel_attention_mask
+    
+    diff = diff.permute(3, 0, 1, 2)
+    diff = diff.view(patch_num,-1)
+    diff = torch.sum(torch.sum(diff, dim=1) ** 0.5)
+
+    return diff
+
+class NonLocalBlockND(nn.Module):
+    def __init__(self, in_channels, inter_channels=None, dimension=2, sub_sample=True, bn_layer=True, downsample_stride=2):
+        super(NonLocalBlockND, self).__init__()
+
+        assert dimension in [1, 2, 3]
+
+        self.dimension = dimension
+        self.sub_sample = sub_sample
+
+        self.in_channels = in_channels
+        self.inter_channels = inter_channels
+
+        if self.inter_channels is None:
+            self.inter_channels = in_channels // 2
+            if self.inter_channels == 0:
+                self.inter_channels = 1
+
+        if dimension == 3:
+            conv_nd = nn.Conv3d
+            max_pool_layer = nn.MaxPool3d(kernel_size=(1, 2, 2))
+            bn = nn.BatchNorm3d
+        elif dimension == 2:
+            conv_nd = nn.Conv2d
+            max_pool_layer = nn.MaxPool2d(kernel_size=(downsample_stride, downsample_stride))
+            bn = nn.BatchNorm2d
+        else:
+            conv_nd = nn.Conv1d
+            max_pool_layer = nn.MaxPool1d(kernel_size=(2))
+            bn = nn.BatchNorm1d
+
+        self.g = conv_nd(in_channels=self.in_channels, out_channels=self.inter_channels,
+                         kernel_size=1, stride=1, padding=0)
+
+        if bn_layer:
+            self.W = nn.Sequential(
+                conv_nd(in_channels=self.inter_channels, out_channels=self.in_channels,
+                        kernel_size=1, stride=1, padding=0),
+                bn(self.in_channels)
+            )
+            nn.init.constant_(self.W[1].weight, 0)
+            nn.init.constant_(self.W[1].bias, 0)
+        else:
+            self.W = conv_nd(in_channels=self.inter_channels, out_channels=self.in_channels,
+                             kernel_size=1, stride=1, padding=0)
+            nn.init.constant_(self.W.weight, 0)
+            nn.init.constant_(self.W.bias, 0)
+
+        self.theta = conv_nd(in_channels=self.in_channels, out_channels=self.inter_channels,
+                             kernel_size=1, stride=1, padding=0)
+
+        self.phi = conv_nd(in_channels=self.in_channels, out_channels=self.inter_channels,
+                           kernel_size=1, stride=1, padding=0)
+
+        if sub_sample:
+            self.g = nn.Sequential(self.g, max_pool_layer)
+            self.phi = nn.Sequential(self.phi, max_pool_layer)
+
+    def forward(self, x):
+        '''
+        :param x: (b, c, t, h, w)
+        :
+        :
+        '''
+
+        batch_size = x.size(0)  #   2 , 256 , 300 , 300
+
+        g_x = self.g(x).view(batch_size, self.inter_channels, -1)   #   2 , 128 , 150 x 150
+        g_x = g_x.permute(0, 2, 1)                                  #   2 , 150 x 150, 128
+
+        theta_x = self.theta(x).view(batch_size, self.inter_channels, -1)   #   2 , 128 , 300 x 300
+        theta_x = theta_x.permute(0, 2, 1)                                  #   2 , 300 x 300 , 128
+        phi_x = self.phi(x).view(batch_size, self.inter_channels, -1)       #   2 , 128 , 150 x 150
+        f = torch.matmul(theta_x, phi_x)    #   2 , 300x300 , 150x150
+        N = f.size(-1)  #   150 x 150
+        f_div_C = f / N #   2 , 300x300, 150x150
+
+        y = torch.matmul(f_div_C, g_x)  #   2, 300x300, 128
+        y = y.permute(0, 2, 1).contiguous() #   2, 128, 300x300
+        y = y.view(batch_size, self.inter_channels, *x.size()[2:])
+        W_y = self.W(y)
+        z = W_y + x
+
+        return z
 
 class Detect(nn.Module):
     stride = None  # strides computed during build
@@ -577,10 +687,61 @@ class Model(nn.Module):
         initialize_weights(self)
         self.info()
         logger.info('')
+        
+        self.channel_wise_adaptation = nn.ModuleList([
+            nn.Linear(256, 256),
+            nn.Linear(512, 512),
+            nn.Linear(1024, 1024),
+            nn.Linear(1024, 1024)
+        ])
 
-    def forward(self, x, augment=False, profile=False):
+        self.spatial_wise_adaptation = nn.ModuleList([
+            nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1)
+        ])
+
+        self.c_adaptation_layers = nn.ModuleList([
+            nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
+        ])
+
+        self.adaptation_layers = nn.ModuleList([
+            nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
+        ])
+
+        self.student_non_local = nn.ModuleList(
+            [
+                NonLocalBlockND(in_channels=128, inter_channels=64, downsample_stride=8),
+                NonLocalBlockND(in_channels=256, inter_channels=64, downsample_stride=4),
+                NonLocalBlockND(in_channels=512),
+                NonLocalBlockND(in_channels=1024)
+            ]
+        )
+        self.teacher_non_local = nn.ModuleList(
+            [
+                NonLocalBlockND(in_channels=256, inter_channels=64, downsample_stride=8),
+                NonLocalBlockND(in_channels=512, inter_channels=64, downsample_stride=4),
+                NonLocalBlockND(in_channels=1024),
+                NonLocalBlockND(in_channels=1024)
+            ]
+        )
+        self.non_local_adaptation = nn.ModuleList([
+            nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
+        ])
+
+    def forward(self, x, augment=False, profile=False, get_feature=False, t_info=None):
+        img_size = x.shape[-2:]  # height, width
         if augment:
-            img_size = x.shape[-2:]  # height, width
             s = [1, 0.83, 0.67]  # scales
             f = [None, 3, None]  # flips (2-ud, 3-lr)
             y = []  # outputs
@@ -596,10 +757,69 @@ class Model(nn.Module):
                 y.append(yi)
             return torch.cat(y, 1), None  # augmented inference, train
         else:
-            return self.forward_once(x, profile)  # single-scale inference, train
+            if t_info is not None:
+                t_feats = t_info
+                pred, features = self.forward_once(x, profile, get_feature=True)
+                device = features[0].device
 
-    def forward_once(self, x, profile=False):
+                t = 0.1
+                kd_feat_loss, kd_channel_loss, kd_spatial_loss = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
+                total_masks = []
+
+                # feature distillation by using attention mask
+                for _i in range(len(t_feats)):
+                    adap_s_feature = self.adaptation_layers[_i](features[_i])
+
+                    # Global part
+                    t_global_attention_mask = self.generate_attention_mask(t_feats[_i], features[0].size(0), t, type="spatial")
+                    s_global_attention_mask = self.generate_attention_mask(adap_s_feature, features[0].size(0), t, type="spatial")
+                    c_t_global_attention_mask = self.generate_attention_mask(t_feats[_i], features[0].size(0), t, type="channel")
+                    c_s_global_attention_mask = self.generate_attention_mask(adap_s_feature, features[0].size(0), t, type="channel")
+                    
+                    sum_global_attention_mask = (t_global_attention_mask + s_global_attention_mask) / 2
+                    sum_global_attention_mask = sum_global_attention_mask.detach()
+
+                    # Local part
+                    local_kd_feat_loss, local_kd_channel_loss, local_mask = self.calculate_local_attention_loss(t_feats[_i], adap_s_feature, _i)
+                    
+                    total_mask = (local_mask + sum_global_attention_mask) / 2
+                    total_masks.append(total_mask)
+
+                    # making final feature mask using in feature distillation
+                    c_sum_global_attention_mask = (c_t_global_attention_mask + c_s_global_attention_mask) / 2
+                    c_sum_global_attention_mask = c_sum_global_attention_mask.detach()
+
+                    # feature loss by using teacher feature and student feature
+                    global_kd_feat_loss = dist2(t_feats[_i], adap_s_feature, attention_mask=sum_global_attention_mask,
+                                        channel_attention_mask=c_sum_global_attention_mask) * 7e-5 * 6
+
+                    kd_feat_loss += (local_kd_feat_loss + global_kd_feat_loss) / 2
+
+                    # original torch L2 loss & using this for channel kd loss
+                    kd_channel_loss += torch.dist(torch.mean(t_feats[_i], [2, 3]),
+                                                self.channel_wise_adaptation[_i](torch.mean(adap_s_feature, [2, 3]))) * 4e-3 * 3 + local_kd_channel_loss
+                    
+                    # spatial kd loss
+                    t_spatial_pool = torch.mean(t_feats[_i], [1]).view(t_feats[_i].size(0), 1, t_feats[_i].size(2),
+                                                                    t_feats[_i].size(3))
+                    s_spatial_pool = torch.mean(adap_s_feature, [1]).view(adap_s_feature.size(0), 1, adap_s_feature.size(2),
+                                                                adap_s_feature.size(3))
+                    kd_spatial_loss += torch.dist(t_spatial_pool, self.spatial_wise_adaptation[_i](s_spatial_pool)) * 4e-3 * 6
+
+                kd_feat_loss *= ((img_size[0] / 640) * (img_size[1] / 640) / len(t_info))
+                kd_channel_loss *= (1 / len(t_info))
+                kd_spatial_loss *= ((img_size[0] / 640) * (img_size[1] / 640) / len(t_info))
+                kd_loss = kd_feat_loss + kd_channel_loss + kd_spatial_loss
+                kd_loss_items = torch.cat((kd_feat_loss, kd_channel_loss, kd_spatial_loss)).detach()
+
+                return pred, kd_loss, kd_loss_items
+            else:
+                return self.forward_once(x, profile, get_feature)  # single-scale inference, train
+
+    def forward_once(self, x, profile=False, get_feature=False):
         y, dt = [], []  # outputs
+        if get_feature:
+            features = []
         for m in self.model:
             if m.f != -1:  # if not from previous layer
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
@@ -625,10 +845,16 @@ class Model(nn.Module):
             x = m(x)  # run
             
             y.append(x if m.i in self.save else None)  # save output
+            if isinstance(m, Concat) and len(m.f)==4 and get_feature and len(features) < 4:
+                features.append(x)
 
         if profile:
             print('%.1fms total' % sum(dt))
-        return x
+            
+        if get_feature:
+            return x, features
+        else:
+            return x
 
     def _initialize_biases(self, cf=None):  # initialize biases into Detect(), cf is class frequency
         # https://arxiv.org/abs/1708.02002 section 3.3
@@ -731,6 +957,114 @@ class Model(nn.Module):
 
     def info(self, verbose=False, img_size=640):  # print model information
         model_info(self, verbose, img_size)
+
+    def generate_attention_mask(self, feature, batch_size, t, type="spatial"):
+        if type=="spatial":
+            attention_mask = torch.mean(torch.abs(feature), [1], keepdim=True) # B x 1 x H x W
+        elif type=="channel":
+            attention_mask = torch.mean(torch.abs(feature), [2, 3], keepdim=True) # B x 256 x 1 x 1
+        else:
+            raise NameError
+        
+        size = attention_mask.size()  
+        attention_mask = attention_mask.view(batch_size, -1)
+
+        if type=="spatial":
+            attention_mask = torch.softmax(attention_mask / t, dim=1) * size[2] * size[3]
+        elif type=="channel":
+            attention_mask = torch.softmax(attention_mask / t, dim=1) * feature.size(1)
+        else:
+            raise NameError
+        
+        attention_mask = attention_mask.view(size)
+        return attention_mask
+
+    def calculate_local_attention_loss(self, t_feature, s_feature, index, patch_size=7):
+        t = 0.1
+        batch_size = t_feature.size(0)
+        f_size = t_feature.size()
+        
+        if f_size[2] % patch_size == 0:
+            height_num = f_size[2] // patch_size
+            height_pad = 0
+        else:
+            height_num = (f_size[2] // patch_size) + 1
+            height_pad = patch_size - (f_size[2] % patch_size)
+            
+        if f_size[3] % patch_size == 0:
+            width_num = f_size[3] // patch_size
+            width_pad = 0
+        else:
+            width_num = (f_size[3] // patch_size) + 1
+            width_pad = patch_size - (f_size[3] % patch_size)
+        
+        if height_num == 0:
+            height_num = 1
+        if width_num == 0:
+            width_num = 1
+        patch_num = height_num * width_num
+
+        # channel attention mask (B x 256 x 1 x patch_num)
+        t_channel_attention_mask = F.avg_pool2d(t_feature.abs(), (patch_size, patch_size), stride=patch_size, ceil_mode=True)     # B x 256 x H/7 x W/7
+        t_channel_attention_mask = t_channel_attention_mask.view(batch_size, f_size[1], patch_num)                          # B x 256 x patch_num
+        t_channel_attention_mask = torch.softmax(t_channel_attention_mask / t, dim=1) * f_size[1]
+        t_channel_attention_mask = t_channel_attention_mask.unsqueeze(2)
+        
+        s_channel_attention_mask = F.avg_pool2d(s_feature.abs(), (patch_size, patch_size), stride=patch_size, ceil_mode=True)
+        s_channel_attention_mask = s_channel_attention_mask.view(batch_size, f_size[1], patch_num)
+        s_channel_attention_mask = torch.softmax(s_channel_attention_mask / t, dim=1) * f_size[1]
+        s_channel_attention_mask = s_channel_attention_mask.unsqueeze(2)
+        
+        # get channel attention for channel distillation loss
+        t_channel_attention = F.avg_pool2d(t_feature, (patch_size, patch_size), stride=patch_size, ceil_mode=True)
+        s_channel_attention = F.avg_pool2d(s_feature, (patch_size, patch_size), stride=patch_size, ceil_mode=True)
+        
+        # PAD INPUT (value = 0.0)
+        t_feature = F.pad(t_feature, (0, width_pad, 0, height_pad))
+        s_feature = F.pad(s_feature, (0, width_pad, 0, height_pad))
+        
+        # divide input by patches (B x 256 x (7x7) x patch_num)
+        t_feature = F.unfold(t_feature, patch_size, stride=patch_size)
+        t_feature = t_feature.view(batch_size, f_size[1], patch_size*patch_size, patch_num)
+                
+        s_feature = F.unfold(s_feature, patch_size, stride=patch_size)
+        s_feature = s_feature.view(batch_size, f_size[1], patch_size*patch_size, patch_num)
+        
+        # spatial attention mask (B x 1 x (7x7) x patch_num)
+        t_spatial_attention_mask = torch.mean(torch.abs(t_feature), [1], keepdim=True)
+        t_spatial_attention_mask = masked_softmax(t_spatial_attention_mask / t, dim=2)
+        
+        s_spatial_attention_mask = torch.mean(torch.abs(s_feature), [1], keepdim=True)
+        s_spatial_attention_mask = masked_softmax(s_spatial_attention_mask / t, dim=2)
+        
+        sum_spatial_attention_mask = (t_spatial_attention_mask + s_spatial_attention_mask) / 2
+        sum_spatial_attention_mask = sum_spatial_attention_mask.detach()
+                
+        sum_channel_attention_mask = (t_channel_attention_mask + s_channel_attention_mask) / 2
+        sum_channel_attention_mask = sum_channel_attention_mask.detach()
+        
+        # kd feature loss
+        kd_feat_loss = pairwise_dist2(t_feature, s_feature, attention_mask=sum_spatial_attention_mask, 
+                                            channel_attention_mask=sum_channel_attention_mask) * 7e-5 * 6
+        
+        # attention loss (after experiment have to fix)     B x C x h/7 x w/7
+        t_channel_attention = t_channel_attention.view(batch_size, f_size[1], patch_num).permute(2,0,1)
+        s_channel_attention = s_channel_attention.view(batch_size, f_size[1], patch_num).permute(2,0,1)
+        
+        # B x patch_num x 256
+        s_channel_attention = self.channel_wise_adaptation[index](s_channel_attention)
+        
+        t_channel_attention = t_channel_attention.view(patch_num, -1)
+        s_channel_attention = s_channel_attention.view(patch_num, -1)
+        
+        pdist = nn.PairwiseDistance(p=2)
+        kd_channel_loss = torch.mean(pdist(t_channel_attention, s_channel_attention)) * 4e-3 * 3
+
+        # Origin size
+        sum_spatial_attention_mask = F.fold(sum_spatial_attention_mask.squeeze(1), (f_size[2] + height_pad, f_size[3] + width_pad), patch_size, stride=patch_size)
+        sum_spatial_attention_mask = sum_spatial_attention_mask[:,:,:f_size[2], :f_size[3]].detach()
+        
+        return kd_feat_loss, kd_channel_loss, sum_spatial_attention_mask
 
 
 def parse_model(d, ch):  # model_dict, input_channels(3)
