@@ -692,7 +692,7 @@ class Model(nn.Module):
             nn.Linear(256, 256),
             nn.Linear(512, 512),
             nn.Linear(1024, 1024),
-            nn.Linear(1536, 1536)
+            nn.Linear(1024, 1024)
         ])
 
         self.spatial_wise_adaptation = nn.ModuleList([
@@ -706,21 +706,21 @@ class Model(nn.Module):
             nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(1024, 1536, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
         ])
 
         self.adaptation_layers = nn.ModuleList([
             nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(1024, 1536, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
         ])
 
         self.non_local_adaptation = nn.ModuleList([
             nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(1024, 1536, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
         ])
 
     def forward(self, x, augment=False, profile=False, get_feature=False, t_info=None):
