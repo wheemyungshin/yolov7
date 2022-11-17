@@ -780,24 +780,24 @@ class Model(nn.Module):
 
                     # feature loss by using teacher feature and student feature
                     global_kd_feat_loss = dist2(t_feats[_i], adap_s_feature, attention_mask=sum_global_attention_mask,
-                                        channel_attention_mask=c_sum_global_attention_mask) * 7e-5 * 6
+                                        channel_attention_mask=c_sum_global_attention_mask)
 
                     kd_feat_loss += (local_kd_feat_loss + global_kd_feat_loss) / 2
 
                     # original torch L2 loss & using this for channel kd loss
                     kd_channel_loss += torch.dist(torch.mean(t_feats[_i], [2, 3]),
-                                                self.channel_wise_adaptation[_i](torch.mean(adap_s_feature, [2, 3]))) * 4e-3 * 3 + local_kd_channel_loss
+                                                self.channel_wise_adaptation[_i](torch.mean(adap_s_feature, [2, 3]))) + local_kd_channel_loss
                     
                     # spatial kd loss
                     t_spatial_pool = torch.mean(t_feats[_i], [1]).view(t_feats[_i].size(0), 1, t_feats[_i].size(2),
                                                                     t_feats[_i].size(3))
                     s_spatial_pool = torch.mean(adap_s_feature, [1]).view(adap_s_feature.size(0), 1, adap_s_feature.size(2),
                                                                 adap_s_feature.size(3))
-                    kd_spatial_loss += torch.dist(t_spatial_pool, self.spatial_wise_adaptation[_i](s_spatial_pool)) * 4e-3 * 6
+                    kd_spatial_loss += torch.dist(t_spatial_pool, self.spatial_wise_adaptation[_i](s_spatial_pool))
 
-                kd_feat_loss *= ((img_size[0] / 640) * (img_size[1] / 640) / len(features))
-                kd_channel_loss *= (1 / len(features))
-                kd_spatial_loss *= ((img_size[0] / 640) * (img_size[1] / 640) / len(features))
+                kd_feat_loss *= ((img_size[0] / 640) * (img_size[1] / 640) / len(features)) * 7e-7 * 6
+                kd_channel_loss *= (1 / len(features)) * 1e-5 * 3
+                kd_spatial_loss *= ((img_size[0] / 640) * (img_size[1] / 640) / len(features)) * 3e-3 * 6
 
                 kd_loss = kd_feat_loss + kd_channel_loss + kd_spatial_loss
                 kd_loss_items = torch.cat((kd_feat_loss, kd_channel_loss, kd_spatial_loss)).detach()
@@ -1035,7 +1035,7 @@ class Model(nn.Module):
         
         # kd feature loss
         kd_feat_loss = pairwise_dist2(t_feature, s_feature, attention_mask=sum_spatial_attention_mask, 
-                                            channel_attention_mask=sum_channel_attention_mask) * 7e-5 * 6
+                                            channel_attention_mask=sum_channel_attention_mask)
         
         # attention loss (after experiment have to fix)     B x C x h/7 x w/7
         t_channel_attention = t_channel_attention.view(batch_size, f_size[1], patch_num).permute(2,0,1)
@@ -1048,8 +1048,7 @@ class Model(nn.Module):
         s_channel_attention = s_channel_attention.view(patch_num, -1)
         
         pdist = nn.PairwiseDistance(p=2)
-        kd_channel_loss = torch.mean(pdist(t_channel_attention, s_channel_attention)) * 4e-3 * 3
-
+        kd_channel_loss = torch.mean(pdist(t_channel_attention, s_channel_attention))
         # Origin size
         sum_spatial_attention_mask = F.fold(sum_spatial_attention_mask.squeeze(1), (f_size[2] + height_pad, f_size[3] + width_pad), patch_size, stride=patch_size)
         sum_spatial_attention_mask = sum_spatial_attention_mask[:,:,:f_size[2], :f_size[3]].detach()
