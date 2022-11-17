@@ -118,7 +118,7 @@ if __name__ == '__main__':
         import onnx
 
         print('\nStarting ONNX export with onnx %s...' % onnx.__version__)
-        f = opt.weights.replace('.pt', '.onnx')  # filename
+        f = opt.weights.replace('.pt', '_{}_{}.onnx'.format(opt.img_size[1], opt.img_size[0]))  # filename
         model.eval()
         output_names = ['classes', 'boxes'] if y is None else ['output']
         dynamic_axes = None
