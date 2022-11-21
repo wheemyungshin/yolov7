@@ -689,12 +689,12 @@ class Model(nn.Module):
         logger.info('')
         
         self.channel_wise_adaptation = nn.ModuleList([
-            nn.Linear(256, 256),
-            nn.Linear(512, 512),
-            nn.Linear(1024, 1024),
+            nn.Linear(128, 256),
+            nn.Linear(256, 512),
+            nn.Linear(512, 1024),
             nn.Linear(1024, 1024)
         ])
-
+        
         self.spatial_wise_adaptation = nn.ModuleList([
             nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1),
             nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1),
@@ -702,7 +702,7 @@ class Model(nn.Module):
             nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1)
         ])
 
-        self.c_adaptation_layers = nn.ModuleList([
+        self.mask_adaptation_layers = nn.ModuleList([
             nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0),
@@ -722,6 +722,24 @@ class Model(nn.Module):
             nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
         ])
+
+        self.normal_init(self.channel_wise_adaptation, 0, 0.0001, True)
+        self.normal_init(self.spatial_wise_adaptation, 0, 0.0001, True)
+        self.normal_init(self.mask_adaptation_layers, 0, 0.0001, True)
+        self.normal_init(self.adaptation_layers, 0, 0.0001, True)
+        self.normal_init(self.non_local_adaptation, 0, 0.0001, True)
+    
+    def normal_init(self, layers, mean, stddev, truncated=False):
+        """
+        weight initalizer: truncated normal and random normal.
+        """
+        for m in layers:
+            # x is a parameter
+            if truncated:
+                m.weight.data.normal_().fmod_(2).mul_(stddev).add_(mean)  # not a perfect approximation
+            else:
+                m.weight.data.normal_(mean, stddev)
+                m.bias.data.zero_()
 
     def forward(self, x, augment=False, profile=False, get_feature=False, t_info=None):
         img_size = x.shape[-2:]  # height, width
@@ -757,48 +775,45 @@ class Model(nn.Module):
 
                 # feature distillation by using attention mask
                 for _i in range(len(features)):
-                    adap_s_feature = self.adaptation_layers[_i](features[_i])
-
                     # Global part
                     t_global_attention_mask = self.generate_attention_mask(t_feats[_i], features[0].size(0), t, type="spatial")
-                    s_global_attention_mask = self.generate_attention_mask(adap_s_feature, features[0].size(0), t, type="spatial")
+                    s_global_attention_mask = self.generate_attention_mask(features[_i], features[0].size(0), t, type="spatial")
                     c_t_global_attention_mask = self.generate_attention_mask(t_feats[_i], features[0].size(0), t, type="channel")
-                    c_s_global_attention_mask = self.generate_attention_mask(adap_s_feature, features[0].size(0), t, type="channel")
+                    c_s_global_attention_mask = self.generate_attention_mask(features[_i], features[0].size(0), t, type="channel")
                     
                     sum_global_attention_mask = (t_global_attention_mask + s_global_attention_mask) / 2
                     sum_global_attention_mask = sum_global_attention_mask.detach()
 
                     # Local part
-                    local_kd_feat_loss, local_kd_channel_loss, local_mask = self.calculate_local_attention_loss(t_feats[_i], adap_s_feature, _i)
+                    local_kd_feat_loss, local_kd_channel_loss, local_mask = self.calculate_local_attention_loss(t_feats[_i], features[_i], _i)
                     
                     total_mask = (local_mask + sum_global_attention_mask) / 2
                     total_masks.append(total_mask)
 
                     # making final feature mask using in feature distillation
-                    c_sum_global_attention_mask = (c_t_global_attention_mask + c_s_global_attention_mask) / 2
+                    c_sum_global_attention_mask = (c_t_global_attention_mask + self.mask_adaptation_layers[_i](c_s_global_attention_mask)) / 2
                     c_sum_global_attention_mask = c_sum_global_attention_mask.detach()
 
                     # feature loss by using teacher feature and student feature
-                    global_kd_feat_loss = dist2(t_feats[_i], adap_s_feature, attention_mask=sum_global_attention_mask,
+                    global_kd_feat_loss = dist2(t_feats[_i], self.adaptation_layers[_i](features[_i]), attention_mask=sum_global_attention_mask,
                                         channel_attention_mask=c_sum_global_attention_mask)
 
                     kd_feat_loss += (local_kd_feat_loss + global_kd_feat_loss) / 2
 
                     # original torch L2 loss & using this for channel kd loss
                     kd_channel_loss += torch.dist(torch.mean(t_feats[_i], [2, 3]),
-                                                self.channel_wise_adaptation[_i](torch.mean(adap_s_feature, [2, 3]))) + local_kd_channel_loss
+                                                self.channel_wise_adaptation[_i](torch.mean(features[_i], [2, 3]))) + local_kd_channel_loss
                     
                     # spatial kd loss
                     t_spatial_pool = torch.mean(t_feats[_i], [1]).view(t_feats[_i].size(0), 1, t_feats[_i].size(2),
                                                                     t_feats[_i].size(3))
-                    s_spatial_pool = torch.mean(adap_s_feature, [1]).view(adap_s_feature.size(0), 1, adap_s_feature.size(2),
-                                                                adap_s_feature.size(3))
+                    s_spatial_pool = torch.mean(features[_i], [1]).view(t_feats[_i].size(0), 1, t_feats[_i].size(2),
+                                                                t_feats[_i].size(3))
                     kd_spatial_loss += torch.dist(t_spatial_pool, self.spatial_wise_adaptation[_i](s_spatial_pool))
 
-                kd_feat_loss *= ((img_size[0] / 640) * (img_size[1] / 640) / len(features)) * 7e-7 * 6
-                kd_channel_loss *= (1 / len(features)) * 1e-5 * 3
-                kd_spatial_loss *= ((img_size[0] / 640) * (img_size[1] / 640) / len(features)) * 3e-3 * 6
-
+                kd_feat_loss *= ((img_size[0] / 640) * (img_size[1] / 640) / len(features)) * 7e-6 * 6
+                kd_channel_loss *= (1 / len(features)) * 4e-4 * 3
+                kd_spatial_loss *= ((img_size[0] / 640) * (img_size[1] / 640) / len(features)) * 4e-3 * 6
                 kd_loss = kd_feat_loss + kd_channel_loss + kd_spatial_loss
                 kd_loss_items = torch.cat((kd_feat_loss, kd_channel_loss, kd_spatial_loss)).detach()
 
@@ -973,6 +988,8 @@ class Model(nn.Module):
         t = 0.1
         batch_size = t_feature.size(0)
         f_size = t_feature.size()
+        s_f_size = s_feature.size()
+        adap_s_feature = self.adaptation_layers[index](s_feature)
         
         if f_size[2] % patch_size == 0:
             height_num = f_size[2] // patch_size
@@ -1001,8 +1018,8 @@ class Model(nn.Module):
         t_channel_attention_mask = t_channel_attention_mask.unsqueeze(2)
         
         s_channel_attention_mask = F.avg_pool2d(s_feature.abs(), (patch_size, patch_size), stride=patch_size, ceil_mode=True)
-        s_channel_attention_mask = s_channel_attention_mask.view(batch_size, f_size[1], patch_num)
-        s_channel_attention_mask = torch.softmax(s_channel_attention_mask / t, dim=1) * f_size[1]
+        s_channel_attention_mask = s_channel_attention_mask.view(batch_size, s_f_size[1], patch_num)
+        s_channel_attention_mask = torch.softmax(s_channel_attention_mask / t, dim=1) * s_f_size[1]
         s_channel_attention_mask = s_channel_attention_mask.unsqueeze(2)
         
         # get channel attention for channel distillation loss
@@ -1012,13 +1029,17 @@ class Model(nn.Module):
         # PAD INPUT (value = 0.0)
         t_feature = F.pad(t_feature, (0, width_pad, 0, height_pad))
         s_feature = F.pad(s_feature, (0, width_pad, 0, height_pad))
+        adap_s_feature = F.pad(adap_s_feature, (0, width_pad, 0, height_pad))
         
         # divide input by patches (B x 256 x (7x7) x patch_num)
         t_feature = F.unfold(t_feature, patch_size, stride=patch_size)
         t_feature = t_feature.view(batch_size, f_size[1], patch_size*patch_size, patch_num)
                 
         s_feature = F.unfold(s_feature, patch_size, stride=patch_size)
-        s_feature = s_feature.view(batch_size, f_size[1], patch_size*patch_size, patch_num)
+        s_feature = s_feature.view(batch_size, s_f_size[1], patch_size*patch_size, patch_num)
+
+        adap_s_feature = F.unfold(adap_s_feature, patch_size, stride=patch_size)
+        adap_s_feature = adap_s_feature.view(batch_size, f_size[1], patch_size*patch_size, patch_num)
         
         # spatial attention mask (B x 1 x (7x7) x patch_num)
         t_spatial_attention_mask = torch.mean(torch.abs(t_feature), [1], keepdim=True)
@@ -1030,16 +1051,16 @@ class Model(nn.Module):
         sum_spatial_attention_mask = (t_spatial_attention_mask + s_spatial_attention_mask) / 2
         sum_spatial_attention_mask = sum_spatial_attention_mask.detach()
                 
-        sum_channel_attention_mask = (t_channel_attention_mask + s_channel_attention_mask) / 2
+        sum_channel_attention_mask = (t_channel_attention_mask + self.mask_adaptation_layers[index](s_channel_attention_mask)) / 2
         sum_channel_attention_mask = sum_channel_attention_mask.detach()
         
         # kd feature loss
-        kd_feat_loss = pairwise_dist2(t_feature, s_feature, attention_mask=sum_spatial_attention_mask, 
+        kd_feat_loss = pairwise_dist2(t_feature, adap_s_feature, attention_mask=sum_spatial_attention_mask, 
                                             channel_attention_mask=sum_channel_attention_mask)
         
         # attention loss (after experiment have to fix)     B x C x h/7 x w/7
         t_channel_attention = t_channel_attention.view(batch_size, f_size[1], patch_num).permute(2,0,1)
-        s_channel_attention = s_channel_attention.view(batch_size, f_size[1], patch_num).permute(2,0,1)
+        s_channel_attention = s_channel_attention.view(batch_size, s_f_size[1], patch_num).permute(2,0,1)
         
         # B x patch_num x 256
         s_channel_attention = self.channel_wise_adaptation[index](s_channel_attention)
