@@ -703,10 +703,10 @@ class Model(nn.Module):
         ])
 
         self.mask_adaptation_layers = nn.ModuleList([
-            nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
+            nn.Sequential(nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),nn.ReLU()),
+            nn.Sequential(nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),nn.ReLU()),
+            nn.Sequential(nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0),nn.ReLU()),
+            nn.Sequential(nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0),nn.ReLU())
         ])
 
         self.adaptation_layers = nn.ModuleList([
@@ -725,9 +725,10 @@ class Model(nn.Module):
 
         self.normal_init(self.channel_wise_adaptation, 0, 0.0001, True)
         self.normal_init(self.spatial_wise_adaptation, 0, 0.0001, True)
-        self.normal_init(self.mask_adaptation_layers, 0, 0.0001, True)
         self.normal_init(self.adaptation_layers, 0, 0.0001, True)
         self.normal_init(self.non_local_adaptation, 0, 0.0001, True)
+        for mask_adaptation_layer in self.mask_adaptation_layers:
+            self.normal_init([mask_adaptation_layer[0]], 0, 0.0001, True)
     
     def normal_init(self, layers, mean, stddev, truncated=False):
         """
@@ -787,9 +788,6 @@ class Model(nn.Module):
                     # Local part
                     local_kd_feat_loss, local_kd_channel_loss, local_mask = self.calculate_local_attention_loss(t_feats[_i], features[_i], _i)
                     
-                    total_mask = (local_mask + sum_global_attention_mask) / 2
-                    total_masks.append(total_mask)
-
                     # making final feature mask using in feature distillation
                     c_sum_global_attention_mask = (c_t_global_attention_mask + self.mask_adaptation_layers[_i](c_s_global_attention_mask)) / 2
                     c_sum_global_attention_mask = c_sum_global_attention_mask.detach()
