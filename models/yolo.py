@@ -689,6 +689,42 @@ class Model(nn.Module):
         logger.info('')
         
         self.channel_wise_adaptation = nn.ModuleList([
+            nn.Linear(256, 256),
+            nn.Linear(512, 512),
+            nn.Linear(1024, 1024),
+            nn.Linear(1024, 1024)
+        ])
+        
+        self.spatial_wise_adaptation = nn.ModuleList([
+            nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1)
+        ])
+
+        self.mask_adaptation_layers = nn.ModuleList([
+            nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(512, 512, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
+        ])
+
+        self.adaptation_layers = nn.ModuleList([
+            nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(512, 512, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
+        ])
+        
+        self.non_local_adaptation = nn.ModuleList([
+            nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(512, 512, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
+        ])
+
+        '''
+        self.channel_wise_adaptation = nn.ModuleList([
             nn.Linear(128, 256),
             nn.Linear(256, 512),
             nn.Linear(512, 1024),
@@ -722,6 +758,7 @@ class Model(nn.Module):
             nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
         ])
+        '''
 
         self.normal_init(self.channel_wise_adaptation, 0, 0.0001, True)
         self.normal_init(self.spatial_wise_adaptation, 0, 0.0001, True)
@@ -791,7 +828,8 @@ class Model(nn.Module):
                     total_masks.append(total_mask)
 
                     # making final feature mask using in feature distillation
-                    c_sum_global_attention_mask = (c_t_global_attention_mask + self.mask_adaptation_layers[_i](c_s_global_attention_mask)) / 2
+                    #c_sum_global_attention_mask = (c_t_global_attention_mask + self.mask_adaptation_layers[_i](c_s_global_attention_mask)) / 2
+                    c_sum_global_attention_mask = (c_t_global_attention_mask + c_s_global_attention_mask) / 2
                     c_sum_global_attention_mask = c_sum_global_attention_mask.detach()
 
                     # feature loss by using teacher feature and student feature
@@ -811,8 +849,8 @@ class Model(nn.Module):
                                                                 t_feats[_i].size(3))
                     kd_spatial_loss += torch.dist(t_spatial_pool, self.spatial_wise_adaptation[_i](s_spatial_pool))
 
-                kd_feat_loss *= ((img_size[0] / 640) * (img_size[1] / 640) / len(features)) * 7e-6 * 6
-                kd_channel_loss *= (1 / len(features)) * 4e-4 * 3
+                kd_feat_loss *= ((img_size[0] / 640) * (img_size[1] / 640) / len(features)) * 2e-5 * 6
+                kd_channel_loss *= (1 / len(features)) * 1e-3 * 3
                 kd_spatial_loss *= ((img_size[0] / 640) * (img_size[1] / 640) / len(features)) * 4e-3 * 6
                 kd_loss = kd_feat_loss + kd_channel_loss + kd_spatial_loss
                 kd_loss_items = torch.cat((kd_feat_loss, kd_channel_loss, kd_spatial_loss)).detach()
@@ -1051,7 +1089,8 @@ class Model(nn.Module):
         sum_spatial_attention_mask = (t_spatial_attention_mask + s_spatial_attention_mask) / 2
         sum_spatial_attention_mask = sum_spatial_attention_mask.detach()
                 
-        sum_channel_attention_mask = (t_channel_attention_mask + self.mask_adaptation_layers[index](s_channel_attention_mask)) / 2
+        #sum_channel_attention_mask = (t_channel_attention_mask + self.mask_adaptation_layers[index](s_channel_attention_mask)) / 2
+        sum_channel_attention_mask = (t_channel_attention_mask + s_channel_attention_mask) / 2
         sum_channel_attention_mask = sum_channel_attention_mask.detach()
         
         # kd feature loss
