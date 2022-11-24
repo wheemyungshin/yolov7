@@ -9,10 +9,9 @@ val: ./coco/val2017.txt  # 5000 images
 test: ./coco/test-dev2017.txt  # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
 
 # number of classes
-nc: 13
+nc: 4
 
 # class names
-names: [ 'person', 'bicycle', 'car', 'motorcycle', 'bus', 'truck', 'traffic light',
-         'bench', 'dog', 'chair', 'couch', 'bed', 'teddy bear']
+names: [ 'person', 'car', 'chair', 'couch']
 
-valid_idx: [0, 1, 2, 3, 4, 7, 9, 13, 16, 56, 57, 59, 77]
+valid_idx: [0, 2, 56, 57]
