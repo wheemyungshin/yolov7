@@ -689,6 +689,16 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         break
                 labels = pastein(img, labels, sample_labels, sample_images, sample_masks)
 
+            if random.random() < hyp.get('dark_paste_in', 0):
+                sample_images, sample_masks = [], []
+                while len(sample_images) < 30:
+                    _, sample_images_, sample_masks_ = load_samples(self, random.randint(0, len(self.labels) - 1))
+                    sample_images += sample_images_
+                    sample_masks += sample_masks_
+                    if len(sample_images) == 0:
+                        break
+                labels = dark_pastein(img, labels, sample_images, sample_masks)
+
         nL = len(labels)  # number of labels
         if nL:
             labels[:, 1:5] = xyxy2xywh(labels[:, 1:5])  # convert xyxy to xywh
@@ -784,6 +794,11 @@ def augment_hsv(img, hgain=0.5, sgain=0.5, vgain=0.5):
     img_hsv = cv2.merge((cv2.LUT(hue, lut_hue), cv2.LUT(sat, lut_sat), cv2.LUT(val, lut_val))).astype(dtype)
     cv2.cvtColor(img_hsv, cv2.COLOR_HSV2BGR, dst=img)  # no return needed
 
+def adjust_gamma(img, gamma=1.0):
+    dtype = img.dtype  # uint8 
+    invGamma = 1.0 / gamma
+    table = np.array([((i / 255.0) ** invGamma) * 255 for i in np.arange(0, 256)]).astype(dtype)
+    return cv2.LUT(img, table)
 
 def hist_equalize(img, clahe=True, bgr=False):
     # Equalize histogram on BGR image 'img' with img.shape(n,m,3) and range 0-255
@@ -853,6 +868,12 @@ def load_mosaic(self, index):
     # Augment
     #img4, labels4, segments4 = remove_background(img4, labels4, segments4)
     #sample_segments(img4, labels4, segments4, probability=self.hyp['copy_paste'])
+    #print("Labels4: ", labels4[0].shape)
+    #print("Segments4: ", segments4[0].shape)
+    #print("Pose4: ", pose_data4[0].shape)
+    #print("Labels4: ", len(labels4))
+    #print("Segments4: ", len(segments4))
+    #print("Pose4: ", len(pose_data4))
     img4, labels4, segments4 = copy_paste(img4, labels4, segments4, probability=self.hyp['copy_paste'])
     img4, labels4 = random_perspective(img4, labels4, segments4,
                                        degrees=self.hyp['degrees'],
@@ -1311,6 +1332,50 @@ def pastein(image, labels, sample_labels, sample_images, sample_masks):
                     else:
                         labels = np.array([[sample_labels[sel_ind], *box]])
                               
+                    image[ymin:ymin+r_h, xmin:xmin+r_w] = temp_crop
+
+    return labels
+
+
+def dark_pastein(image, labels, sample_images, sample_masks):
+    # Applies image cutout augmentation https://arxiv.org/abs/1708.04552
+    h, w = image.shape[:2]
+
+    # create random masks
+    scales = [0.75] * 2 + [0.5] * 4 + [0.25] * 4 + [0.125] * 4 + [0.0625] * 6  # image size fraction
+    for s in scales:
+        if random.random() < 0.2:
+            continue
+        mask_h = random.randint(1, int(h * s))
+        mask_w = random.randint(1, int(w * s))
+
+        # box
+        xmin = max(0, random.randint(0, w) - mask_w // 2)
+        ymin = max(0, random.randint(0, h) - mask_h // 2)
+        xmax = min(w, xmin + mask_w)
+        ymax = min(h, ymin + mask_h)   
+        
+        box = np.array([xmin, ymin, xmax, ymax], dtype=np.float32)
+        if len(labels):
+            ioa = bbox_ioa(box, labels[:, 1:5])  # intersection over area     
+        else:
+            ioa = np.zeros(1)
+        
+        if (ioa < 0.30).all() and len(sample_images) and (xmax > xmin+20) and (ymax > ymin+20):  # allow 30% obscuration of existing labels
+            sel_ind = random.randint(0, len(sample_images)-1)
+            hs, ws, cs = sample_images[sel_ind].shape
+            r_scale = min((ymax-ymin)/hs, (xmax-xmin)/ws)
+            r_w = int(ws*r_scale)
+            r_h = int(hs*r_scale)
+            
+            if (r_w > 10) and (r_h > 10):
+                r_mask = cv2.resize(sample_masks[sel_ind], (r_w, r_h))
+                r_image = cv2.resize(sample_images[sel_ind], (r_w, r_h))
+                r_image = adjust_gamma(r_image, 0.05)
+                temp_crop = image[ymin:ymin+r_h, xmin:xmin+r_w]
+                m_ind = r_mask > 0
+                if m_ind.astype(np.int).sum() > 60:
+                    temp_crop[m_ind] = r_image[m_ind]                              
                     image[ymin:ymin+r_h, xmin:xmin+r_w] = temp_crop
 
     return labels
