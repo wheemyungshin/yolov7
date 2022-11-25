@@ -50,7 +50,7 @@ if __name__ == '__main__':
             if opt.save_type == 'segments':
                 line = [str(category_id)]
                 for seg in segmentation:    
-                    line.append(str(seg))                        
+                    line.append(str(round(seg/300, 6)))                        
                 labels_f.write(' '.join(line))
                 labels_f.close()
 
