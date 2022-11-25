@@ -23,7 +23,8 @@
 !setup.cfg
 !cfg/yolov3*.cfg
 NCAP_videos_selected/
-weights
+weights/
+converted_synthetic_cups/
 
 storage.googleapis.com
 runs/*

@@ -1,0 +1,11 @@
+train: ./converted_synthetic_cups/train.txt  # 13500 images
+val: ./converted_synthetic_cups/val.txt  # 1500 images
+test: ./converted_synthetic_cups/val.txt  # 1500 images
+
+# number of classes
+nc: 1
+
+# class names
+names: ['cup']
+
+valid_idx: [1]
