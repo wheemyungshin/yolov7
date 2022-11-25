@@ -289,6 +289,14 @@ def xyn2xy(x, w=640, h=640, padw=0, padh=0):
     y[:, 1] = h * x[:, 1] + padh  # top left y
     return y
 
+def pose_xyn2xy(x, w=640, h=640, padw=0, padh=0):
+    # Convert normalized segments into pixel segments, shape (n,2)
+    y = np.copy(x)
+    valid_idx = (np.min(x, axis=1)>0)
+    y[valid_idx, 0] = w * x[valid_idx, 0] + padw  # top left x
+    y[valid_idx, 1] = h * x[valid_idx, 1] + padh  # top left y
+    return y
+
 def segment2box(segment, width=640, height=640):
     # Convert 1 segment label to 1 box label, applying inside-image constraint, i.e. (xy1, xy2, ...) to (xyxy)
     x, y = segment.T  # segment xy
