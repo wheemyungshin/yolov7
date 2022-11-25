@@ -468,9 +468,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             self.segments = tuple([self.segments[i] for i, x in enumerate(self.labels) if len(x)>0])
             self.labels = [self.labels[i] for i, x in enumerate(self.labels) if len(x)>0]
 
-
         if self.pose_data is not None:
-            print(len(self.pose_data))
             new_pose_data = []
             for i, img_file in enumerate(self.img_files):
                 image_id = int(img_file.split("/")[-1].split(".")[0])
@@ -480,12 +478,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         rescale_pose_data.append(p_data / self.shapes[i])
                 new_pose_data.append(rescale_pose_data)
             self.pose_data = new_pose_data
-
-            print(len(self.labels))
-            print(len(self.img_files))
-            print(len(self.label_files))
-            print(len(self.pose_data))
-            print(len(self.shapes))
 
         if single_cls:
             for x in self.labels:
@@ -861,9 +853,9 @@ def load_mosaic(self, index):
     # Augment
     #img4, labels4, segments4 = remove_background(img4, labels4, segments4)
     #sample_segments(img4, labels4, segments4, probability=self.hyp['copy_paste'])
-    #print("Labels4: ", labels4.shape)#(n,5)
-    #print("Segments4: ", segments4.shape)#(n,s,2)
-    #print("Pose4: ", pose_data4.shape)#(n,17,2)
+    #("Labels4: ", labels4.shape)#(n,5)
+    #("Segments4: ", segments4.shape)#(n,s,2)
+    #("Pose4: ", pose_data4.shape)#(n,17,2)
 
     img4, labels4, segments4 = copy_paste(img4, labels4, segments4, probability=self.hyp['copy_paste'])
     img4, labels4, poses4 = random_perspective(img4, labels4, segments4, poses4,
@@ -1071,7 +1063,6 @@ def sample_segments(img, labels, segments, probability=0.5):
             l, s = labels[j], segments[j]
             box = l[1].astype(int).clip(0,w-1), l[2].astype(int).clip(0,h-1), l[3].astype(int).clip(0,w-1), l[4].astype(int).clip(0,h-1) 
             
-            #print(box)
             if (box[2] <= box[0]) or (box[3] <= box[1]):
                 continue
             
@@ -1085,7 +1076,6 @@ def sample_segments(img, labels, segments, probability=0.5):
             result = cv2.bitwise_and(src1=img, src2=mask)
             i = result > 0  # pixels to replace
             mask[i] = result[i]  # cv2.imwrite('debug.jpg', img)  # debug
-            #print(box)
             sample_images.append(mask[box[1]:box[3],box[0]:box[2],:])
 
     return sample_labels, sample_images, sample_masks
