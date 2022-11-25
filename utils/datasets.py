@@ -27,7 +27,7 @@ from copy import deepcopy
 from torchvision.utils import save_image
 from torchvision.ops import roi_pool, roi_align, ps_roi_pool, ps_roi_align
 
-from utils.general import check_requirements, xyxy2xywh, xywh2xyxy, xywhn2xyxy, xyn2xy, segment2box, segments2boxes, \
+from utils.general import check_requirements, xyxy2xywh, xywh2xyxy, xywhn2xyxy, xyn2xy, pose_xyn2xy, segment2box, segments2boxes, \
     resample_segments, clean_str
 from utils.torch_utils import torch_distributed_zero_first
 
@@ -375,21 +375,22 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 train_pose = json.load(f)['annotations']
                 for p_dict in train_pose:
                     p_list = np.zeros([17,2])
-                    for i in range(17):
-                        if p_dict['keypoints'][i*3+2]!= 0:
-                            p_list[i,0] = p_dict['keypoints'][i*3]
-                            p_list[i,1] = p_dict['keypoints'][i*3+1]
-                    if np.sum(p_list) > 0:
+                    if 'keypoints' in p_dict and 'bbox' in p_dict:
+                        for i in range(17):
+                            if p_dict['keypoints'][i*3+2]!= 0:
+                                p_list[i,0] = p_dict['keypoints'][i*3]
+                                p_list[i,1] = p_dict['keypoints'][i*3+1]
                         self.pose_data[p_dict['image_id']].append(p_list)
+
             with open(pose_data[1], 'r') as f:
                 test_pose = json.load(f)['annotations']
                 for p_dict in test_pose:
                     p_list = np.zeros([17,2])
-                    for i in range(17):
-                        if p_dict['keypoints'][i*3+2]!= 0:
-                            p_list[i,0] = p_dict['keypoints'][i*3]
-                            p_list[i,1] = p_dict['keypoints'][i*3+1]
-                    if np.sum(p_list) > 0:
+                    if 'keypoints' in p_dict and 'bbox' in p_dict:
+                        for i in range(17):
+                            if p_dict['keypoints'][i*3+2]!= 0:
+                                p_list[i,0] = p_dict['keypoints'][i*3]
+                                p_list[i,1] = p_dict['keypoints'][i*3+1]
                         self.pose_data[p_dict['image_id']].append(p_list)
         else:
             self.pose_data = None
@@ -441,19 +442,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         self.img_files = list(cache.keys())  # update
         self.label_files = img2label_paths(cache.keys())  # update
 
-        '''
-        print(len(self.labels))
-        print(len(self.shapes))
-        print(len(self.img_files))
-        print(len(self.label_files))
-
-        print("X:", x)
-        #print("x0: ", x[:, 0])
-        #print("x0: ", type(x[:, 0]))
-        print("shapes:", self.shapes[i])
-        print("img_files: ", self.img_files[i])
-        print("label_files: ", self.label_files[i])
-        '''
         if valid_idx is not None:
             print("Filtering non-valid samples")
             new_labels = []
@@ -480,25 +468,24 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             self.segments = tuple([self.segments[i] for i, x in enumerate(self.labels) if len(x)>0])
             self.labels = [self.labels[i] for i, x in enumerate(self.labels) if len(x)>0]
 
+
         if self.pose_data is not None:
+            print(len(self.pose_data))
             new_pose_data = []
             for i, img_file in enumerate(self.img_files):
                 image_id = int(img_file.split("/")[-1].split(".")[0])
                 rescale_pose_data = []
-                for p_data in self.pose_data[image_id]:
-                    rescale_pose_data.append(p_data / self.shapes[i])
+                for p_data_i, p_data in enumerate(self.pose_data[image_id]):
+                    if p_data_i < len(self.labels[i]):
+                        rescale_pose_data.append(p_data / self.shapes[i])
                 new_pose_data.append(rescale_pose_data)
             self.pose_data = new_pose_data
 
-        '''
-        for i in range(len(self.labels)):
-            print("Labels: ", self.labels[i])
-            print("img_files: ", self.img_files[i])
-            print("label_files: ", self.label_files[i])
-            print("pose_data: ", self.pose_data[i])
-            print("shapes: ", self.shapes[i])
-        #exit()
-        '''
+            print(len(self.labels))
+            print(len(self.img_files))
+            print(len(self.label_files))
+            print(len(self.pose_data))
+            print(len(self.shapes))
 
         if single_cls:
             for x in self.labels:
@@ -626,23 +613,25 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         hyp = self.hyp
         mosaic = self.mosaic and random.random() < hyp['mosaic']
+        poses = np.array([])
         if mosaic:
             # Load mosaic
             if random.random() < 0.8:
-                img, labels = load_mosaic(self, index)
+                img, labels, poses = load_mosaic(self, index)
             else:
-                img, labels = load_mosaic9(self, index)
+                img, labels, poses = load_mosaic9(self, index)
             shapes = None
 
             # MixUp https://arxiv.org/pdf/1710.09412.pdf
             if random.random() < hyp['mixup']:
                 if random.random() < 0.8:
-                    img2, labels2 = load_mosaic(self, random.randint(0, len(self.labels) - 1))
+                    img2, labels2, poses2= load_mosaic(self, random.randint(0, len(self.labels) - 1))
                 else:
-                    img2, labels2 = load_mosaic9(self, random.randint(0, len(self.labels) - 1))
+                    img2, labels2, poses2 = load_mosaic9(self, random.randint(0, len(self.labels) - 1))
                 r = np.random.beta(8.0, 8.0)  # mixup ratio, alpha=beta=8.0
                 img = (img * r + img2 * (1 - r)).astype(np.uint8)
                 labels = np.concatenate((labels, labels2), 0)
+                poses = np.concatenate((poses, poses2), 0)
 
         else:
             # Load image
@@ -656,11 +645,14 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             labels = self.labels[index].copy()
             if labels.size:  # normalized xywh to pixel xyxy format
                 labels[:, 1:] = xywhn2xyxy(labels[:, 1:], ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1])
+                if self.pose_data is not None:
+                    poses = self.pose_data[index].copy()
+                    poses = [pose_xyn2xy(x, ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1]) for x in poses]
 
         if self.augment:
             # Augment imagespace
             if not mosaic:
-                img, labels = random_perspective(img, labels,
+                img, labels, poses = random_perspective(img, labels, poses,
                                                  degrees=hyp['degrees'],
                                                  translate=hyp['translate'],
                                                  scale=hyp['scale'],
@@ -814,7 +806,7 @@ def hist_equalize(img, clahe=True, bgr=False):
 def load_mosaic(self, index):
     # loads images in a 4-mosaic
 
-    labels4, segments4, pose_data4 = [], [], []
+    labels4, segments4, poses4 = [], [], []
     s = self.img_size
     yc, xc = [int(random.uniform(-x, 2 * s + x)) for x in self.mosaic_border]  # mosaic center x, y
     indices = [index] + random.choices(self.indices, k=3)  # 3 additional image indices
@@ -844,16 +836,16 @@ def load_mosaic(self, index):
         # Labels
         labels, segments = self.labels[index].copy(), self.segments[index].copy()
         if self.pose_data is not None:
-            pose_data = self.pose_data[index].copy()
+            poses = self.pose_data[index].copy()
         if labels.size:
             labels[:, 1:] = xywhn2xyxy(labels[:, 1:], w, h, padw, padh)  # normalized xywh to pixel xyxy format
             segments = [xyn2xy(x, w, h, padw, padh) for x in segments]
             if self.pose_data is not None:
-                pose_data = [xyn2xy(x, w, h, padw, padh) for x in pose_data]
+                poses = [pose_xyn2xy(x, w, h, padw, padh) for x in poses]
         labels4.append(labels)
         segments4.extend(segments)
         if self.pose_data is not None:
-            pose_data4.extend(pose_data)
+            poses4.extend(poses)
 
     # Concat/clip labels
     labels4 = np.concatenate(labels4, 0)
@@ -861,34 +853,36 @@ def load_mosaic(self, index):
         np.clip(x, 0, 2 * s, out=x)  # clip when using random_perspective()
     # img4, labels4 = replicate(img4, labels4)  # replicate
 
+    poses4 = np.array(poses4)
     if self.pose_data is not None:
-        for x in pose_data4:
+        for x in poses4:
             np.clip(x, 0, 2 * s, out=x)
             
     # Augment
     #img4, labels4, segments4 = remove_background(img4, labels4, segments4)
     #sample_segments(img4, labels4, segments4, probability=self.hyp['copy_paste'])
-    #print("Labels4: ", labels4[0].shape)
-    #print("Segments4: ", segments4[0].shape)
-    #print("Pose4: ", pose_data4[0].shape)
-    #print("Labels4: ", len(labels4))
-    #print("Segments4: ", len(segments4))
-    #print("Pose4: ", len(pose_data4))
+    #print("Labels4: ", labels4.shape)#(n,5)
+    #print("Segments4: ", segments4.shape)#(n,s,2)
+    #print("Pose4: ", pose_data4.shape)#(n,17,2)
+
     img4, labels4, segments4 = copy_paste(img4, labels4, segments4, probability=self.hyp['copy_paste'])
-    img4, labels4 = random_perspective(img4, labels4, segments4,
-                                       degrees=self.hyp['degrees'],
-                                       translate=self.hyp['translate'],
-                                       scale=self.hyp['scale'],
-                                       shear=self.hyp['shear'],
-                                       perspective=self.hyp['perspective'],
-                                       border=self.mosaic_border)  # border to remove
-    return img4, labels4
+    img4, labels4, poses4 = random_perspective(img4, labels4, segments4, poses4,
+                                        degrees=self.hyp['degrees'],
+                                        translate=self.hyp['translate'],
+                                        scale=self.hyp['scale'],
+                                        shear=self.hyp['shear'],
+                                        perspective=self.hyp['perspective'],
+                                        border=self.mosaic_border)  # border to remove
+
+
+    return img4, labels4, poses4
+
 
 
 def load_mosaic9(self, index):
     # loads images in a 9-mosaic
 
-    labels9, segments9 = [], []
+    labels9, segments9, poses9 = [], [], []
     s = self.img_size
     indices = [index] + random.choices(self.indices, k=8)  # 8 additional image indices
     for i, index in enumerate(indices):
@@ -922,11 +916,17 @@ def load_mosaic9(self, index):
 
         # Labels
         labels, segments = self.labels[index].copy(), self.segments[index].copy()
+        if self.pose_data is not None:
+            poses = self.pose_data[index].copy()
         if labels.size:
             labels[:, 1:] = xywhn2xyxy(labels[:, 1:], w, h, padx, pady)  # normalized xywh to pixel xyxy format
             segments = [xyn2xy(x, w, h, padx, pady) for x in segments]
+            if self.pose_data is not None:
+                poses = [pose_xyn2xy(x, w, h, padx, pady) for x in poses]
         labels9.append(labels)
         segments9.extend(segments)
+        if self.pose_data is not None:
+            poses9.extend(poses)
 
         # Image
         img9[y1:y2, x1:x2] = img[y1 - pady:, x1 - padx:]  # img9[ymin:ymax, xmin:xmax]
@@ -947,19 +947,25 @@ def load_mosaic9(self, index):
         np.clip(x, 0, 2 * s, out=x)  # clip when using random_perspective()
     # img9, labels9 = replicate(img9, labels9)  # replicate
 
+    poses9 = [x - c for x in poses9]
+    poses9 = np.array(poses9)
+    if self.pose_data is not None:
+        for x in poses9:
+            np.clip(x, 0, 2 * s, out=x)
+
     # Augment
     #img9, labels9, segments9 = remove_background(img9, labels9, segments9)
     img9, labels9, segments9 = copy_paste(img9, labels9, segments9, probability=self.hyp['copy_paste'])
-    img9, labels9 = random_perspective(img9, labels9, segments9,
-                                       degrees=self.hyp['degrees'],
-                                       translate=self.hyp['translate'],
-                                       scale=self.hyp['scale'],
-                                       shear=self.hyp['shear'],
-                                       perspective=self.hyp['perspective'],
-                                       border=self.mosaic_border)  # border to remove
+    img9, labels9, poses9 = random_perspective(img9, labels9, segments9, poses9,
+                                        degrees=self.hyp['degrees'],
+                                        translate=self.hyp['translate'],
+                                        scale=self.hyp['scale'],
+                                        shear=self.hyp['shear'],
+                                        perspective=self.hyp['perspective'],
+                                        border=self.mosaic_border)  # border to remove
 
-    return img9, labels9
 
+    return img9, labels9, poses9
 
 def load_samples(self, index):
     # loads images in a 4-mosaic
@@ -1135,7 +1141,7 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
     return img, ratio, (dw, dh)
 
 
-def random_perspective(img, targets=(), segments=(), degrees=10, translate=.1, scale=.1, shear=10, perspective=0.0,
+def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, translate=.1, scale=.1, shear=10, perspective=0.0,
                        border=(0, 0)):
     # torchvision.transforms.RandomAffine(degrees=(-10, 10), translate=(.1, .1), scale=(.9, 1.1), shear=(-10, 10))
     # targets = [cls, xyxy]
@@ -1221,7 +1227,49 @@ def random_perspective(img, targets=(), segments=(), degrees=10, translate=.1, s
         targets = targets[i]
         targets[:, 1:5] = new[i]
 
-    return img, targets
+    ##poses##
+    pose_n = len(poses)
+    if pose_n:
+        xy = np.ones((pose_n * 17, 3))
+        xy[:, :2] = poses.reshape(pose_n * 17, 2)  # x1y1, x2y2, x1y2, x2y1
+        xy = xy @ M.T  # transform
+        new = xy[:, :2].reshape(pose_n, 17, 2)
+        # clip
+        new_ = poses.copy()
+        new_[poses>0] = new[poses>0]
+        new_[new_[:, :, 0]<=0 , :] = 0
+        new_[new_[:, :, 1]<=0 , :] = 0
+        new_[new_[:, :, 0]>width , :] = 0
+        new_[new_[:, :, 1]>height , :] = 0
+
+        # filter candidates
+        new_poses = new_[i]
+        i = valid_pose_box(targets, new_poses, min_points=3, upper_only=True)
+        targets = targets[i]
+        return img, targets, new_poses
+
+    return img, targets, np.array([])
+
+def valid_pose_box(box, pose, min_points=1, upper_only=False):
+    valid_idx = []
+    for i, p in enumerate(pose):
+        is_valid = np.ones(17)
+        is_valid[[0,1,2]] = 5#eyes & nose
+        is_valid[[3,4,5,6]] = 2#ears & shoulders
+        is_valid[[7,8]] = 1.5#elbows
+        if upper_only:    
+              is_valid[[13,14,15,16]] = 0#legs
+        else:
+              is_valid[[11,12]] = 2#hips
+
+        is_valid[p[:, 0] < box[i, 1]] = 0
+        is_valid[p[:, 0] > box[i, 3]] = 0
+        is_valid[p[:, 1] < box[i, 2]] = 0
+        is_valid[p[:, 1] > box[i, 4]] = 0
+        if np.sum(is_valid) >= min_points:
+            valid_idx.append(i)
+
+    return valid_idx
 
 
 def box_candidates(box1, box2, wh_thr=2, ar_thr=20, area_thr=0.1, eps=1e-16):  # box1(4,n), box2(4,n)
