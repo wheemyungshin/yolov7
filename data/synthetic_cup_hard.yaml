@@ -1,6 +1,6 @@
-train: ./converted_synthetic_cups/train.txt  # 13500 images
-val: ./converted_synthetic_cups/val.txt  # 1500 images
-test: ./converted_synthetic_cups/val.txt  # 1500 images
+train: /coco/converted_synthetic_cups/train.txt  # 13500 images
+val: /coco/converted_synthetic_cups/val.txt  # 1500 images
+test: /coco/converted_synthetic_cups/val.txt  # 1500 images
 
 # number of classes
 nc: 1
