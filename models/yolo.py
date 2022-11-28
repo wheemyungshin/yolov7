@@ -689,47 +689,42 @@ class Model(nn.Module):
         logger.info('')
         
         self.channel_wise_adaptation = nn.ModuleList([
+            nn.Linear(64, 128),
             nn.Linear(128, 256),
-            nn.Linear(256, 512),
-            nn.Linear(512, 1024),
-            nn.Linear(1024, 1024)
+            nn.Linear(256, 512)
         ])
         
         self.spatial_wise_adaptation = nn.ModuleList([
-            nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1),
             nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1),
             nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1),
             nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1)
         ])
 
         self.local_mask_adaptation_layers = nn.ModuleList([
+            nn.Conv2d(64, 128, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0)
         ])
 
         self.global_mask_adaptation_layers = nn.ModuleList([
+            nn.Conv2d(64, 128, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0)
         ])
 
         self.adaptation_layers = nn.ModuleList([
+            nn.Conv2d(64, 128, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0)
         ])
 
         self.non_local_adaptation = nn.ModuleList([
+            nn.Conv2d(64, 128, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(1024, 1024, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0)
         ])
 
+        
         self.normal_init(self.channel_wise_adaptation, 0, 0.0001, True)
         self.normal_init(self.spatial_wise_adaptation, 0, 0.0001, True)
         self.normal_init(self.adaptation_layers, 0, 0.0001, True)
@@ -855,7 +850,7 @@ class Model(nn.Module):
             x = m(x)  # run
             
             y.append(x if m.i in self.save else None)  # save output
-            if m.i in self.model[-1].f and get_feature and len(features) < 3:
+            if m.i in [self.model[-4].f, self.model[-3].f, self.model[-2].f] and get_feature and len(features) < 3:#distill features before the last repconv
                 features.append(x)
 
         if profile:
