@@ -38,7 +38,7 @@ def detect(save_img=False):
     #imgsz = check_img_size(imgsz, s=stride)  # check img_size
 
     if trace:
-        model = TracedModel(model, device, opt.img_size)
+        model = TracedModel(model, device, tuple(opt.img_size))
 
     if half:
         model.half()  # to FP16
@@ -135,16 +135,27 @@ def detect(save_img=False):
                         plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
                     
                     if opt.save_json:
-                        # [{"image_id": 42, "category_id": 18, "bbox": [258.15, 41.29, 348.26, 243.78], "score": 0.236}, ...
-                        #xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4))).view(-1).tolist()  # normalized xywh
-                        xyxy_ = [float((item / gn[idx] * gn_to[idx]).detach().cpu().numpy()) for idx, item in enumerate(xyxy)]
-                        line = (cls, xyxy_)  # label format
-                        jdict_item = {'image_id': frame,
-                                    'category_id': int(line[0].detach().cpu().numpy())+1,
-                                    'bbox': [x for x in line[1]],
-                                    'score': float(conf.detach().cpu().numpy()),
-                                    'video_path': path.split("/")[-1]}
-                        jdict.append(jdict_item)
+                        if dataset.mode == 'image':
+                            if int(cls.detach().cpu().numpy())==0:
+                                xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4))).view(-1).tolist()
+                                line = (cls, xywh)  # label format
+                                jdict_item = {
+                                            'bbox': [x for x in line[1]],
+                                            'category_id': 1,
+                                            'image_id': int(p.name.split(".")[0]),
+                                            'score': float(conf.detach().cpu().numpy())}
+                                jdict.append(jdict_item)
+                        else:
+                            # [{"image_id": 42, "category_id": 18, "bbox": [258.15, 41.29, 348.26, 243.78], "score": 0.236}, ...
+                            #xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4))).view(-1).tolist()  # normalized xywh
+                            xyxy_ = [float((item / gn[idx] * gn_to[idx]).detach().cpu().numpy()) for idx, item in enumerate(xyxy)]
+                            line = (cls, xyxy_)  # label format
+                            jdict_item = {'image_id': frame,
+                                        'category_id': int(line[0].detach().cpu().numpy())+1,
+                                        'bbox': [x for x in line[1]],
+                                        'score': float(conf.detach().cpu().numpy()),
+                                        'video_path': path.split("/")[-1]}
+                            jdict.append(jdict_item)
 
             # Print time (inference + NMS)
             print(f'{s}Done. ({(1E3 * (t2 - t1)):.1f}ms) Inference, ({(1E3 * (t3 - t2)):.1f}ms) NMS')
@@ -194,7 +205,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', nargs='+', type=str, default='yolov7.pt', help='model.pt path(s)')
     parser.add_argument('--source', type=str, default='inference/images', help='source')  # file/folder, 0 for webcam
-    parser.add_argument('--img-size', type=int, default=(192,256), help='inference size (pixels)')
+    parser.add_argument('--img-size', nargs='+', type=int, default=[192,256], help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.45, help='IOU threshold for NMS')
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')

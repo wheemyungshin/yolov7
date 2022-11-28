@@ -1,6 +1,6 @@
 target="/coco/cup_data/1_classification"
-numbers=("paper_cups/paper_cups" "plastic_cups/image")
-subjects=("MIX" "cap" "holder" "normal" "stick")
+numbers=("paper_cups/paper_cups" "plastic_cups/image" "plastic_cups/video")
+subjects=("MIX" "cap" "holder" "normal" "stick" "MIX_video")
 for number in ${numbers[@]}; do
         for subject in ${subjects[@]}; do
                 echo ${target}
