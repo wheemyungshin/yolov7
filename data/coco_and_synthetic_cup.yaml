@@ -1,0 +1,11 @@
+train: ['/coco/converted_synthetic_cups/train.txt', './coco/train2017.txt'] # 13500 images
+val: ['/coco/converted_synthetic_cups/val.txt','./coco/val2017.txt']  # 1500 images
+test: ['/coco/converted_synthetic_cups/val.txt', './coco/test-dev2017.txt ']  # 1500 images
+
+# number of classes
+nc: 1
+
+# class names
+names: ['cup']
+
+valid_idx: [41]
