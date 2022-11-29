@@ -139,10 +139,16 @@ def detect(save_img=False):
                             if int(cls.detach().cpu().numpy())==0:
                                 xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4))).view(-1).tolist()
                                 line = (cls, xywh)  # label format
+                                image_id = p.name.split(".")[0]
+                                try: 
+                                    int(image_id)
+                                    image_id = int(image_id)
+                                except ValueError:
+                                    image_id = image_id
                                 jdict_item = {
                                             'bbox': [x for x in line[1]],
                                             'category_id': 1,
-                                            'image_id': int(p.name.split(".")[0]),
+                                            'image_id': image_id,
                                             'score': float(conf.detach().cpu().numpy())}
                                 jdict.append(jdict_item)
                         else:
