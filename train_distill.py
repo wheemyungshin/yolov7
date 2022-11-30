@@ -339,7 +339,7 @@ def train(hyp, opt, device, tb_writer=None):
     torch.save(model, wdir / 'init.pt')
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         model.train()
-        sup_model.eval()
+        sup_model.train()
 
         # Update image weights (optional)
         if opt.image_weights:
