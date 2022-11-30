@@ -30,32 +30,52 @@ if __name__ == '__main__':
 
     data_root = opt.data_root
     json_path = os.path.join(opt.data_root, 'coco_instances.json')
+    all_anno_data_dict = {}
     with open(json_path, 'r') as f:
         data_anno = json.load(f)['annotations']
-        for data_dict in data_anno:
-            segmentation = data_dict['segmentation'][0]
-            image_id = data_dict['image_id']
-            category_id = data_dict['category_id']
-            bbox = data_dict['bbox']
+        for anno_dict in data_anno:
+            image_id = anno_dict['image_id']
+            segmentation = anno_dict['segmentation'][0]
+            category_id = anno_dict['category_id']
+            bbox = anno_dict['bbox']
 
-            data_name = str(image_id)
-            save_name = '0'*(8 - len(data_name))+data_name
-
-            if image_id < 13500:
-                split = 'train'
+            if image_id not in all_anno_data_dict:
+                temp_dict = {}
+                temp_dict['segmentation'] = [segmentation]
+                temp_dict['category_id'] = [category_id]
+                temp_dict['bbox'] = [bbox]
+                all_anno_data_dict[image_id] = temp_dict
             else:
-                split = 'val'
+                all_anno_data_dict[image_id]['segmentation'].append(segmentation)
+                all_anno_data_dict[image_id]['category_id'].append(category_id)
+                all_anno_data_dict[image_id]['bbox'].append(bbox)
 
-            labels_f = open('{}.txt'.format(os.path.join(label_dir[split], save_name)), 'w')
+            
+    for image_id in all_anno_data_dict.keys():
+        data_name = str(image_id)
+        save_name = '0'*(8 - len(data_name))+data_name
+
+        if image_id < 13500:
+            split = 'train'
+        else:
+            split = 'val'
+        
+        segmentation = all_anno_data_dict[image_id]['segmentation']
+        category_id = all_anno_data_dict[image_id]['category_id']
+        bbox = all_anno_data_dict[image_id]['bbox']
+
+        labels_f = open('{}.txt'.format(os.path.join(label_dir[split], save_name)), 'w')
+        for i, c_id in enumerate(category_id):
             if opt.save_type == 'segments':
-                line = [str(category_id)]
-                for seg in segmentation:    
+                line = [str(c_id)]
+                for seg in segmentation[i]:    
                     line.append(str(round(seg/300, 6)))                        
-                labels_f.write(' '.join(line))
-                labels_f.close()
+                labels_f.write(' '.join(line))                       
+                labels_f.write('\n')
+        labels_f.close()
 
-                relative_path = os.path.join('./images', split, save_name+'.jpg\n')
-                file_list_f[split].write(relative_path)
+        relative_path = os.path.join('./images', split, save_name+'.jpg\n')
+        file_list_f[split].write(relative_path)
 
-            copyfile(os.path.join(data_root, 'images_raw', save_name+'.jpg'), os.path.join(image_dir[split], save_name+'.jpg'))
+        copyfile(os.path.join(data_root, 'images_raw', save_name+'.jpg'), os.path.join(image_dir[split], save_name+'.jpg'))
     file_list_f[split].close()
