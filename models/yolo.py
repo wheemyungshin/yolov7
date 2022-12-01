@@ -937,6 +937,42 @@ class Model(nn.Module):
             elif isinstance(m, (IDetect, IAuxDetect)):
                 m.fuse()
                 m.forward = m.fuseforward
+            elif type(m) is Shuffle_Block:
+                if hasattr(m, 'branch1'):
+                    re_branch1 = nn.Sequential(
+                        nn.Conv2d(m.branch1[0].in_channels, m.branch1[0].out_channels,
+                                  kernel_size=m.branch1[0].kernel_size, stride=m.branch1[0].stride,
+                                  padding=m.branch1[0].padding, groups=m.branch1[0].groups),
+                        nn.Conv2d(m.branch1[2].in_channels, m.branch1[2].out_channels,
+                                  kernel_size=m.branch1[2].kernel_size, stride=m.branch1[2].stride,
+                                  padding=m.branch1[2].padding, bias=False),
+                        nn.ReLU(inplace=True),
+                    )
+                    re_branch1[0] = fuse_conv_and_bn(m.branch1[0], m.branch1[1])
+                    re_branch1[1] = fuse_conv_and_bn(m.branch1[2], m.branch1[3])
+                    # pdb.set_trace()
+                    # print(m.branch1[0])
+                    m.branch1 = re_branch1
+                if hasattr(m, 'branch2'):
+                    re_branch2 = nn.Sequential(
+                        nn.Conv2d(m.branch2[0].in_channels, m.branch2[0].out_channels,
+                                  kernel_size=m.branch2[0].kernel_size, stride=m.branch2[0].stride,
+                                  padding=m.branch2[0].padding, groups=m.branch2[0].groups),
+                        nn.ReLU(inplace=True),
+                        nn.Conv2d(m.branch2[3].in_channels, m.branch2[3].out_channels,
+                                  kernel_size=m.branch2[3].kernel_size, stride=m.branch2[3].stride,
+                                  padding=m.branch2[3].padding, bias=False),
+                        nn.Conv2d(m.branch2[5].in_channels, m.branch2[5].out_channels,
+                                  kernel_size=m.branch2[5].kernel_size, stride=m.branch2[5].stride,
+                                  padding=m.branch2[5].padding, groups=m.branch2[5].groups),
+                        nn.ReLU(inplace=True),
+                    )
+                    re_branch2[0] = fuse_conv_and_bn(m.branch2[0], m.branch2[1])
+                    re_branch2[2] = fuse_conv_and_bn(m.branch2[3], m.branch2[4])
+                    re_branch2[3] = fuse_conv_and_bn(m.branch2[5], m.branch2[6])
+                    # pdb.set_trace()
+                    m.branch2 = re_branch2
+                    # print(m.branch2)
         self.info()
         return self
 
