@@ -2020,7 +2020,7 @@ class ST2CSPC(nn.Module):
 
 # yolov7-lite
 def channel_shuffle(x, groups):
-    batchsize, num_channels, height, width = x.data.size()
+    batchsize, num_channels, height, width = x.shape
     channels_per_group = num_channels // groups
 
     # reshape
