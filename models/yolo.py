@@ -811,9 +811,9 @@ class Model(nn.Module):
                                                                 t_feats[_i].size(3))
                     kd_spatial_loss += torch.dist(t_spatial_pool, self.spatial_wise_adaptation[_i](s_spatial_pool))
 
-                kd_feat_loss *= ((img_size[0] / 640) * (img_size[1] / 640) / len(features)) * 7e-6 * 6
-                kd_channel_loss *= (1 / len(features)) * 2e-4 * 3
-                kd_spatial_loss *= ((img_size[0] / 640) * (img_size[1] / 640) / len(features)) * 4e-3 * 6
+                kd_feat_loss *= 4e-7 * 6
+                kd_channel_loss *= 1e-4 * 3
+                kd_spatial_loss *= 3e-4 * 6
                 kd_loss = kd_feat_loss + kd_channel_loss + kd_spatial_loss
                 kd_loss_items = torch.cat((kd_feat_loss, kd_channel_loss, kd_spatial_loss)).detach()
 
