@@ -79,7 +79,11 @@ def detect(save_img=False):
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
         if img.ndimension() == 3:
             img = img.unsqueeze(0)
-        fps = 30
+
+        if opt.frame_ratio > 0:
+            frame_ratio = opt.frame_ratio
+        else:
+            fps = 30
 
         # Warmup
         if device.type != 'cpu' and (old_img_b != img.shape[0] or old_img_h != img.shape[2] or old_img_w != img.shape[3]):
@@ -109,7 +113,10 @@ def detect(save_img=False):
             else:
                 p, s, im0, frame = path, '', im0s, getattr(dataset, 'frame', 0)
 
-            if dataset.mode != 'image' and frame % fps != 0:
+            if opt.frame_ratio <= 0:
+                frame_ratio = fps
+
+            if dataset.mode != 'image' and frame % frame_ratio != 0:
                 continue
             else:
                 p = Path(p)  # to Path
@@ -195,7 +202,8 @@ def detect(save_img=False):
                                 fps, w, h = 30, im0.shape[1], im0.shape[0]
                                 save_path += '.mp4'
                             vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
-                        cv2.imwrite(save_path+'_'+str(frame)+'.jpg', im0)
+                        if opt.save_frame:
+                            cv2.imwrite(save_path+'_'+str(frame)+'.jpg', im0)
                         vid_writer.write(im0)
 
     if save_txt or save_img:
@@ -239,6 +247,8 @@ if __name__ == '__main__':
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
     parser.add_argument('--no-trace', action='store_true', help='don`t trace model')
     parser.add_argument('--save-json', action='store_true', help='save a cocoapi-compatible JSON results file')
+    parser.add_argument('--frame-ratio', default=1, type=int, help='save frame ratio')
+    parser.add_argument('--save-frame', action='store_true', help='save each frame of video results')
     opt = parser.parse_args()
     print(opt)
     #check_requirements(exclude=('pycocotools', 'thop'))
