@@ -689,9 +689,9 @@ class Model(nn.Module):
         logger.info('')
         
         self.channel_wise_adaptation = nn.ModuleList([
-            nn.Linear(128, 256),
-            nn.Linear(256, 512),
-            nn.Linear(512, 1024)
+            nn.Linear(128, 128),
+            nn.Linear(256, 256),
+            nn.Linear(512, 512)
         ])
         
         self.spatial_wise_adaptation = nn.ModuleList([
@@ -700,6 +700,7 @@ class Model(nn.Module):
             nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1)
         ])
 
+        '''
         self.local_mask_adaptation_layers = nn.ModuleList([
             nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
@@ -711,17 +712,18 @@ class Model(nn.Module):
             nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
             nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0)
         ])
+        '''
 
         self.adaptation_layers = nn.ModuleList([
-            nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(128, 128, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(512, 512, kernel_size=1, stride=1, padding=0)
         ])
 
         self.non_local_adaptation = nn.ModuleList([
-            nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(128, 128, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(512, 512, kernel_size=1, stride=1, padding=0)
         ])
 
         
@@ -729,8 +731,8 @@ class Model(nn.Module):
         self.normal_init(self.spatial_wise_adaptation, 0, 0.0001, True)
         self.normal_init(self.adaptation_layers, 0, 0.0001, True)
         self.normal_init(self.non_local_adaptation, 0, 0.0001, True)
-        self.normal_init(self.local_mask_adaptation_layers, 0, 0.0001, True)
-        self.normal_init(self.global_mask_adaptation_layers, 0, 0.0001, True)
+        #self.normal_init(self.local_mask_adaptation_layers, 0, 0.0001, True)
+        #self.normal_init(self.global_mask_adaptation_layers, 0, 0.0001, True)
     
     def normal_init(self, layers, mean, stddev, truncated=False):
         """
@@ -782,7 +784,8 @@ class Model(nn.Module):
                     t_global_attention_mask = self.generate_attention_mask(t_feats[_i], features[0].size(0), t, type="spatial")
                     s_global_attention_mask = self.generate_attention_mask(features[_i], features[0].size(0), t, type="spatial")
                     c_t_global_attention_mask = self.generate_attention_mask(t_feats[_i], features[0].size(0), t, type="channel")
-                    c_s_global_attention_mask = self.generate_attention_mask(self.global_mask_adaptation_layers[_i](features[_i]), features[0].size(0), t, type="channel")
+                    c_s_global_attention_mask = self.generate_attention_mask(features[_i], features[0].size(0), t, type="channel")
+                    #c_s_global_attention_mask = self.generate_attention_mask(self.global_mask_adaptation_layers[_i](features[_i]), features[0].size(0), t, type="channel")
                     
                     sum_global_attention_mask = (t_global_attention_mask + s_global_attention_mask) / 2
                     sum_global_attention_mask = sum_global_attention_mask.detach()
@@ -1053,7 +1056,8 @@ class Model(nn.Module):
         t_channel_attention_mask = torch.softmax(t_channel_attention_mask / t, dim=1) * f_size[1]
         t_channel_attention_mask = t_channel_attention_mask.unsqueeze(2)
         
-        s_channel_attention_mask = F.avg_pool2d(self.local_mask_adaptation_layers[index](s_feature).abs(), (patch_size, patch_size), stride=patch_size, ceil_mode=True)
+        #s_channel_attention_mask = F.avg_pool2d(self.local_mask_adaptation_layers[index](s_feature).abs(), (patch_size, patch_size), stride=patch_size, ceil_mode=True)
+        s_channel_attention_mask = F.avg_pool2d(s_feature.abs(), (patch_size, patch_size), stride=patch_size, ceil_mode=True)
         s_channel_attention_mask = s_channel_attention_mask.view(batch_size, f_size[1], patch_num)
         s_channel_attention_mask = torch.softmax(s_channel_attention_mask / t, dim=1) * f_size[1]
         s_channel_attention_mask = s_channel_attention_mask.unsqueeze(2)
