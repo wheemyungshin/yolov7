@@ -1,7 +1,7 @@
 # train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
-train: /data/pitta_nota_vitset/trainval.txt
-val: /data/pitta_nota_vitset/trainval.txt
-test: /data/pitta_nota_vitset/trainval.txt
+train: /data/pitta_nota_vitset/train.txt
+val: /data/pitta_nota_vitset/val.txt
+test: /data/pitta_nota_vitset/val.txt
 # number of classes
 nc: 1
 
