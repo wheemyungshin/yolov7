@@ -1,0 +1,11 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: ['/data/pitta_nota_vitset/train.txt', './coco/train2017.txt']
+val: ['/data/pitta_nota_vitset/val.txt','./coco/val2017.txt']
+test: ['/data/pitta_nota_vitset/val.txt', './coco/test-dev2017.txt ']
+# number of classes
+nc: 1
+
+# class names
+names: ['person']
+
+valid_idx: [0]
