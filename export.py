@@ -66,6 +66,20 @@ if __name__ == '__main__':
         #     m.forward = m.forward_export  # assign forward (optional)
     model.model[-1].export = not opt.grid  # set Detect() layer grid export
     y = model(img)  # dry run
+    '''
+    print(y)
+    print(type(y))
+    print(len(y))
+    print(type(y[0]))
+    print(len(y[0]))
+    print(type(y[1]))
+    print(len(y[1]))
+    print(y[0].shape)
+    print(y[1][0].shape)
+    print(y[1][1].shape)
+    print(y[1][2].shape)
+    exit()
+    '''
     if opt.include_nms:
         model.model[-1].include_nms = True
         y = None

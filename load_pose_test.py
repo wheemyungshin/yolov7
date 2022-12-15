@@ -1,6 +1,6 @@
 import json
 
-pose_data = "/coco/annotations/person_keypoints_val2017.json"
+pose_data = "/data/coco/annotations/coco_wholebody_val_v1.0.json"
 
 with open(pose_data, 'r') as f:
     data = json.load(f)
@@ -11,9 +11,4 @@ with open(pose_data, 'r') as f:
     print(len(data['annotations']))
     print(type(data['annotations'][0]))
     print(data['annotations'][0])
-    for annos in data['annotations']:
-        for i in range(2,51,3):
-            if annos['keypoints'][i] != 0:
-                print(i)
-                print(annos['keypoints'][i-2], annos['keypoints'][i-1])
     
