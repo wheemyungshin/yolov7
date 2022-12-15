@@ -1,0 +1,13 @@
+train: /data/surreal_face/train.txt  # 108529 images
+val: /data/surreal_face/val.txt  # 4547 images
+test: /data/surreal_face/val.txt  # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
+#pose_train: /coco/annotations/person_keypoints_train2017.json
+#pose_val: /coco/annotations/person_keypoints_val2017.json
+
+# number of classes
+nc: 2
+
+# class names
+names: ['person', 'face']
+
+valid_idx: [0, 1]
