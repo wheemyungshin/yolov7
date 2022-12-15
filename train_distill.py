@@ -392,9 +392,14 @@ def train(hyp, opt, device, tb_writer=None):
 
             # Forward
             with amp.autocast(enabled=cuda):
-                with torch.no_grad():
-                    sup_pred, sup_features = sup_model(imgs, get_feature=True)  # forward
-                pred, kd_loss, kd_loss_items = model(imgs, t_info=(sup_pred, sup_features), get_feature=True)  # forward          
+                if epoch < opt.early_stop:
+                    with torch.no_grad():
+                        sup_pred, sup_features = sup_model(imgs, get_feature=True)  # forward
+                    pred, kd_loss, kd_loss_items = model(imgs, t_info=(sup_pred, sup_features), get_feature=True)  # forward         
+                else:
+                    pred = model(imgs)  # forward
+                    kd_loss = 0
+                    kd_loss_items = torch.zeros(3, device=device).detach()
 
                 if 'loss_ota' not in hyp or hyp['loss_ota'] == 1:
                     loss, loss_items = compute_loss_ota(pred, targets.to(device), imgs)  # loss scaled by batch_size
@@ -605,6 +610,7 @@ if __name__ == '__main__':
     parser.add_argument('--artifact_alias', type=str, default="latest", help='version of dataset artifact to be used')
     parser.add_argument('--freeze', nargs='+', type=int, default=[0], help='Freeze layers: backbone of yolov7=50, first3=0 1 2')
     parser.add_argument('--v5-metric', action='store_true', help='assume maximum recall as 1.0 in AP calculation')
+    parser.add_argument('--early-stop', type=int, default=-1, help='Set bounding-box image logging interval for W&B')
     opt = parser.parse_args()
 
     # Set DDP variables
@@ -647,6 +653,9 @@ if __name__ == '__main__':
     # Hyperparameters
     with open(opt.hyp) as f:
         hyp = yaml.load(f, Loader=yaml.SafeLoader)  # load hyps
+
+    if opt.early_stop == -1:
+        opt.early_stop = opt.epochs
 
     # Train
     logger.info(opt)
