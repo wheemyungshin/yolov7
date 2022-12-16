@@ -625,6 +625,20 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 labels = np.concatenate((labels, labels2), 0)
                 poses = np.concatenate((poses, poses2), 0)
 
+            if random.random() < hyp.get('face_cut_out', 0):
+                for face in labels[labels[:, 0]==1, 1:]:
+                    width_temp = face[2] - face[0]
+                    height_temp = face[3] - face[1]
+                    cutx = face[0]+(1.2*random.random()-0.1)*width_temp
+                    cuty = face[1]+(1.2*random.random()-0.1)*height_temp
+                    cutw = 0.7*width_temp*random.random()
+                    cuth = 0.7*height_temp*random.random()
+                    cutx_min = int(min(max(cutx - cutw/2, 0), img.shape[1]))
+                    cuty_min = int(min(max(cuty - cuth/2, 0), img.shape[0]))
+                    cutx_max = int(min(max(cutx + cutw/2, 0), img.shape[1]))
+                    cuty_max = int(min(max(cuty + cuth/2, 0), img.shape[0]))
+                    img[cuty_min : cuty_max, cutx_min : cutx_max, :] = 0
+
         else:
             # Load image
             img, (h0, w0), (h, w) = load_image(self, index)
@@ -640,7 +654,21 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 if self.pose_data is not None:
                     poses = self.pose_data[index].copy()
                     poses = [pose_xyn2xy(x, ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1]) for x in poses]
-
+            
+            if random.random() < hyp.get('face_cut_out', 0):
+                for face in labels[labels[:, 0]==1, 1:]:
+                    width_temp = face[2] - face[0]
+                    height_temp = face[3] - face[1]
+                    cutx = face[0]+(1.2*random.random()-0.1)*width_temp
+                    cuty = face[1]+(1.2*random.random()-0.1)*height_temp
+                    cutw = 0.7*width_temp*random.random()
+                    cuth = 0.7*height_temp*random.random()
+                    cutx_min = int(min(max(cutx - cutw/2, 0), w))
+                    cuty_min = int(min(max(cuty - cuth/2, 0), h))
+                    cutx_max = int(min(max(cutx + cutw/2, 0), w))
+                    cuty_max = int(min(max(cuty + cuth/2, 0), h))
+                    img[cuty_min : cuty_max, cutx_min : cutx_max, :] = 0
+                
         if self.augment:
             # Augment imagespace
             if not mosaic:
