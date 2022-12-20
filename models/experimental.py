@@ -181,8 +181,8 @@ class ONNX_ORT(nn.Module):
             scores *= conf  # conf = obj_conf * cls_conf
         boxes @= self.convert_matrix
         max_score, category_id = scores.max(2, keepdim=True)
-        dis = category_id.float() * self.max_wh
-        nmsbox = boxes + dis
+        #dis = category_id.float() * self.max_wh
+        nmsbox = boxes# + dis
         max_score_tp = max_score.transpose(1, 2).contiguous()
         selected_indices = ORT_NMS.apply(nmsbox, max_score_tp, self.max_obj, self.iou_threshold, self.score_threshold)
         X, Y = selected_indices[:, 0], selected_indices[:, 2]
