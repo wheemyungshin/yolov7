@@ -2,7 +2,7 @@
 train: [/data/wider_check_concat/train.txt, /data/wider_check_concat/val.txt, 
 /data/crowd/train.txt, /data/crowd/val.txt,
 /data/AIHUB_drowsy/valid_train.txt,
-/data/coco_face/train.txt, /data/coco_face/val.txt]  # 96169 images
+/data/coco_face/train.txt, /data/coco_face/val.txt]  # 96778 images
 val: [/data/coco_face/val.txt]   # 5884 images
 test: [/data/coco_face/val.txt]   # 5884
 
