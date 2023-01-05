@@ -98,7 +98,7 @@ def test(data,
         print("Testing with YOLOv5 AP metric...")
     
     
-    with open("predictions_yolo.json", 'r') as f:
+    with open("predictions2_AIHUB.json", 'r') as f:
         out = json.load(f)
         
     seen = 0
