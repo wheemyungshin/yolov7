@@ -1,0 +1,12 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [/data/AIHUB_drowsy/valid_train.txt]  # 96169 images
+val: [/data/AIHUB_drowsy/valid_train.txt]   # 5884 images
+test: [/data/AIHUB_drowsy/valid_train.txt]   # 5884
+
+# number of classes
+nc: 2
+
+# class names
+names: ['person', 'face']
+
+valid_idx: [0, 1]
