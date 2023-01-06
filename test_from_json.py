@@ -25,7 +25,6 @@ def test(data,
          conf_thres=0.001,
          iou_thres=0.6,  # for NMS
          save_json=False,
-         augment=False,
          dataloader=None,
          save_dir=Path(''),  # for saving images
          save_txt=False,  # for auto-labelling
@@ -269,8 +268,6 @@ if __name__ == '__main__':
     parser.add_argument('--conf-thres', type=float, default=0.001, help='object confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.65, help='IOU threshold for NMS')
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
-    parser.add_argument('--single-cls', action='store_true', help='treat as single-class dataset')
-    parser.add_argument('--augment', action='store_true', help='augmented inference')
     parser.add_argument('--save-txt', action='store_true', help='save results to *.txt')
     parser.add_argument('--save-hybrid', action='store_true', help='save label+prediction hybrid results to *.txt')
     parser.add_argument('--save-conf', action='store_true', help='save confidences in --save-txt labels')
@@ -292,7 +289,6 @@ if __name__ == '__main__':
             opt.conf_thres,
             opt.iou_thres,
             opt.save_json,
-            opt.augment,
             save_txt=opt.save_txt | opt.save_hybrid,
             save_hybrid=opt.save_hybrid,
             save_conf=opt.save_conf
