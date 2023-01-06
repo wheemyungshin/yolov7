@@ -65,7 +65,7 @@ def exif_size(img):
     return s
 
 
-def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=False, cache=False, pad=0.0, rect=False,
+def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=False, cache=False, pad=0.0, rect=False, ratio_maintain=True,
                       rank=-1, world_size=1, workers=8, image_weights=False, quad=False, prefix='', valid_idx=None, pose_data=None):
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache
     with torch_distributed_zero_first(rank):
@@ -73,6 +73,7 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
                                       augment=augment,  # augment images
                                       hyp=hyp,  # augmentation hyperparameters
                                       rect=rect,  # rectangular training
+                                      ratio_maintain=ratio_maintain,
                                       cache_images=cache,
                                       single_cls=opt.single_cls,
                                       stride=int(stride),
@@ -356,13 +357,14 @@ def img2label_paths(img_paths):
 
 
 class LoadImagesAndLabels(Dataset):  # for training/testing
-    def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, image_weights=False,
+    def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, ratio_maintain=True, image_weights=False,
                  cache_images=False, single_cls=False, stride=32, pad=0.0, prefix='',valid_idx=None, pose_data=None):
         self.img_size = img_size
         self.augment = augment
         self.hyp = hyp
         self.image_weights = image_weights
         self.rect = False if image_weights else rect
+        self.ratio_maintain = ratio_maintain
         self.mosaic = self.augment and not self.rect  # load 4 images at a time into a mosaic (only during training)
         self.mosaic_border = [-img_size // 2, -img_size // 2]
         self.stride = stride
@@ -625,7 +627,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 labels = np.concatenate((labels, labels2), 0)
                 poses = np.concatenate((poses, poses2), 0)
 
-            if random.random() < hyp.get('face_cut_out', 0):
+            if hyp is not None and random.random() < hyp.get('face_cut_out', 0):
                 for face in labels[labels[:, 0]==1, 1:]:
                     width_temp = face[2] - face[0]
                     height_temp = face[3] - face[1]
@@ -641,7 +643,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         else:
             # Load image
-            img, (h0, w0), (h, w) = load_image(self, index)
+            img, (h0, w0), (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain)
 
             # Letterbox
             shape = self.batch_shapes[self.batch[index]] if self.rect else self.img_size  # final letterboxed shape
@@ -654,21 +656,21 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 if self.pose_data is not None:
                     poses = self.pose_data[index].copy()
                     poses = [pose_xyn2xy(x, ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1]) for x in poses]
-            
-            for _ in range(hyp.get('max_num_face_cut_out', 0)):
-                if random.random() < hyp.get('face_cut_out', 0):
-                    for face in labels[labels[:, 0]==1, 1:]:
-                        width_temp = face[2] - face[0]
-                        height_temp = face[3] - face[1]
-                        cutx = face[0]+(1.2*random.random()-0.1)*width_temp
-                        cuty = face[1]+(1.2*random.random()-0.1)*height_temp
-                        cutw = 0.8*width_temp*random.random()
-                        cuth = 0.8*height_temp*random.random()
-                        cutx_min = int(min(max(cutx - cutw/2, 0), w))
-                        cuty_min = int(min(max(cuty - cuth/2, 0), h))
-                        cutx_max = int(min(max(cutx + cutw/2, 0), w))
-                        cuty_max = int(min(max(cuty + cuth/2, 0), h))
-                        img[cuty_min : cuty_max, cutx_min : cutx_max, :] = 0
+            if hyp is not None:
+                for _ in range(hyp.get('max_num_face_cut_out', 0)):
+                    if random.random() < hyp.get('face_cut_out', 0):
+                        for face in labels[labels[:, 0]==1, 1:]:
+                            width_temp = face[2] - face[0]
+                            height_temp = face[3] - face[1]
+                            cutx = face[0]+(1.2*random.random()-0.1)*width_temp
+                            cuty = face[1]+(1.2*random.random()-0.1)*height_temp
+                            cutw = 0.8*width_temp*random.random()
+                            cuth = 0.8*height_temp*random.random()
+                            cutx_min = int(min(max(cutx - cutw/2, 0), w))
+                            cuty_min = int(min(max(cuty - cuth/2, 0), h))
+                            cutx_max = int(min(max(cutx + cutw/2, 0), w))
+                            cuty_max = int(min(max(cuty + cuth/2, 0), h))
+                            img[cuty_min : cuty_max, cutx_min : cutx_max, :] = 0
                 
         if self.augment:
             # Augment imagespace
@@ -702,7 +704,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         break
                 labels = pastein(img, labels, sample_labels, sample_images, sample_masks)
 
-            if random.random() < hyp.get('dark_paste_in', 0):
+            if hyp is not None and random.random() < hyp.get('dark_paste_in', 0):
                 sample_images, sample_masks = [], []
                 while len(sample_images) < 30:
                     _, sample_images_, sample_masks_ = load_samples(self, random.randint(0, len(self.labels) - 1))
@@ -777,7 +779,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
 
 # Ancillary functions --------------------------------------------------------------------------------------------------
-def load_image(self, index):
+def load_image(self, index, ratio_maintain=True):
     # loads 1 image from dataset, returns img, original hw, resized hw
     img = self.imgs[index]
     if img is None:  # not cached
@@ -785,11 +787,16 @@ def load_image(self, index):
         img = cv2.imread(path)  # BGR
         assert img is not None, 'Image Not Found ' + path
         h0, w0 = img.shape[:2]  # orig hw
-        r = self.img_size / max(h0, w0)  # resize image to img_size
-        if r != 1:  # always resize down, only resize up if training with augmentation
-            interp = cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR
-            img = cv2.resize(img, (int(w0 * r), int(h0 * r)), interpolation=interp)
-        return img, (h0, w0), img.shape[:2]  # img, hw_original, hw_resized
+        if ratio_maintain:
+            r = self.img_size / max(h0, w0)  # resize image to img_size
+            if r != 1:  # always resize down, only resize up if training with augmentation
+                interp = cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR
+                img = cv2.resize(img, (int(w0 * r), int(h0 * r)), interpolation=interp)
+            return img, (h0, w0), img.shape[:2]  # img, hw_original, hw_resized
+        else:
+            interp = cv2.INTER_AREA if not self.augment else cv2.INTER_LINEAR
+            img = cv2.resize(img, (int(self.img_size), int(self.img_size)), interpolation=interp)
+            return img, (h0, w0), img.shape[:2]  # img, hw_original, hw_resized
     else:
         return self.imgs[index], self.img_hw0[index], self.img_hw[index]  # img, hw_original, hw_resized
 
