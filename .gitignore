@@ -26,7 +26,7 @@ NCAP_videos_selected/
 weights/
 converted_synthetic_cups/
 detected_cups_coco_and_surreal/
-.git/objects/
+
 
 storage.googleapis.com
 runs/*
