@@ -222,8 +222,8 @@ def detect(save_img=False):
 
     print(f'Done. ({time.time() - t0:.3f}s)')
     print("BBOX NUM: ", bbox_num)
-    with open('bboxnum.txt', 'a') as f:
-        f.write(str(bbox_num) + '\n')
+    #with open('bboxnum.txt', 'a') as f:
+    #    f.write(str(bbox_num) + '\n')
 
 
 if __name__ == '__main__':

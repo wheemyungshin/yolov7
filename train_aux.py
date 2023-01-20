@@ -200,8 +200,8 @@ def train(hyp, opt, device, tb_writer=None):
     ema = ModelEMA(model) if rank in [-1, 0] else None
 
     # Resume
-    start_epoch, best_fitness = 0, 0.0
-    if pretrained:
+    start_epoch, best_fitness = 0, 0.0	
+    if opt.resume:
         # Optimizer
         if ckpt['optimizer'] is not None:
             optimizer.load_state_dict(ckpt['optimizer'])
@@ -240,7 +240,7 @@ def train(hyp, opt, device, tb_writer=None):
     if opt.sync_bn and cuda and rank != -1:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model).to(device)
         logger.info('Using SyncBatchNorm()')
-
+	
     valid_idx = data_dict.get('valid_idx', None)	
     pose_data = [data_dict.get('pose_train', None), data_dict.get('pose_val', None)]	
     if pose_data[0] is None and pose_data[1] is None:	
@@ -281,7 +281,7 @@ def train(hyp, opt, device, tb_writer=None):
     if cuda and rank != -1:
         model = DDP(model, device_ids=[opt.local_rank], output_device=opt.local_rank,
                     # nn.MultiheadAttention incompatibility with DDP https://github.com/pytorch/pytorch/issues/26698
-                    find_unused_parameters=any(isinstance(layer, nn.MultiheadAttention) for layer in model.modules()))
+                    find_unused_parameters=True)
 
     # Model parameters
     hyp['box'] *= 3. / nl  # scale to layers
