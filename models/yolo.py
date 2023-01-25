@@ -689,9 +689,9 @@ class Model(nn.Module):
         logger.info('')
         
         self.channel_wise_adaptation = nn.ModuleList([
-            nn.Linear(128, 256),
-            nn.Linear(256, 512),
-            nn.Linear(512, 1024)
+            nn.Linear(128, 128),
+            nn.Linear(256, 256),
+            nn.Linear(512, 512)
         ])
         
         self.spatial_wise_adaptation = nn.ModuleList([
@@ -701,27 +701,27 @@ class Model(nn.Module):
         ])
 
         self.local_mask_adaptation_layers = nn.ModuleList([
-            nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(128, 128, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(512, 512, kernel_size=1, stride=1, padding=0)
         ])
 
         self.global_mask_adaptation_layers = nn.ModuleList([
-            nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(128, 128, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(512, 512, kernel_size=1, stride=1, padding=0)
         ])
 
         self.adaptation_layers = nn.ModuleList([
-            nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(128, 128, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(512, 512, kernel_size=1, stride=1, padding=0)
         ])
 
         self.non_local_adaptation = nn.ModuleList([
-            nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(128, 128, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(512, 512, kernel_size=1, stride=1, padding=0)
         ])
 
         
