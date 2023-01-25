@@ -337,6 +337,8 @@ def train(hyp, opt, device, tb_writer=None):
                 f'Logging results to {save_dir}\n'
                 f'Starting training for {epochs} epochs...')
     torch.save(model, wdir / 'init.pt')
+
+    is_distill = True
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         model.train()
         sup_model.train()
@@ -358,6 +360,16 @@ def train(hyp, opt, device, tb_writer=None):
         # Update mosaic border
         # b = int(random.uniform(0.25 * imgsz, 0.75 * imgsz + gs) // gs * gs)
         # dataset.mosaic_border = [b - imgsz, -b]  # height, width borders
+        if epoch == epochs - opt.close_mosaic:
+            print("CLOSE MOSAIC!")
+            # Trainloader
+            dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, opt,
+                                                    hyp=hyp, augment=False, cache=opt.cache_images, rect=opt.rect, rank=rank,
+                                                    world_size=opt.world_size, workers=opt.workers,
+                                                    image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data)
+            
+            print("STOP DISTILLATION!")
+            is_distill = False
 
         mloss = torch.zeros(7, device=device)  # mean losses
         if rank != -1:
@@ -392,9 +404,14 @@ def train(hyp, opt, device, tb_writer=None):
 
             # Forward
             with amp.autocast(enabled=cuda):
-                with torch.no_grad():
-                    sup_pred, sup_features = sup_model(imgs, get_feature=True)  # forward
-                pred, kd_loss, kd_loss_items = model(imgs, t_info=(sup_pred, sup_features), get_feature=True)  # forward          
+                if is_distill:
+                    with torch.no_grad():
+                        sup_pred, sup_features = sup_model(imgs, get_feature=True)  # forward
+                    pred, kd_loss, kd_loss_items = model(imgs, t_info=(sup_pred, sup_features), get_feature=True)  # forward    
+                else:	
+                    pred = model(imgs)  # forward
+                    kd_loss = torch.zeros(1, device=device)
+                    kd_loss_items = torch.zeros(3, device=device)
 
                 if 'loss_ota' not in hyp or hyp['loss_ota'] == 1:
                     loss, loss_items = compute_loss_ota(pred, targets.to(device), imgs)  # loss scaled by batch_size
@@ -605,6 +622,7 @@ if __name__ == '__main__':
     parser.add_argument('--artifact_alias', type=str, default="latest", help='version of dataset artifact to be used')
     parser.add_argument('--freeze', nargs='+', type=int, default=[0], help='Freeze layers: backbone of yolov7=50, first3=0 1 2')
     parser.add_argument('--v5-metric', action='store_true', help='assume maximum recall as 1.0 in AP calculation')
+    parser.add_argument('--close-mosaic', type=int, default=16, help='stop mosaic augmentation and distillation')
     opt = parser.parse_args()
 
     # Set DDP variables
