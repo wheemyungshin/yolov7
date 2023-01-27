@@ -341,7 +341,7 @@ def train(hyp, opt, device, tb_writer=None):
     is_distill = True
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         model.train()
-        sup_model.train()
+        sup_model.eval()
 
         # Update image weights (optional)
         if opt.image_weights:
@@ -405,9 +405,15 @@ def train(hyp, opt, device, tb_writer=None):
             # Forward
             with amp.autocast(enabled=cuda):
                 if is_distill:
+                    distill_weight = (
+                        (1 - math.cos(ni * math.pi / len(dataloader)))
+                        / 2) * (0.1 - 1) + 1
+
                     with torch.no_grad():
                         sup_pred, sup_features = sup_model(imgs, get_feature=True)  # forward
-                    pred, kd_loss, kd_loss_items = model(imgs, t_info=(sup_pred, sup_features), get_feature=True)  # forward    
+                    pred, kd_loss, kd_loss_items = model(imgs, t_info=(sup_pred, sup_features), get_feature=True)  # forward  
+                    kd_loss *= distill_weight
+                    kd_loss_items *= distill_weight
                 else:	
                     pred = model(imgs)  # forward
                     kd_loss = torch.zeros(1, device=device)
@@ -507,12 +513,21 @@ def train(hyp, opt, device, tb_writer=None):
                 best_fitness = fi
             wandb_logger.end_epoch(best_result=best_fitness == fi)
 
+            #remove adaptation layers
+            savemodel = deepcopy(model.module if is_parallel(model) else model).half()
+            savemodel.channel_wise_adaptation = nn.Sequential()
+            savemodel.spatial_wise_adaptation = nn.Sequential()
+            savemodel.local_mask_adaptation_layers = nn.Sequential()
+            savemodel.global_mask_adaptation_layers = nn.Sequential()
+            savemodel.adaptation_layers = nn.Sequential()
+            savemodel.non_local_adaptation = nn.Sequential()
+
             # Save model
             if (not opt.nosave) or (final_epoch and not opt.evolve):  # if save
                 ckpt = {'epoch': epoch,
                         'best_fitness': best_fitness,
                         'training_results': results_file.read_text(),
-                        'model': deepcopy(model.module if is_parallel(model) else model).half(),
+                        'model': savemodel,
                         'ema': deepcopy(ema.ema).half(),
                         'updates': ema.updates,
                         'optimizer': optimizer.state_dict(),
