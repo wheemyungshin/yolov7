@@ -1,0 +1,15 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [/data/wider_face_updated/train.txt, /data/wider_face_updated/val.txt, 
+/data/coco_face_from_kpts_wholebody/train.txt, /data/coco_face_from_kpts_wholebody/val.txt,
+/data/crowd/train.txt, /data/crowd/val.txt,
+/data/MAFA_concat/train.txt, /data/MAFA_concat/val.txt]  # 99575 images
+val: [/data/coco_face_from_kpts_wholebody/val.txt]   # 5884 images
+test: [/data/coco_face_from_kpts_wholebody/val.txt]   # 5884
+
+# number of classes
+nc: 2
+
+# class names
+names: ['person', 'face']
+
+valid_idx: [0, 1]

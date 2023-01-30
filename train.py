@@ -329,6 +329,16 @@ def train(hyp, opt, device, tb_writer=None):
         # Update mosaic border
         # b = int(random.uniform(0.25 * imgsz, 0.75 * imgsz + gs) // gs * gs)
         # dataset.mosaic_border = [b - imgsz, -b]  # height, width borders
+        if epoch == epochs - opt.close_mosaic:
+            print("CLOSE MOSAIC!")
+            # Trainloader
+            dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, opt,
+                                                    hyp=hyp, augment=False, cache=opt.cache_images, rect=opt.rect, rank=rank,
+                                                    world_size=opt.world_size, workers=opt.workers,
+                                                    image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data)
+            
+            print("STOP DISTILLATION!")
+            is_distill = False
 
         mloss = torch.zeros(4, device=device)  # mean losses
         if rank != -1:
@@ -568,6 +578,7 @@ if __name__ == '__main__':
     parser.add_argument('--artifact_alias', type=str, default="latest", help='version of dataset artifact to be used')
     parser.add_argument('--freeze', nargs='+', type=int, default=[0], help='Freeze layers: backbone of yolov7=50, first3=0 1 2')
     parser.add_argument('--v5-metric', action='store_true', help='assume maximum recall as 1.0 in AP calculation')
+    parser.add_argument('--close-mosaic', type=int, default=0, help='stop mosaic augmentation and distillation')
     opt = parser.parse_args()
 
     # Set DDP variables

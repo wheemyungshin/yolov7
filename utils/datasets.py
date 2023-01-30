@@ -639,7 +639,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     cuty_min = int(min(max(cuty - cuth/2, 0), img.shape[0]))
                     cutx_max = int(min(max(cutx + cutw/2, 0), img.shape[1]))
                     cuty_max = int(min(max(cuty + cuth/2, 0), img.shape[0]))
-                    img[cuty_min : cuty_max, cutx_min : cutx_max, :] = 0
+                    img[cuty_min : cuty_max, cutx_min : cutx_max, :] = random.random()*255
 
         else:
             # Load image
@@ -670,7 +670,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             cuty_min = int(min(max(cuty - cuth/2, 0), h))
                             cutx_max = int(min(max(cutx + cutw/2, 0), w))
                             cuty_max = int(min(max(cuty + cuth/2, 0), h))
-                            img[cuty_min : cuty_max, cutx_min : cutx_max, :] = 0
+                            img[cuty_min : cuty_max, cutx_min : cutx_max, :] = random.random()*255
                 
         if self.augment:
             # Augment imagespace
