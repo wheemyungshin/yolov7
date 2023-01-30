@@ -689,9 +689,9 @@ class Model(nn.Module):
         logger.info('')
         
         self.channel_wise_adaptation = nn.ModuleList([
-            nn.Linear(128, 128),
-            nn.Linear(256, 256),
-            nn.Linear(512, 512)
+            nn.Linear(128, 256),
+            nn.Linear(256, 512),
+            nn.Linear(512, 1024)
         ])
         
         self.spatial_wise_adaptation = nn.ModuleList([
@@ -702,28 +702,28 @@ class Model(nn.Module):
 
         '''
         self.local_mask_adaptation_layers = nn.ModuleList([
-            nn.Conv2d(128, 128, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(512, 512, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0)
         ])
 
         self.global_mask_adaptation_layers = nn.ModuleList([
-            nn.Conv2d(128, 128, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(512, 512, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0)
         ])
         '''
 
         self.adaptation_layers = nn.ModuleList([
-            nn.Conv2d(128, 128, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(512, 512, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0)
         ])
 
         self.non_local_adaptation = nn.ModuleList([
-            nn.Conv2d(128, 128, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(512, 512, kernel_size=1, stride=1, padding=0)
+            nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0)
         ])
 
         
@@ -814,9 +814,9 @@ class Model(nn.Module):
                                                                 t_feats[_i].size(3))
                     kd_spatial_loss += torch.dist(t_spatial_pool, self.spatial_wise_adaptation[_i](s_spatial_pool))
 
-                kd_feat_loss *= 4e-7 * 6
-                kd_channel_loss *= 1e-4 * 3
-                kd_spatial_loss *= 3e-4 * 6
+                kd_feat_loss *= 4e-8 * 6
+                kd_channel_loss *= 1e-5 * 3
+                kd_spatial_loss *= 3e-5 * 6
                 kd_loss = kd_feat_loss + kd_channel_loss + kd_spatial_loss
                 kd_loss_items = torch.cat((kd_feat_loss, kd_channel_loss, kd_spatial_loss)).detach()
 
@@ -853,7 +853,7 @@ class Model(nn.Module):
             x = m(x)  # run
             
             y.append(x if m.i in self.save else None)  # save output
-            if m.i in self.model[-1].f and get_feature and len(features) < 3:#distill features before the last repconv
+            if m.i in self.model[-1].f and get_feature and len(features) < 3:#distill features after the last repconv
                 features.append(x)
 
         if profile:
