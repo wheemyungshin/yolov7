@@ -411,9 +411,10 @@ def train(hyp, opt, device, tb_writer=None):
 
                     with torch.no_grad():
                         sup_pred, sup_features = sup_model(imgs, get_feature=True)  # forward
-                    pred, kd_loss, kd_loss_items = model(imgs, t_info=(sup_pred, sup_features), get_feature=True)  # forward  
+                    kd_loss_items = torch.zeros(3, device=device)
+                    pred, kd_loss, kd_loss_item = model(imgs, t_info=(sup_pred, sup_features), get_feature=True)  # forward  
+                    kd_loss_items[0] = kd_loss_item * distill_weight
                     kd_loss *= distill_weight
-                    kd_loss_items *= distill_weight
                 else:	
                     pred = model(imgs)  # forward
                     kd_loss = torch.zeros(1, device=device)
