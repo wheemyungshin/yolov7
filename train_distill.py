@@ -250,12 +250,12 @@ def train(hyp, opt, device, tb_writer=None):
     # DP mode
     if cuda and rank == -1 and torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
-        sup_model = torch.nn.DataParallel(sup_model)
+        #sup_model = torch.nn.DataParallel(sup_model)
 
     # SyncBatchNorm
     if opt.sync_bn and cuda and rank != -1:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model).to(device)
-        sup_model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(sup_model).to(device)
+        #sup_model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(sup_model).to(device)
         logger.info('Using SyncBatchNorm()')
 
     valid_idx = data_dict.get('valid_idx', None)
@@ -300,9 +300,11 @@ def train(hyp, opt, device, tb_writer=None):
         model = DDP(model, device_ids=[opt.local_rank], output_device=opt.local_rank,
                     # nn.MultiheadAttention incompatibility with DDP https://github.com/pytorch/pytorch/issues/26698
                     find_unused_parameters=True)
+        '''
         sup_model = DDP(sup_model, device_ids=[opt.local_rank], output_device=opt.local_rank,
                     # nn.MultiheadAttention incompatibility with DDP https://github.com/pytorch/pytorch/issues/26698
                     find_unused_parameters=True)
+        '''
 
     # Model parameters
     hyp['box'] *= 3. / nl  # scale to layers
@@ -315,12 +317,14 @@ def train(hyp, opt, device, tb_writer=None):
     model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device) * nc  # attach class weights
     model.names = names
 
+    '''
     # Model parameters
     sup_model.nc = nc  # attach number of classes to model
     sup_model.hyp = hyp  # attach hyperparameters to model
     sup_model.gr = 1.0  # iou loss ratio (obj_loss = 1.0 or iou)
     sup_model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device) * nc  # attach class weights
     sup_model.names = names
+    '''
 
     # Start training
     t0 = time.time()
@@ -413,8 +417,8 @@ def train(hyp, opt, device, tb_writer=None):
                         sup_pred, sup_features = sup_model(imgs, get_feature=True)  # forward
                     kd_loss_items = torch.zeros(3, device=device)
                     pred, kd_loss, kd_loss_item = model(imgs, t_info=(sup_pred, sup_features), get_feature=True)  # forward  
-                    kd_loss_items[0] = kd_loss_item * distill_weight
                     kd_loss *= distill_weight
+                    kd_loss_items[0] = kd_loss
                 else:	
                     pred = model(imgs)  # forward
                     kd_loss = torch.zeros(1, device=device)
