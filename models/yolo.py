@@ -794,10 +794,10 @@ class Model(nn.Module):
                                             dim=1)  # [N*C, H*W]
 
                     logsoftmax = torch.nn.LogSoftmax(dim=1)
-                    kd_feat_loss = torch.sum(
+                    kd_feat_loss += torch.sum(
                         softmax_pred_T * logsoftmax(t_feat.view(-1, W * H) / tau) -
                         softmax_pred_T * logsoftmax(s_feat.view(-1, W * H) / tau)) * (
-                            tau**2) / (C * N)
+                            tau**2) / (C * N) * 0.1
                 
                 kd_loss = kd_feat_loss
                 kd_loss_items = kd_feat_loss
