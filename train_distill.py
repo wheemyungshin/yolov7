@@ -250,12 +250,12 @@ def train(hyp, opt, device, tb_writer=None):
     # DP mode
     if cuda and rank == -1 and torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
-        #sup_model = torch.nn.DataParallel(sup_model)
+        sup_model = torch.nn.DataParallel(sup_model)
 
     # SyncBatchNorm
     if opt.sync_bn and cuda and rank != -1:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model).to(device)
-        #sup_model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(sup_model).to(device)
+        sup_model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(sup_model).to(device)
         logger.info('Using SyncBatchNorm()')
 
     valid_idx = data_dict.get('valid_idx', None)
@@ -417,7 +417,7 @@ def train(hyp, opt, device, tb_writer=None):
                         sup_pred, sup_features = sup_model(imgs, get_feature=True)  # forward
                     kd_loss_items = torch.zeros(3, device=device)
                     pred, kd_loss, kd_loss_item = model(imgs, t_info=(sup_pred, sup_features), get_feature=True)  # forward  
-                    kd_loss *= distill_weight
+                    kd_loss = kd_loss * distill_weight
                     kd_loss_items[0] = kd_loss
                 else:	
                     pred = model(imgs)  # forward
