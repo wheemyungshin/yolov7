@@ -15,6 +15,7 @@ from utils.plots import plot_one_box
 from utils.torch_utils import select_device, load_classifier, time_synchronized, TracedModel
 
 import json
+import os
 
 
 def detect(save_img=False):
@@ -72,6 +73,12 @@ def detect(save_img=False):
 
     jdict = []
 
+
+    if opt.save_frame:
+        os.makedirs(os.path.join(save_dir, 'vis_frames'), exist_ok=True)
+        os.makedirs(os.path.join(save_dir, 'clean_frames'), exist_ok=True)
+
+
     t0 = time.time()
     for path, img, im0s, vid_cap in dataset:
         img = torch.from_numpy(img).to(device)
@@ -106,12 +113,16 @@ def detect(save_img=False):
         if classify:
             pred = apply_classifier(pred, modelc, img, im0s)
 
+
         # Process detections
         for i, det in enumerate(pred):  # detections per image
             if webcam:  # batch_size >= 1
                 p, s, im0, frame = path[i], '%g: ' % i, im0s[i].copy(), dataset.count
             else:
                 p, s, im0, frame = path, '', im0s, getattr(dataset, 'frame', 0)
+            
+
+            clean_im0 = im0.copy()
 
             if opt.frame_ratio <= 0:
                 frame_ratio = fps
@@ -189,6 +200,10 @@ def detect(save_img=False):
                     if dataset.mode == 'image':
                         cv2.imwrite(save_path, im0)
                         print(f" The image with the result is saved in: {save_path}")
+                        if opt.save_frame:
+                            print(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0]))
+                            cv2.imwrite(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0])+'_'+str(frame)+'.jpg', im0)
+                            cv2.imwrite(os.path.join(save_dir, 'clean_frames', p.name.split('.')[0])+'_'+str(frame)+'_clean.jpg', clean_im0)
                     else:  # 'video' or 'stream'
                         if vid_path != save_path:  # new video
                             vid_path = save_path
@@ -203,7 +218,9 @@ def detect(save_img=False):
                                 save_path += '.mp4'
                             vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                         if opt.save_frame:
-                            cv2.imwrite(save_path+'_'+str(frame)+'.jpg', im0)
+                            print(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0]))
+                            cv2.imwrite(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0])+'_'+str(frame)+'.jpg', im0)
+                            cv2.imwrite(os.path.join(save_dir, 'clean_frames', p.name.split('.')[0])+'_'+str(frame)+'_clean.jpg', clean_im0)
                         vid_writer.write(im0)
 
     if save_txt or save_img:
