@@ -368,7 +368,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         self.mosaic = self.augment and not self.rect  # load 4 images at a time into a mosaic (only during training)
         self.mosaic_border = [-img_size // 2, -img_size // 2]
         self.stride = stride
-        self.path = path      
+        self.path = path
         #self.albumentations = Albumentations() if augment else None
         
         if pose_data is not None:
@@ -713,6 +713,43 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     if len(sample_images) == 0:
                         break
                 labels = dark_pastein(img, labels, sample_images, sample_masks)
+
+        nL = len(labels)  # number of labels
+        if nL:
+            shape_before = len(labels)
+            #body filtering
+            if hyp.get('body_filter', False):
+                body_labels = labels[labels[:, 0]==0]
+                face_labels = labels[labels[:, 0]==1]
+
+                in_box_dict = {}
+                for body_i, body_label in enumerate(body_labels):
+                    for face_i, face_label in enumerate(face_labels):
+                        if body_label[1]-1 < face_label[1] < body_label[3]+1 and \
+                            body_label[2]-1 < face_label[2] < body_label[4]+1 and \
+                            body_label[1]-1 < face_label[3] < body_label[3]+1 and \
+                            body_label[2]-1 < face_label[4] < body_label[4]+1:
+                            if body_i in in_box_dict:
+                                #select the highest face
+                                if face_labels[in_box_dict[body_i]][2] > face_label[2]:
+                                    in_box_dict[body_i] = face_i
+                            else:
+                                in_box_dict[body_i] = face_i
+
+                ignore_body_i_list = []
+                for body_i, face_i in in_box_dict.items():
+                    face_height = face_labels[face_i][4] - face_labels[face_i][2]
+                    body_under_face_height = body_labels[body_i][4] - face_labels[face_i][4]
+                    if body_under_face_height < face_height*0.6:
+                        ignore_body_i_list.append(body_i)
+
+                labels_after_filter = []
+                for body_i, body_label in enumerate(body_labels):
+                    if body_i not in ignore_body_i_list:
+                        labels_after_filter.append(body_label)
+                for face_i, face_label in enumerate(face_labels):
+                    labels_after_filter.append(face_label)
+                labels = np.array(labels_after_filter)
 
         nL = len(labels)  # number of labels
         if nL:
