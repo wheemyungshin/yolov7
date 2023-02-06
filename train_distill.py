@@ -7,6 +7,7 @@ import time
 from copy import deepcopy
 from pathlib import Path
 from threading import Thread
+import datetime
 
 import numpy as np
 import torch.distributed as dist
@@ -300,9 +301,11 @@ def train(hyp, opt, device, tb_writer=None):
         model = DDP(model, device_ids=[opt.local_rank], output_device=opt.local_rank,
                     # nn.MultiheadAttention incompatibility with DDP https://github.com/pytorch/pytorch/issues/26698
                     find_unused_parameters=True)
+        '''
         sup_model = DDP(sup_model, device_ids=[opt.local_rank], output_device=opt.local_rank,
                     # nn.MultiheadAttention incompatibility with DDP https://github.com/pytorch/pytorch/issues/26698
                     find_unused_parameters=True)
+        '''
 
     # Model parameters
     hyp['box'] *= 3. / nl  # scale to layers
@@ -315,12 +318,14 @@ def train(hyp, opt, device, tb_writer=None):
     model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device) * nc  # attach class weights
     model.names = names
 
+    '''
     # Model parameters
     sup_model.nc = nc  # attach number of classes to model
     sup_model.hyp = hyp  # attach hyperparameters to model
     sup_model.gr = 1.0  # iou loss ratio (obj_loss = 1.0 or iou)
     sup_model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device) * nc  # attach class weights
     sup_model.names = names
+    '''
 
     # Start training
     t0 = time.time()
@@ -411,9 +416,10 @@ def train(hyp, opt, device, tb_writer=None):
 
                     with torch.no_grad():
                         sup_pred, sup_features = sup_model(imgs, get_feature=True)  # forward
-                    pred, kd_loss, kd_loss_items = model(imgs, t_info=(sup_pred, sup_features), get_feature=True)  # forward  
-                    kd_loss *= distill_weight
-                    kd_loss_items *= distill_weight
+                    kd_loss_items = torch.zeros(3, device=device)
+                    pred, kd_loss, kd_loss_item = model(imgs, t_info=(sup_pred, sup_features), get_feature=True)  # forward  
+                    kd_loss = kd_loss * distill_weight
+                    kd_loss_items[0] = kd_loss
                 else:	
                     pred = model(imgs)  # forward
                     kd_loss = torch.zeros(1, device=device)
@@ -673,7 +679,7 @@ if __name__ == '__main__':
         assert torch.cuda.device_count() > opt.local_rank
         torch.cuda.set_device(opt.local_rank)
         device = torch.device('cuda', opt.local_rank)
-        dist.init_process_group(backend='nccl', init_method='env://')  # distributed backend
+        dist.init_process_group(backend='nccl', init_method='env://', timeout=datetime.timedelta(seconds=18000))  # distributed backend
         assert opt.batch_size % opt.world_size == 0, '--batch-size must be multiple of CUDA device count'
         opt.batch_size = opt.total_batch_size // opt.world_size
 
