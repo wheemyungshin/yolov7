@@ -726,11 +726,20 @@ class Model(nn.Module):
             nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0)
         ])
 
+        self.norm = [
+            nn.BatchNorm2d(256, affine=False),
+            nn.BatchNorm2d(512, affine=False),
+            nn.BatchNorm2d(1024, affine=False)
+        ]
         
         self.normal_init(self.channel_wise_adaptation, 0, 0.0001, True)
         self.normal_init(self.spatial_wise_adaptation, 0, 0.0001, True)
         self.normal_init(self.adaptation_layers, 0, 0.0001, True)
         self.normal_init(self.non_local_adaptation, 0, 0.0001, True)
+        #self.normal_init(self.channel_wise_adaptation, 0, 0.0001, True)
+        #self.normal_init(self.spatial_wise_adaptation, 0, 0.0001, True)
+        #self.normal_init(self.adaptation_layers, 0, 0.0001, True)
+        #self.normal_init(self.non_local_adaptation, 0, 0.0001, True)
         #self.normal_init(self.local_mask_adaptation_layers, 0, 0.0001, True)
         #self.normal_init(self.global_mask_adaptation_layers, 0, 0.0001, True)
     
@@ -774,11 +783,36 @@ class Model(nn.Module):
                 #    print("S: ", features[_i].size())
                 #    print("T: ", t_feats[_i].size())
 
-                t = 0.1
+                #t = 0.1
+                tau = 1.0
                 kd_feat_loss, kd_channel_loss, kd_spatial_loss = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
                 total_masks = []
 
+                for _i in range(len(features)):
+                    adap_norm = self.norm[_i].to(device)
+                    s_feat = self.adaptation_layers[_i](features[_i])
+                    s_feat = adap_norm(s_feat)
+                    t_feat = adap_norm(t_feats[_i])
+                    
+                    N, C, H, W = s_feat.shape
+                    # normalize in channel diemension
+                    softmax_pred_T = F.softmax(t_feat.view(-1, W * H) / tau,
+                                            dim=1)  # [N*C, H*W]
+
+                    logsoftmax = torch.nn.LogSoftmax(dim=1)
+                    kd_feat_loss += torch.sum(
+                        softmax_pred_T * logsoftmax(t_feat.view(-1, W * H) / tau) -
+                        softmax_pred_T * logsoftmax(s_feat.view(-1, W * H) / tau)) * (
+                            tau**2) / (C * N) * 0.1
+                
+                kd_loss = kd_feat_loss
+                kd_loss_items = kd_feat_loss
+
+                return pred, kd_loss, kd_loss_items
+
+
                 # feature distillation by using attention mask
+                '''
                 for _i in range(len(features)):
                     # Global part
                     t_global_attention_mask = self.generate_attention_mask(t_feats[_i], features[0].size(0), t, type="spatial")
@@ -821,6 +855,7 @@ class Model(nn.Module):
                 kd_loss_items = torch.cat((kd_feat_loss, kd_channel_loss, kd_spatial_loss)).detach()
 
                 return pred, kd_loss, kd_loss_items
+                '''
             else:
                 return self.forward_once(x, profile, get_feature)  # single-scale inference, train
 
