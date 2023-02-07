@@ -231,7 +231,14 @@ def train(hyp, opt, device, tb_writer=None):
     # Image sizes
     gs = max(int(model.stride.max()), 32)  # grid size (max stride)
     nl = model.model[-1].nl  # number of detection layers (used for scaling hyp['obj'])
-    imgsz, imgsz_test = [check_img_size(x, gs) for x in opt.img_size]  # verify imgsz are gs-multiples
+    if isinstance(opt.img_size, list):
+        imgsz = [check_img_size(x, gs) for x in opt.img_size]  # verify imgsz are gs-multiples
+        imgsz = tuple(imgsz)
+        imgsz_test = max(imgsz[0], imgsz[1])
+    else:
+        imgsz = check_img_size(opt.img_size, gs)  # verify imgsz are gs-multiples
+        imgsz_test = imgsz
+
 
     # DP mode
     if cuda and rank == -1 and torch.cuda.device_count() > 1:
@@ -287,7 +294,11 @@ def train(hyp, opt, device, tb_writer=None):
     # Model parameters
     hyp['box'] *= 3. / nl  # scale to layers
     hyp['cls'] *= nc / 80. * 3. / nl  # scale to classes and layers
-    hyp['obj'] *= (imgsz / 640) ** 2 * 3. / nl  # scale to image size and layers
+    
+    if isinstance(imgsz, tuple):
+        hyp['obj'] *= (imgsz[0] / 640) * (imgsz[1] / 640) * 3. / nl  # scale to image size and layers
+    else:
+        hyp['obj'] *= (imgsz / 640) ** 2 * 3. / nl  # scale to image size and layers
     hyp['label_smoothing'] = opt.label_smoothing
     model.nc = nc  # attach number of classes to model
     model.hyp = hyp  # attach hyperparameters to model
@@ -352,7 +363,7 @@ def train(hyp, opt, device, tb_writer=None):
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
             ni = i + nb * epoch  # number integrated batches (since train start)
             imgs = imgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
-            print(imgs.shape)
+            #print(imgs.shape)
 
             # Warmup
             if ni <= nw:
@@ -367,7 +378,11 @@ def train(hyp, opt, device, tb_writer=None):
 
             # Multi-scale
             if opt.multi_scale:
-                sz = random.randrange(imgsz * 0.5, imgsz * 1.5 + gs) // gs * gs  # size
+                if isinstance(imgsz, tuple):
+                    sz = random.randrange(max(imgsz[0], imgsz[1]) * 0.5, max(imgsz[0], imgsz[1]) * 1.5 + gs) // gs * gs  # size
+                else:
+                    sz = random.randrange(imgsz * 0.5, imgsz * 1.5 + gs) // gs * gs  # size
+                    
                 sf = sz / max(imgs.shape[2:])  # scale factor
                 if sf != 1:
                     ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
