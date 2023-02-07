@@ -829,15 +829,18 @@ def load_image(self, index, ratio_maintain=True):
         assert img is not None, 'Image Not Found ' + path
         h0, w0 = img.shape[:2]  # orig hw
         if ratio_maintain:
-            r = self.img_size / max(h0, w0)  # resize image to img_size
-            if r != 1:  # always resize down, only resize up if training with augmentation
-                interp = cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR
-                img = cv2.resize(img, (int(w0 * r), int(h0 * r)), interpolation=interp)
+            if isinstance(self.img_size, tuple):
+                img = cv2.resize(img, (int(self.img_size[1]), int(self.img_size[0])), interpolation=cv2.INTER_LINEAR)
+            else:
+                r = self.img_size / max(h0, w0)  # resize image to img_size
+                if r != 1:  # always resize down, only resize up if training with augmentation
+                    interp = cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR
+                    img = cv2.resize(img, (int(w0 * r), int(h0 * r)), interpolation=interp)
             return img, (h0, w0), img.shape[:2]  # img, hw_original, hw_resized
         else:
             interp = cv2.INTER_AREA if not self.augment else cv2.INTER_LINEAR
             if isinstance(self.img_size, tuple):
-                img = cv2.resize(img, (int(self.img_size[0]), int(self.img_size[1])), interpolation=interp)
+                img = cv2.resize(img, (int(self.img_size[1]), int(self.img_size[0])), interpolation=interp)
             else:
                 img = cv2.resize(img, (int(self.img_size), int(self.img_size)), interpolation=interp)
             return img, (h0, w0), img.shape[:2]  # img, hw_original, hw_resized
