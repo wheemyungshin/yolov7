@@ -454,7 +454,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 seg = self.segments[i]
                 for j, x_line in enumerate(x):
                     for id_index, v_id in enumerate(valid_idx):
-                        if x_line[0] == v_id:
+                        if int(x_line[0]) == v_id:
                             new_x.append(np.array([id_index, x_line[1], x_line[2], x_line[3], x_line[4]]))
                             if len(seg) > j:
                                 new_seg.append(seg[j])
@@ -487,6 +487,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         n = len(self.shapes)  # number of images
         bi = np.floor(np.arange(n) / batch_size).astype(np.int)  # batch index
+        print(bi)
         nb = bi[-1] + 1  # number of batches
         self.batch = bi  # batch index of image
         self.n = n
