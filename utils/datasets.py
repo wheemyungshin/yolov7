@@ -722,7 +722,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         if nL:
             shape_before = len(labels)
             #body filtering
-            if hyp.get('body_filter', False):
+            if hyp is not None and hyp.get('body_filter', False):
                 body_labels = labels[labels[:, 0]==0]
                 face_labels = labels[labels[:, 0]==1]
 
