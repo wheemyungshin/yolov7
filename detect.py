@@ -198,7 +198,7 @@ def detect(save_img=False):
                 # Save results (image with detections)
                 if save_img:
                     if dataset.mode == 'image':
-                        cv2.imwrite(save_path, im0)
+                        #cv2.imwrite(save_path, im0)
                         print(f" The image with the result is saved in: {save_path}")
                         if opt.save_frame:
                             print(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0]))
