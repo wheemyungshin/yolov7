@@ -5,5 +5,6 @@ for dir in $target/*; do
                 echo $dir
                 echo ${dir##*/}
                 python3 detect.py --weights weights/0127memryx_mafa-yolov7-tiny_body_only_s192_320.pt  --conf 0.4 --source $dir --name 0127memryx_mafa-yolov7-tiny_body_only_s192_320/${dir##*/} --img-size 192 320 --device 0 --agnostic-nms --save-frame
+
         fi
 done
