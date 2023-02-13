@@ -484,6 +484,13 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 new_pose_data.append(rescale_pose_data)
             self.pose_data = new_pose_data
 
+        if hyp is not None:
+            box_margin = hyp.get('box_margin', 1.0)
+            print(box_margin)
+            for i, x in enumerate(self.labels):
+                self.labels[i][:, 3] = x[:, 3]*box_margin
+                self.labels[i][:, 4] = x[:, 4]*box_margin
+
         if single_cls:
             for x in self.labels:
                 x[:, 0] = 0
