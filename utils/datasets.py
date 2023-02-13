@@ -484,6 +484,13 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 new_pose_data.append(rescale_pose_data)
             self.pose_data = new_pose_data
 
+        if hyp is not None:
+            box_margin = hyp.get('box_margin', 1.0)
+            print(box_margin)
+            for i, x in enumerate(self.labels):
+                self.labels[i][:, 3] = x[:, 3]*box_margin
+                self.labels[i][:, 4] = x[:, 4]*box_margin
+
         if single_cls:
             for x in self.labels:
                 x[:, 0] = 0
@@ -644,6 +651,16 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     cutx_max = int(min(max(cutx + cutw/2, 0), img.shape[1]))
                     cuty_max = int(min(max(cuty + cuth/2, 0), img.shape[0]))
                     img[cuty_min : cuty_max, cutx_min : cutx_max, :] = random.random()*255
+            elif hyp is not None and random.random() < hyp.get('cut_out', 0):
+                cutx = (0.6*random.random()+0.2)*img.shape[1]
+                cuty = (0.6*random.random()+0.2)*img.shape[0]
+                cutw = 0.05*random.random()*img.shape[1]
+                cuth = 0.05*random.random()*img.shape[0]
+                cutx_min = int(min(max(cutx - cutw/2, 0), img.shape[1]))
+                cuty_min = int(min(max(cuty - cuth/2, 0), img.shape[0]))
+                cutx_max = int(min(max(cutx + cutw/2, 0), img.shape[1]))
+                cuty_max = int(min(max(cuty + cuth/2, 0), img.shape[0]))
+                img[cuty_min : cuty_max, cutx_min : cutx_max, :] = random.random()*255
 
         else:
             # Load image
@@ -675,6 +692,16 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             cutx_max = int(min(max(cutx + cutw/2, 0), w))
                             cuty_max = int(min(max(cuty + cuth/2, 0), h))
                             img[cuty_min : cuty_max, cutx_min : cutx_max, :] = random.random()*255
+                    elif hyp is not None and random.random() < hyp.get('cut_out', 0):
+                        cutx = (0.6*random.random()+0.2)*img.shape[1]
+                        cuty = (0.6*random.random()+0.2)*img.shape[0]
+                        cutw = 0.05*random.random()*img.shape[1]
+                        cuth = 0.05*random.random()*img.shape[0]
+                        cutx_min = int(min(max(cutx - cutw/2, 0), img.shape[1]))
+                        cuty_min = int(min(max(cuty - cuth/2, 0), img.shape[0]))
+                        cutx_max = int(min(max(cutx + cutw/2, 0), img.shape[1]))
+                        cuty_max = int(min(max(cuty + cuth/2, 0), img.shape[0]))
+                        img[cuty_min : cuty_max, cutx_min : cutx_max, :] = random.random()*255
                 
         if self.augment:
             # Augment imagespace
