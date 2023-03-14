@@ -5,5 +5,6 @@ for dir in $target/*; do
                 echo $dir
                 echo ${dir##*/}
                 python3 detect.py --weights weights/smoke_all_crop_yolov7_s192_192.pt  --conf 0.4 --source $dir --name smoke_all_crop_yolov7_s192_192/${dir##*/} --img-size 192 320 --device 0 --agnostic-nms --save-frame
+
         fi
 done
