@@ -781,6 +781,13 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 for face_i, face_label in enumerate(face_labels):
                     labels_after_filter.append(face_label)
                 labels = np.array(labels_after_filter)
+            elif hyp is not None:
+                labels_after_filter = []
+                for label in labels:
+                    if (label[3]-label[1])*(label[4]-label[2]) > hyp.get('min_size', 0):#if obj min_size exists
+                        labels_after_filter.append(label)
+                labels = np.array(labels_after_filter)
+
 
         nL = len(labels)  # number of labels
         if nL:
