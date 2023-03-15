@@ -654,8 +654,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             elif hyp is not None and random.random() < hyp.get('cut_out', 0):
                 cutx = (0.6*random.random()+0.2)*img.shape[1]
                 cuty = (0.6*random.random()+0.2)*img.shape[0]
-                cutw = 0.05*random.random()*img.shape[1]
-                cuth = 0.05*random.random()*img.shape[0]
+                cutw = 0.07*random.random()*img.shape[1]
+                cuth = 0.07*random.random()*img.shape[0]
                 cutx_min = int(min(max(cutx - cutw/2, 0), img.shape[1]))
                 cuty_min = int(min(max(cuty - cuth/2, 0), img.shape[0]))
                 cutx_max = int(min(max(cutx + cutw/2, 0), img.shape[1]))
@@ -695,8 +695,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     elif hyp is not None and random.random() < hyp.get('cut_out', 0):
                         cutx = (0.6*random.random()+0.2)*img.shape[1]
                         cuty = (0.6*random.random()+0.2)*img.shape[0]
-                        cutw = 0.05*random.random()*img.shape[1]
-                        cuth = 0.05*random.random()*img.shape[0]
+                        cutw = 0.07*random.random()*img.shape[1]
+                        cuth = 0.07*random.random()*img.shape[0]
                         cutx_min = int(min(max(cutx - cutw/2, 0), img.shape[1]))
                         cuty_min = int(min(max(cuty - cuth/2, 0), img.shape[0]))
                         cutx_max = int(min(max(cutx + cutw/2, 0), img.shape[1]))
