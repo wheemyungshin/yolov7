@@ -52,7 +52,7 @@ if __name__ == '__main__':
     opt.img_size = [check_img_size(x, gs) for x in opt.img_size]  # verify img_size are gs-multiples
 
     # Input
-    img = torch.zeros(opt.batch_size, 3, *opt.img_size).to(device)  # image size(1,3,320,192) iDetection
+    img = torch.zeros(opt.batch_size, 3, *opt.img_size).to(device)  # image size(1,3,192,320) iDetection
 
     # Update model
     for k, m in model.named_modules():
@@ -132,7 +132,7 @@ if __name__ == '__main__':
         import onnx
 
         print('\nStarting ONNX export with onnx %s...' % onnx.__version__)
-        f = opt.weights.replace('.pt', '_{}_{}.onnx'.format(opt.img_size[1], opt.img_size[0]))  # filename
+        f = opt.weights.replace('.pt', '_{}_{}.onnx'.format(opt.img_size[0], opt.img_size[1]))  # filename
         model.eval()
         output_names = ['classes', 'boxes'] if y is None else ['output']
         dynamic_axes = None
