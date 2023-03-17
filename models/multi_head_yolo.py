@@ -638,50 +638,52 @@ class Model(nn.Module):
         self.model, self.save = parse_model(deepcopy(self.yaml), ch=[ch])  # model, savelist
         self.names = [str(i) for i in range(self.yaml['nc'])]  # default names
         # print([x.shape for x in self.forward(torch.zeros(1, ch, 64, 64))])
+        self.nc = nc
 
         # Build strides, anchors
-        m = self.model[-1]  # Detect()
-        if isinstance(m, Detect):
-            s = 256  # 2x min stride
-            m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
-            check_anchor_order(m)
-            m.anchors /= m.stride.view(-1, 1, 1)
-            self.stride = m.stride
-            self._initialize_biases()  # only run once
-            # print('Strides: %s' % m.stride.tolist())
-        if isinstance(m, IDetect):
-            s = 256  # 2x min stride
-            m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
-            check_anchor_order(m)
-            m.anchors /= m.stride.view(-1, 1, 1)
-            self.stride = m.stride
-            self._initialize_biases()  # only run once
-            # print('Strides: %s' % m.stride.tolist())
-        if isinstance(m, IAuxDetect):
-            s = 256  # 2x min stride
-            m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))[:4]])  # forward
-            #print(m.stride)
-            check_anchor_order(m)
-            m.anchors /= m.stride.view(-1, 1, 1)
-            self.stride = m.stride
-            self._initialize_aux_biases()  # only run once
-            # print('Strides: %s' % m.stride.tolist())
-        if isinstance(m, IBin):
-            s = 256  # 2x min stride
-            m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
-            check_anchor_order(m)
-            m.anchors /= m.stride.view(-1, 1, 1)
-            self.stride = m.stride
-            self._initialize_biases_bin()  # only run once
-            # print('Strides: %s' % m.stride.tolist())
-        if isinstance(m, IKeypoint):
-            s = 256  # 2x min stride
-            m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
-            check_anchor_order(m)
-            m.anchors /= m.stride.view(-1, 1, 1)
-            self.stride = m.stride
-            self._initialize_biases_kpt()  # only run once
-            # print('Strides: %s' % m.stride.tolist())
+        for multi_head_i in range(self.nc):
+            m = self.model[-self.nc+multi_head_i]  # Detect()
+            if isinstance(m, Detect):
+                s = 256  # 2x min stride
+                m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))[0]])  # forward
+                check_anchor_order(m)
+                m.anchors /= m.stride.view(-1, 1, 1)
+                self.stride = m.stride
+                self._initialize_biases(-self.nc+multi_head_i) # run each layer
+                # print('Strides: %s' % m.stride.tolist())
+            if isinstance(m, IDetect):
+                s = 256  # 2x min stride
+                m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))[0]])  # forward
+                check_anchor_order(m)
+                m.anchors /= m.stride.view(-1, 1, 1)
+                self.stride = m.stride
+                self._initialize_biases(-self.nc+multi_head_i) # run each layer
+                # print('Strides: %s' % m.stride.tolist())
+            if isinstance(m, IAuxDetect):
+                s = 256  # 2x min stride
+                m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))[:4]])  # forward
+                #print(m.stride)
+                check_anchor_order(m)
+                m.anchors /= m.stride.view(-1, 1, 1)
+                self.stride = m.stride
+                self._initialize_aux_biases()  # only run once
+                # print('Strides: %s' % m.stride.tolist())
+            if isinstance(m, IBin):
+                s = 256  # 2x min stride
+                m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
+                check_anchor_order(m)
+                m.anchors /= m.stride.view(-1, 1, 1)
+                self.stride = m.stride
+                self._initialize_biases_bin()  # only run once
+                # print('Strides: %s' % m.stride.tolist())
+            if isinstance(m, IKeypoint):
+                s = 256  # 2x min stride
+                m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
+                check_anchor_order(m)
+                m.anchors /= m.stride.view(-1, 1, 1)
+                self.stride = m.stride
+                self._initialize_biases_kpt()  # only run once
+                # print('Strides: %s' % m.stride.tolist())
 
         # Init weights, biases
         initialize_weights(self)
@@ -809,58 +811,13 @@ class Model(nn.Module):
                 kd_loss_items = kd_feat_loss
 
                 return pred, kd_loss, kd_loss_items
-
-
-                # feature distillation by using attention mask
-                '''
-                for _i in range(len(features)):
-                    # Global part
-                    t_global_attention_mask = self.generate_attention_mask(t_feats[_i], features[0].size(0), t, type="spatial")
-                    s_global_attention_mask = self.generate_attention_mask(features[_i], features[0].size(0), t, type="spatial")
-                    c_t_global_attention_mask = self.generate_attention_mask(t_feats[_i], features[0].size(0), t, type="channel")
-                    c_s_global_attention_mask = self.generate_attention_mask(features[_i], features[0].size(0), t, type="channel")
-                    #c_s_global_attention_mask = self.generate_attention_mask(self.global_mask_adaptation_layers[_i](features[_i]), features[0].size(0), t, type="channel")
-                    
-                    sum_global_attention_mask = (t_global_attention_mask + s_global_attention_mask) / 2
-                    sum_global_attention_mask = sum_global_attention_mask.detach()
-
-                    # Local part
-                    local_kd_feat_loss, local_kd_channel_loss, local_mask = self.calculate_local_attention_loss(t_feats[_i], features[_i], _i)
-                    
-                    # making final feature mask using in feature distillation
-                    c_sum_global_attention_mask = (c_t_global_attention_mask + c_s_global_attention_mask) / 2
-                    c_sum_global_attention_mask = c_sum_global_attention_mask.detach()
-
-                    # feature loss by using teacher feature and student feature
-                    global_kd_feat_loss = dist2(t_feats[_i], self.adaptation_layers[_i](features[_i]), attention_mask=sum_global_attention_mask,
-                                        channel_attention_mask=c_sum_global_attention_mask)
-
-                    kd_feat_loss += (local_kd_feat_loss + global_kd_feat_loss) / 2
-
-                    # original torch L2 loss & using this for channel kd loss
-                    kd_channel_loss += torch.dist(torch.mean(t_feats[_i], [2, 3]),
-                                                self.channel_wise_adaptation[_i](torch.mean(features[_i], [2, 3]))) + local_kd_channel_loss
-                    
-                    # spatial kd loss
-                    t_spatial_pool = torch.mean(t_feats[_i], [1]).view(t_feats[_i].size(0), 1, t_feats[_i].size(2),
-                                                                    t_feats[_i].size(3))
-                    s_spatial_pool = torch.mean(features[_i], [1]).view(t_feats[_i].size(0), 1, t_feats[_i].size(2),
-                                                                t_feats[_i].size(3))
-                    kd_spatial_loss += torch.dist(t_spatial_pool, self.spatial_wise_adaptation[_i](s_spatial_pool))
-
-                kd_feat_loss *= 4e-8 * 6
-                kd_channel_loss *= 1e-5 * 3
-                kd_spatial_loss *= 3e-5 * 6
-                kd_loss = kd_feat_loss + kd_channel_loss + kd_spatial_loss
-                kd_loss_items = torch.cat((kd_feat_loss, kd_channel_loss, kd_spatial_loss)).detach()
-
-                return pred, kd_loss, kd_loss_items
-                '''
             else:
-                return self.forward_once(x, profile, get_feature)  # single-scale inference, train
+                output = self.forward_once(x, profile, get_feature) 
+                return output  # single-scale inference, train
 
     def forward_once(self, x, profile=False, get_feature=False):
         y, dt = [], []  # outputs
+        output_save = None
         if get_feature:
             features = []
         for m in self.model:
@@ -886,23 +843,24 @@ class Model(nn.Module):
                 print('%10.1f%10.0f%10.1fms %-40s' % (o, m.np, dt[-1], m.type))
 
             x = m(x)  # run
+            if isinstance(m, IDetect):
+                if output_save is None:
+                    output_save = {0: x}
+                else:
+                    output_save[len(output_save)] = x
+                x = output_save
             
             y.append(x if m.i in self.save else None)  # save output
-            if m.i in self.model[-1].f and get_feature and len(features) < 3:#distill features after the last repconv
-                features.append(x)
 
         if profile:
             print('%.1fms total' % sum(dt))
             
-        if get_feature:
-            return x, features
-        else:
-            return x
+        return x
 
-    def _initialize_biases(self, cf=None):  # initialize biases into Detect(), cf is class frequency
+    def _initialize_biases(self, multi_head_i=-1, cf=None):  # initialize biases into Detect(), cf is class frequency
         # https://arxiv.org/abs/1708.02002 section 3.3
-        # cf = torch.bincount(torch.tensor(np.concatenate(dataset.labels, 0)[:, 0]).long(), minlength=nc) + 1.
-        m = self.model[-1]  # Detect() module
+        # cf = torch.bincount(torch.tensor(np.concatenate(dataset.labels, 0)[:, 0]).long(), minlength=nc) + 1.    
+        m = self.model[multi_head_i]  # Detect()
         for mi, s in zip(m.m, m.stride):  # from
             b = mi.bias.view(m.na, -1)  # conv.bias(255) to (3,85)
             b.data[:, 4] += math.log(8 / (640 / s) ** 2)  # obj (8 objects per 640 image)
@@ -949,10 +907,11 @@ class Model(nn.Module):
             mi.bias = torch.nn.Parameter(b.view(-1), requires_grad=True)
 
     def _print_biases(self):
-        m = self.model[-1]  # Detect() module
-        for mi in m.m:  # from
-            b = mi.bias.detach().view(m.na, -1).T  # conv.bias(255) to (3,85)
-            print(('%6g Conv2d.bias:' + '%10.3g' * 6) % (mi.weight.shape[1], *b[:5].mean(1).tolist(), b[5:].mean()))
+        for multi_head_i in range(self.nc):
+            m = self.model[-self.nc+multi_head_i]  # Detect()
+            for mi in m.m:  # from
+                b = mi.bias.detach().view(m.na, -1).T  # conv.bias(255) to (3,85)
+                print(('%6g Conv2d.bias:' + '%10.3g' * 6) % (mi.weight.shape[1], *b[:5].mean(1).tolist(), b[5:].mean()))
 
     # def _print_weights(self):
     #     for m in self.model.modules():
