@@ -109,21 +109,12 @@ def detect(save_img=False):
         t2 = time_synchronized()
 
         t3 = time_synchronized()
-        print(type(preds))
-        print(len(preds))
         concat_pred = []
         for multi_head_i, pred in enumerate(preds):
-            print(type(pred[0]))
-            print(type(pred[1]))
-            print(pred[0].shape)
-            print(len(pred[1]))
-            for p in pred[1]:
-                print(p.shape)
             pred = pred[0]
 
             # Apply NMS
             pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=0, agnostic=opt.agnostic_nms)
-            print(len(pred))
             for p in pred:
                 p[:, -1] = multi_head_i
             for p in pred:
@@ -133,7 +124,6 @@ def detect(save_img=False):
                     concat_pred[0] = torch.cat((concat_pred[0], p), 0)
                 
         pred = concat_pred
-        print(pred)
 
         # Apply Classifier
         if classify:
