@@ -12,7 +12,7 @@ from utils.datasets import LoadStreams, LoadImages
 from utils.general import check_img_size, check_requirements, check_imshow, non_max_suppression, apply_classifier, \
     scale_coords, xyxy2xywh, strip_optimizer, set_logging, increment_path
 from utils.plots import plot_one_box
-from utils.torch_utils import select_device, load_classifier, time_synchronized, TracedModel
+from utils.torch_utils import select_device, load_classifier, time_synchronized, TracedModel_multihead
 
 import json
 import os
@@ -21,10 +21,13 @@ import os
 def detect(save_img=False):
     bbox_num = 0
     source, weights, view_img, save_txt, imgsz, trace = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, not opt.no_trace
+    head_num = opt.head_num
     save_img = not opt.nosave and not source.endswith('.txt')  # save inference images
     webcam = source.isnumeric() or source.endswith('.txt') or source.lower().startswith(
         ('rtsp://', 'rtmp://', 'http://', 'https://'))
 
+    assert head_num > 0
+    
     # Directories
     save_dir = Path(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
     (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
@@ -39,12 +42,10 @@ def detect(save_img=False):
     stride = int(model.stride.max())  # model stride
     #imgsz = check_img_size(imgsz, s=stride)  # check img_size
 
-
+    print(model)
+    
     if trace:
-        if len(opt.img_size)==2:
-            model = TracedModel(model, device, tuple(opt.img_size))
-        elif len(opt.img_size)==1:
-            model = TracedModel(model, device, tuple([opt.img_size[0], opt.img_size[0]]))
+        model = TracedModel_multihead(model, head_num, device, tuple(opt.img_size))
 
     if half:
         model.half()  # to FP16
@@ -77,11 +78,9 @@ def detect(save_img=False):
 
     jdict = []
 
-
     if opt.save_frame:
         os.makedirs(os.path.join(save_dir, 'vis_frames'), exist_ok=True)
         os.makedirs(os.path.join(save_dir, 'clean_frames'), exist_ok=True)
-
 
     t0 = time.time()
     for path, img, im0s, vid_cap in dataset:
@@ -106,12 +105,35 @@ def detect(save_img=False):
 
         # Inference
         t1 = time_synchronized()
-        pred = model(img, augment=opt.augment)[0]
+        preds = model(img, augment=opt.augment)
         t2 = time_synchronized()
 
-        # Apply NMS
-        pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
         t3 = time_synchronized()
+        print(type(preds))
+        print(len(preds))
+        concat_pred = []
+        for multi_head_i, pred in enumerate(preds):
+            print(type(pred[0]))
+            print(type(pred[1]))
+            print(pred[0].shape)
+            print(len(pred[1]))
+            for p in pred[1]:
+                print(p.shape)
+            pred = pred[0]
+
+            # Apply NMS
+            pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=0, agnostic=opt.agnostic_nms)
+            print(len(pred))
+            for p in pred:
+                p[:, -1] = multi_head_i
+            for p in pred:
+                if len(concat_pred) == 0:
+                    concat_pred.append(p)
+                else:
+                    concat_pred[0] = torch.cat((concat_pred[0], p), 0)
+                
+        pred = concat_pred
+        print(pred)
 
         # Apply Classifier
         if classify:
@@ -267,6 +289,7 @@ if __name__ == '__main__':
     parser.add_argument('--name', default='exp', help='save results to project/name')
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
     parser.add_argument('--no-trace', action='store_true', help='don`t trace model')
+    parser.add_argument('--head-num', default=0, type=int, help='the number of multi heads')
     parser.add_argument('--save-json', action='store_true', help='save a cocoapi-compatible JSON results file')
     parser.add_argument('--frame-ratio', default=1, type=int, help='save frame ratio')
     parser.add_argument('--save-frame', action='store_true', help='save each frame of video results')
