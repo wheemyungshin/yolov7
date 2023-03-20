@@ -341,7 +341,6 @@ def revert_sync_batchnorm(module):
 
 
 class TracedModel(nn.Module):
-
     def __init__(self, model=None, device=None, img_size=(640,640)): 
         super(TracedModel, self).__init__()
         
@@ -376,4 +375,50 @@ class TracedModel(nn.Module):
     def forward(self, x, augment=False, profile=False):
         out = self.model(x)
         out = self.detect_layer(out)
+        return out
+
+class TracedModel_multihead(nn.Module):
+    def __init__(self, model=None, head_num=1, device=None, img_size=(640,640)): 
+        super(TracedModel_multihead, self).__init__()
+        
+        print(" Convert model to Traced-model... ") 
+        self.stride = model.stride
+        self.names = model.names
+        self.model = model
+
+        self.model = revert_sync_batchnorm(self.model)
+        self.model.to('cpu')
+        self.model.eval()
+
+        self.detect_layers = []
+        for layer_i in range(head_num):            
+            self.detect_layers.append(self.model.model[-head_num+layer_i])
+        self.model.traced = True
+        
+        if isinstance(img_size, int):
+            rand_example = torch.rand(1, 3, img_size, img_size)
+        elif isinstance(img_size, tuple):
+            rand_example = torch.rand(1, 3, img_size[0], img_size[1])
+        else:
+            assert isinstance(img_size, int) or isinstance(img_size, tuple)  
+        
+        traced_script_module = torch.jit.trace(self.model, rand_example, strict=False)
+        #traced_script_module = torch.jit.script(self.model)
+        traced_script_module.save("traced_model.pt")
+        print(" traced_script_module saved! ")
+        self.model = traced_script_module
+        self.model.to(device)
+        for head_i in range(len(self.detect_layers)):
+            self.detect_layers[head_i].to(device)
+            print(self.detect_layers[head_i])
+            print(self.detect_layers[head_i].anchors)
+            print(self.detect_layers[head_i].anchor_grid)
+        print(" model is traced! \n") 
+
+    def forward(self, x, augment=False, profile=False):
+        x = self.model(x)
+        out = []
+        for i, detect_layer in enumerate(self.detect_layers):
+            x_out = detect_layer(x.copy())
+            out.append(x_out)
         return out

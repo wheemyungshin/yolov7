@@ -974,17 +974,18 @@ class Model(nn.Module):
         return self
 
     def nms(self, mode=True):  # add or remove NMS module
-        present = type(self.model[-1]) is NMS  # last layer is NMS
-        if mode and not present:
-            print('Adding NMS... ')
-            m = NMS()  # module
-            m.f = -1  # from
-            m.i = self.model[-1].i + 1  # index
-            self.model.add_module(name='%s' % m.i, module=m)  # add
-            self.eval()
-        elif not mode and present:
-            print('Removing NMS... ')
-            self.model = self.model[:-1]  # remove
+        for multi_head_i in range(self.nc):
+            present = type(self.model[-self.nc+multi_head_i]) is NMS  # last layer is NMS
+            if mode and not present:
+                print('Adding NMS... ')
+                m = NMS()  # module
+                m.f = -1  # from
+                m.i = self.model[-self.nc+multi_head_i].i + self.nc # index
+                self.model.add_module(name='%s' % m.i, module=m)  # add
+                self.eval()
+            elif not mode and present:
+                print('Removing NMS... ')
+                self.model = self.model[:-self.nc]  # remove
         return self
 
     def autoshape(self):  # add autoShape module
