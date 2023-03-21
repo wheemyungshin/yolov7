@@ -845,9 +845,9 @@ class Model(nn.Module):
             x = m(x)  # run
             if isinstance(m, IDetect):
                 if output_save is None:
-                    output_save = [x]
+                    output_save = {0: x}
                 else:
-                    output_save.append(x)
+                    output_save[len(output_save)] = x
                 x = output_save
             
             y.append(x if m.i in self.save else None)  # save output

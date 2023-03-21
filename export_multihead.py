@@ -42,6 +42,7 @@ if __name__ == '__main__':
     print(opt)
     set_logging()
     t = time.time()
+    assert opt.head_num > 0
 
     # Load PyTorch model
     device = select_device(opt.device)
@@ -88,6 +89,7 @@ if __name__ == '__main__':
             model.model[-opt.head_num+head_i].include_nms = True
         y = None
 
+    '''
     # TorchScript export
     try:
         print('\nStarting TorchScript export with torch %s...' % torch.__version__)
@@ -130,95 +132,92 @@ if __name__ == '__main__':
         print('TorchScript-Lite export success, saved as %s' % f)
     except Exception as e:
         print('TorchScript-Lite export failure: %s' % e)
+    '''
 
     # ONNX export
-    try:
-        import onnx
+    import onnx
 
-        print('\nStarting ONNX export with onnx %s...' % onnx.__version__)
-        f = opt.weights.replace('.pt', '_{}_{}.onnx'.format(opt.img_size[0], opt.img_size[1]))  # filename
-        model.eval()
-        output_names = ['classes', 'boxes'] if y is None else ['output']
-        dynamic_axes = None
-        if opt.dynamic:
-            dynamic_axes = {'images': {0: 'batch', 2: 'height', 3: 'width'},  # size(1,3,640,640)
-             'output': {0: 'batch', 2: 'y', 3: 'x'}}
-        if opt.dynamic_batch:
-            opt.batch_size = 'batch'
-            dynamic_axes = {
-                'images': {
-                    0: 'batch',
-                }, }
-            if opt.end2end and opt.max_wh is None:
-                output_axes = {
-                    'num_dets': {0: 'batch'},
-                    'det_boxes': {0: 'batch'},
-                    'det_scores': {0: 'batch'},
-                    'det_classes': {0: 'batch'},
-                }
-            else:
-                output_axes = {
-                    'output': {0: 'batch'},
-                }
-            dynamic_axes.update(output_axes)
-        if opt.grid:
-            if opt.end2end:
-                print('\nStarting export end2end onnx model for %s...' % 'TensorRT' if opt.max_wh is None else 'onnxruntime')
-                model = End2End_multihead(model,opt.head_num,opt.topk_all,opt.iou_thres,opt.conf_thres,opt.max_wh,device,len(labels))
-                if opt.end2end and opt.max_wh is None:
-                    output_names = ['num_dets', 'det_boxes', 'det_scores', 'det_classes']
-                    shapes = [opt.batch_size, 1, opt.batch_size, opt.topk_all, 4,
-                              opt.batch_size, opt.topk_all, opt.batch_size, opt.topk_all]
-                else:
-                    output_names = ['output']
-            else:
-                for head_i in range(opt.head_num):
-                    model.model[-opt.head_num+head_i].concat = True
-
-        torch.onnx.export(model, img, f, verbose=False, opset_version=12, input_names=['images'],
-                          output_names=output_names,
-                          dynamic_axes=dynamic_axes)
-
-        # Checks
-        onnx_model = onnx.load(f)  # load onnx model
-        onnx.checker.check_model(onnx_model)  # check onnx model
-
+    print('\nStarting ONNX export with onnx %s...' % onnx.__version__)
+    f = opt.weights.replace('.pt', '_{}_{}.onnx'.format(opt.img_size[0], opt.img_size[1]))  # filename
+    model.eval()
+    output_names = ['classes', 'boxes'] if y is None else ['output']
+    dynamic_axes = None
+    if opt.dynamic:
+        dynamic_axes = {'images': {0: 'batch', 2: 'height', 3: 'width'},  # size(1,3,640,640)
+            'output': {0: 'batch', 2: 'y', 3: 'x'}}
+    if opt.dynamic_batch:
+        opt.batch_size = 'batch'
+        dynamic_axes = {
+            'images': {
+                0: 'batch',
+            }, }
         if opt.end2end and opt.max_wh is None:
-            for i in onnx_model.graph.output:
-                for j in i.type.tensor_type.shape.dim:
-                    j.dim_param = str(shapes.pop(0))
+            output_axes = {
+                'num_dets': {0: 'batch'},
+                'det_boxes': {0: 'batch'},
+                'det_scores': {0: 'batch'},
+                'det_classes': {0: 'batch'},
+            }
+        else:
+            output_axes = {
+                'output': {0: 'batch'},
+            }
+        dynamic_axes.update(output_axes)
+    if opt.grid:
+        if opt.end2end:
+            print('\nStarting export end2end onnx model for %s...' % 'TensorRT' if opt.max_wh is None else 'onnxruntime')
+            model = End2End_multihead(model,opt.head_num,opt.topk_all,opt.iou_thres,opt.conf_thres,opt.max_wh,device,len(labels))
+            if opt.end2end and opt.max_wh is None:
+                output_names = ['num_dets', 'det_boxes', 'det_scores', 'det_classes']
+                shapes = [opt.batch_size, 1, opt.batch_size, opt.topk_all, 4,
+                            opt.batch_size, opt.topk_all, opt.batch_size, opt.topk_all]
+            else:
+                output_names = ['output']
+        else:
+            for head_i in range(opt.head_num):
+                model.model[-opt.head_num+head_i].concat = True
 
-        # print(onnx.helper.printable_graph(onnx_model.graph))  # print a human readable model
+    torch.onnx.export(model, img, f, verbose=False, opset_version=12, input_names=['images'],
+                        output_names=output_names,
+                        dynamic_axes=dynamic_axes)
 
-        # # Metadata
-        # d = {'stride': int(max(model.stride))}
-        # for k, v in d.items():
-        #     meta = onnx_model.metadata_props.add()
-        #     meta.key, meta.value = k, str(v)
-        # onnx.save(onnx_model, f)
+    # Checks
+    onnx_model = onnx.load(f)  # load onnx model
+    onnx.checker.check_model(onnx_model)  # check onnx model
 
-        if opt.simplify:
-            try:
-                import onnxsim
+    if opt.end2end and opt.max_wh is None:
+        for i in onnx_model.graph.output:
+            for j in i.type.tensor_type.shape.dim:
+                j.dim_param = str(shapes.pop(0))
 
-                print('\nStarting to simplify ONNX...')
-                onnx_model, check = onnxsim.simplify(onnx_model)
-                assert check, 'assert check failed'
-            except Exception as e:
-                print(f'Simplifier failure: {e}')
+    # print(onnx.helper.printable_graph(onnx_model.graph))  # print a human readable model
 
-        # print(onnx.helper.printable_graph(onnx_model.graph))  # print a human readable model
-        onnx.save(onnx_model,f)
-        print('ONNX export success, saved as %s' % f)
+    # # Metadata
+    # d = {'stride': int(max(model.stride))}
+    # for k, v in d.items():
+    #     meta = onnx_model.metadata_props.add()
+    #     meta.key, meta.value = k, str(v)
+    # onnx.save(onnx_model, f)
 
-        if opt.include_nms:
-            print('Registering NMS plugin for ONNX...')
-            mo = RegisterNMS(f)
-            mo.register_nms()
-            mo.save(f)
+    if opt.simplify:
+        try:
+            import onnxsim
 
-    except Exception as e:
-        print('ONNX export failure: %s' % e)
+            print('\nStarting to simplify ONNX...')
+            onnx_model, check = onnxsim.simplify(onnx_model)
+            assert check, 'assert check failed'
+        except Exception as e:
+            print(f'Simplifier failure: {e}')
+
+    # print(onnx.helper.printable_graph(onnx_model.graph))  # print a human readable model
+    onnx.save(onnx_model,f)
+    print('ONNX export success, saved as %s' % f)
+
+    if opt.include_nms:
+        print('Registering NMS plugin for ONNX...')
+        mo = RegisterNMS(f)
+        mo.register_nms()
+        mo.save(f)
 
     # Finish
     print('\nExport complete (%.2fs). Visualize with https://github.com/lutzroeder/netron.' % (time.time() - t))
