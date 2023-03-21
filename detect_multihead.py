@@ -108,7 +108,6 @@ def detect(save_img=False):
         preds = model(img, augment=opt.augment)
         t2 = time_synchronized()
 
-        t3 = time_synchronized()
         concat_pred = []
         for multi_head_i, pred in enumerate(preds):
             pred = pred[0]
@@ -122,6 +121,7 @@ def detect(save_img=False):
                     concat_pred.append(p)
                 else:
                     concat_pred[0] = torch.cat((concat_pred[0], p), 0)
+        t3 = time_synchronized()
                 
         pred = concat_pred
 
