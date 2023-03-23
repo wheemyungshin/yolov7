@@ -1,0 +1,12 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [/data/crop_seatbelt_data/train.txt, ../data/Pitta2ND_DB/seatbelt/train.txt] # 14695 + 23494
+val: [/data/crop_seatbelt_data/train.txt]   
+test: [/data/crop_seatbelt_data/train.txt]   
+
+# number of classes
+nc: 2
+
+# class names
+names: ['seatbelt', 'face']
+
+valid_idx: [0, 1]
