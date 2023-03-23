@@ -111,9 +111,11 @@ def detect(save_img=False):
         concat_pred = []
         for multi_head_i, pred in enumerate(preds):
             pred = pred[0]
+            print(multi_head_i, " : ", pred)
 
             # Apply NMS
-            pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=0, agnostic=opt.agnostic_nms)
+            pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=None, agnostic=opt.agnostic_nms)
+            print(multi_head_i, " (nms) : ", pred)
             for p in pred:
                 p[:, -1] = multi_head_i
             for p in pred:
@@ -124,6 +126,7 @@ def detect(save_img=False):
         t3 = time_synchronized()
                 
         pred = concat_pred
+        print("concat: ", pred)
 
         # Apply Classifier
         if classify:
