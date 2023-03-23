@@ -77,7 +77,6 @@ def check_anchors_multihead(dataset, model, multi_head_num=None, thr=4.0, imgsz=
             scale = np.random.uniform(0.9, 1.1, size=(shapes.shape[0], 1))  # augment scale
             wh = torch.tensor(np.concatenate([l[:, 3:5] * s for s, l in zip(shapes * scale, dataset.labels)])).float()  # wh
 
-
             anchors = m.anchor_grid.clone().cpu().view(-1, 2)  # current anchors
             bpr, aat = metric(anchors)
             print(f'anchors/target = {aat:.2f}, Best Possible Recall (BPR) = {bpr:.4f}', end='')

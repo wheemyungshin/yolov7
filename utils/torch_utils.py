@@ -410,9 +410,6 @@ class TracedModel_multihead(nn.Module):
         self.model.to(device)
         for head_i in range(len(self.detect_layers)):
             self.detect_layers[head_i].to(device)
-            print(self.detect_layers[head_i])
-            print(self.detect_layers[head_i].anchors)
-            print(self.detect_layers[head_i].anchor_grid)
         print(" model is traced! \n") 
 
     def forward(self, x, augment=False, profile=False):
