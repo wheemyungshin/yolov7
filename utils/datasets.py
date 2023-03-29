@@ -786,6 +786,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 for label in labels:
                     if (label[3]-label[1])*(label[4]-label[2]) > hyp.get('min_size', 0):#if obj min_size exists
                         labels_after_filter.append(label)
+                    else:
+                        img[int(label[2]):int(label[4]), int(label[1]):int(label[3]), :] = 0
                 labels = np.array(labels_after_filter)
 
 
