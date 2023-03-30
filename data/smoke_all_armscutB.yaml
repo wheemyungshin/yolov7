@@ -4,7 +4,6 @@ train: [/data/smoke_all_armscut/smoke_data_BFC/train.txt,
 /data/smoke_all_armscut/valid_ciga_data_cbf_for_training/ncap.txt,
 /data/smoke_all_armscut/valid_ciga_data_cbf_for_training/pitta_1st.txt,
 /data/smoke_all_armscut/PITTA_2ND_ir_smoke_frames_after_inspection/train.txt,
-/data/smoke_all_armscut/valid_pitta_smoke_BFC/train.txt,
 /data/smoke_all_armscut/valid_pitta_smoke_BFC2/train.txt] # 43297 + 2754
 val: [/data/smoke_all_armscut/PITTA_2ND_ir_smoke_frames_after_inspection/train.txt] # 2391
 test: [/data/smoke_all_armscut/PITTA_2ND_ir_smoke_frames_after_inspection/train.txt]   
