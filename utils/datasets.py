@@ -786,10 +786,32 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 for label in labels:
                     if (label[3]-label[1])*(label[4]-label[2]) > hyp.get('min_size', 0):#if obj min_size exists
                         labels_after_filter.append(label)
-                    else:
-                        img[int(label[2]):int(label[4]), int(label[1]):int(label[3]), :] = 0
+                    else:                        
+                        if hyp.get('min_size', 0) > 0 and hyp.get('min_scale_up', False):
+                            center_x = int((label[1]+label[3])/2)
+                            center_y = int((label[2]+label[4])/2)
+                            center_w = label[3]-label[1]
+                            center_h = label[4]-label[2]
+                            scale_up_ratio = hyp.get('min_size', 0)**0.5 / min(center_w, center_h)
+                            scale_up_w = int(center_w * scale_up_ratio / 2)
+                            scale_up_h = int(center_h * scale_up_ratio / 2)
+                            
+                            scale_up_sample = cv2.resize(img[int(label[2]):int(label[4]), int(label[1]):int(label[3]), :], 
+                                (scale_up_w*2, scale_up_h*2), interpolation=cv2.INTER_LINEAR)
+                            scale_up_x1 = max(center_x-scale_up_w, 0)
+                            scale_up_x2 = min(center_x+scale_up_w, img.shape[1])
+                            scale_up_y1 = max(center_y-scale_up_h, 0)
+                            scale_up_y2 = min(center_y+scale_up_h, img.shape[0])
+                            img[scale_up_y1 : scale_up_y2, scale_up_x1 : scale_up_x2, :] = scale_up_sample[:scale_up_y2-scale_up_y1, :scale_up_x2-scale_up_x1, :]
+                            new_label = label
+                            new_label[1] = scale_up_x1
+                            new_label[2] = scale_up_y1
+                            new_label[3] = scale_up_x2
+                            new_label[4] = scale_up_y2
+                            labels_after_filter.append(new_label)
+                        else:
+                            img[int(label[2]):int(label[4]), int(label[1]):int(label[3]), :] = 0
                 labels = np.array(labels_after_filter)
-
 
         nL = len(labels)  # number of labels
         if nL:
