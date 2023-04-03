@@ -784,15 +784,15 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             elif hyp is not None:
                 labels_after_filter = []
                 for label in labels:
-                    if (label[3]-label[1])*(label[4]-label[2]) > hyp.get('min_size', 0):#if obj min_size exists
+                    if (label[3]-label[1])*(label[4]-label[2]) > hyp.get('min_scale_up', 0):#if obj min_size exists
                         labels_after_filter.append(label)
                     else:                        
-                        if hyp.get('min_size', 0) > 0 and hyp.get('min_scale_up', False):
+                        if (label[3]-label[1])*(label[4]-label[2]) > hyp.get('min_size', 0):
                             center_x = int((label[1]+label[3])/2)
                             center_y = int((label[2]+label[4])/2)
                             center_w = label[3]-label[1]
                             center_h = label[4]-label[2]
-                            scale_up_ratio = hyp.get('min_size', 0)**0.5 / min(center_w, center_h)
+                            scale_up_ratio = hyp.get('min_scale_up', 0)**0.5 / min(center_w, center_h)
                             scale_up_w = int(center_w * scale_up_ratio / 2)
                             scale_up_h = int(center_h * scale_up_ratio / 2)
                             
