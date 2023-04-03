@@ -16,6 +16,7 @@ from utils.general import coco80_to_coco91_class, check_dataset, check_file, che
 from utils.metrics import ap_per_class, ConfusionMatrix
 from utils.plots import plot_images, output_to_target, plot_study_txt
 from utils.torch_utils import select_device, time_synchronized, TracedModel
+from collections import defaultdict
 
 
 def test(data,
@@ -104,7 +105,10 @@ def test(data,
     s = ('%20s' + '%12s' * 6) % ('Class', 'Images', 'Labels', 'P', 'R', 'mAP@.5', 'mAP@.5:.95')
     p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
     loss = torch.zeros(3, device=device)
-    jdict, stats, ap, ap_class, wandb_images = [], [], [], [], []
+    jdict, ap, ap_class, wandb_images = [], [], [], []
+    if opt.size_devision:
+        size_stats = defaultdict(list)
+    stats = []
     for batch_i, (img, targets, paths, shapes) in enumerate(tqdm(dataloader, desc=s)):
         img = img.to(device, non_blocking=True)
         img = img.half() if half else img.float()  # uint8 to fp16/32
@@ -138,8 +142,23 @@ def test(data,
             path = Path(paths[si])
             seen += 1
 
+            size_devision = []
+            for label in labels:
+                if label[3]*label[4] < 32*32:
+                    size_devision_ = 'small'
+                elif 32*32 <= label[3]*label[4] < 96*96:
+                    size_devision_ = 'medium'
+                else:
+                    size_devision_ = 'large'
+                
+                size_devision.append(size_devision_)
+            size_devision = np.array(size_devision)
+
             if len(pred) == 0:
                 if nl:
+                    if opt.size_devision:
+                        for size_devision_ in ['small', 'medium', 'large']:
+                            size_stats[size_devision_].append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls[size_devision==size_devision_]))
                     stats.append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls))
                 continue
             
@@ -182,15 +201,23 @@ def test(data,
 
             # Assign all predictions as incorrect
             correct = torch.zeros(pred.shape[0], niou, dtype=torch.bool, device=device)
+            if opt.size_devision:
+                correct_size_devision = {}
+                conf_size_devision = {}
+                for size_devision_ in ['small', 'medium', 'large']:                        
+                    correct_size_devision[size_devision_] = torch.zeros(pred.shape[0], niou, dtype=torch.bool, device=device)
+                    conf_size_devision[size_devision_] = torch.clone(pred[:, 4])
             if nl:
                 detected = []  # target indices
                 tcls_tensor = labels[:, 0]
 
                 # target boxes
                 tbox = xywh2xyxy(labels[:, 1:5])
+
                 scale_coords(img[si].shape[1:], tbox, shapes[si][0], shapes[si][1])  # native-space labels
                 if plots:
-                    confusion_matrix.process_batch(predn, torch.cat((labels[:, 0:1], tbox), 1))
+                    predn_ = torch.clone(predn)
+                    confusion_matrix.process_batch(predn_, torch.cat((labels[:, 0:1], tbox), 1))
 
                 # Per target class
                 for cls in torch.unique(tcls_tensor):
@@ -200,7 +227,7 @@ def test(data,
                     # Search for detections
                     if pi.shape[0]:
                         # Prediction to target ious
-                        ious, i = box_iou(predn[pi, :4], tbox[ti]).max(1)  # best ious, indices
+                        ious, i = box_iou(predn_[pi, :4], tbox[ti]).max(1)  # best ious, indices
 
                         # Append detections
                         detected_set = set()
@@ -210,10 +237,24 @@ def test(data,
                                 detected_set.add(d.item())
                                 detected.append(d)
                                 correct[pi[j]] = ious[j] > iouv  # iou_thres is 1xn
+                                if opt.size_devision:
+                                    correct_size_devision[size_devision[ti[i[j]].detach().cpu().numpy()][0]][pi[j]] = ious[j] > iouv
+                                    for size_devision__ in ['small', 'medium', 'large']:
+                                        if size_devision__ != size_devision[ti[i[j]].detach().cpu().numpy()][0]:
+                                            conf_size_devision[size_devision__][pi[j]] = 0
                                 if len(detected) == nl:  # all targets already located in image
                                     break
-
+                                
             # Append statistics (correct, conf, pcls, tcls)
+            if opt.size_devision:
+                for size_devision_ in ['small', 'medium', 'large']:
+                    sort_indices = torch.argsort(conf_size_devision[size_devision_], descending=True)
+                    correct_size_devision_ = correct_size_devision[size_devision_][sort_indices].cpu()
+                    conf_size_devision_ = conf_size_devision[size_devision_][sort_indices].cpu()
+                    class_size_devision_ = pred[:, 5][sort_indices].cpu()
+                    #print(size_devision_, " : ", conf_size_devision_)
+                    size_stats[size_devision_].append((correct_size_devision_, conf_size_devision_, class_size_devision_,
+                            [tcls[i] for i, is_size in enumerate(size_devision==size_devision_) if is_size]))
             stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls))
 
         # Plot images
@@ -224,6 +265,30 @@ def test(data,
             Thread(target=plot_images, args=(img, output_to_target(out), paths, f, names), daemon=True).start()
 
     # Compute statistics
+    if opt.size_devision:
+        for size_devision_ in ['small', 'medium', 'large']:
+            print(size_devision_+"   Class      Images      Labels           P           R      mAP@.5  mAP@.5:.95")
+            size_stats_ = size_stats[size_devision_]
+            size_stats_ = [np.concatenate(x, 0) for x in zip(*size_stats_)]  # to numpy
+            if len(size_stats_) and size_stats_[0].any():
+                p, r, ap, f1, ap_class = ap_per_class(*size_stats_, plot=plots, v5_metric=v5_metric, save_dir=save_dir, names=names)
+                ap50, ap = ap[:, 0], ap.mean(1)  # AP@0.5, AP@0.5:0.95
+                mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
+                nt = np.bincount(size_stats_[3].astype(np.int64), minlength=nc)  # number of targets per class
+            else:
+                nt = torch.zeros(1)
+
+            # Print results
+            pf = '%20s' + '%12i' * 2 + '%12.3g' * 4  # print format
+            print(pf % ('all', seen, nt.sum(), mp, mr, map50, map))
+
+            # Print results per class
+            if (verbose or (not training)) and nc > 1 and len(size_stats_):
+                for i, c in enumerate(ap_class):
+                    print(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
+        print("mAP for all size")
+        print("               Class      Images      Labels           P           R      mAP@.5  mAP@.5:.95")
+
     stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
     if len(stats) and stats[0].any():
         p, r, ap, f1, ap_class = ap_per_class(*stats, plot=plots, v5_metric=v5_metric, save_dir=save_dir, names=names)
@@ -316,6 +381,7 @@ if __name__ == '__main__':
     parser.add_argument('--v5-metric', action='store_true', help='assume maximum recall as 1.0 in AP calculation')
     parser.add_argument('--person-only', action='store_true', help='assume maximum recall as 1.0 in AP calculation')
     parser.add_argument('--xyxy', action='store_true', help='the box label type is xyxy not xywh')
+    parser.add_argument('--size-devision', action='store_true', help='show mAP for small, medium and large objects, respectively')
     opt = parser.parse_args()
     opt.save_json |= opt.data.endswith('coco.yaml')
     opt.data = check_file(opt.data)  # check file
