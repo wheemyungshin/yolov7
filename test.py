@@ -267,7 +267,7 @@ def test(data,
     # Compute statistics
     if opt.size_devision:
         for size_devision_ in ['small', 'medium', 'large']:
-            print(size_devision_+"   Class      Images      Labels           P           R      mAP@.5  mAP@.5:.95")
+            print(size_devision_+"          Class      Images      Labels           P           R      mAP@.5  mAP@.5:.95")
             size_stats_ = size_stats[size_devision_]
             size_stats_ = [np.concatenate(x, 0) for x in zip(*size_stats_)]  # to numpy
             if len(size_stats_) and size_stats_[0].any():
@@ -286,8 +286,7 @@ def test(data,
             if (verbose or (not training)) and nc > 1 and len(size_stats_):
                 for i, c in enumerate(ap_class):
                     print(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
-        print("mAP for all size")
-        print("               Class      Images      Labels           P           R      mAP@.5  mAP@.5:.95")
+        print("all size       Class      Images      Labels           P           R      mAP@.5  mAP@.5:.95")
 
     stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
     if len(stats) and stats[0].any():
