@@ -42,7 +42,8 @@ def test(data,
          trace=False,
          is_coco=False,
          v5_metric=False,
-         person_only=False):
+         person_only=False,
+         opt_size_devision=False):
     # Initialize/load model and set device
     training = model is not None
     if training:  # called by train.py
@@ -106,8 +107,10 @@ def test(data,
     p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
     loss = torch.zeros(3, device=device)
     jdict, ap, ap_class, wandb_images = [], [], [], []
-    if opt.size_devision:
+    if opt_size_devision:
         size_stats = defaultdict(list)
+    else:
+        size_stats = None
     stats = []
     for batch_i, (img, targets, paths, shapes) in enumerate(tqdm(dataloader, desc=s)):
         img = img.to(device, non_blocking=True)
@@ -156,7 +159,7 @@ def test(data,
 
             if len(pred) == 0:
                 if nl:
-                    if opt.size_devision:
+                    if opt_size_devision:
                         for size_devision_ in ['small', 'medium', 'large']:
                             size_stats[size_devision_].append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls[size_devision==size_devision_]))
                     stats.append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls))
@@ -201,7 +204,7 @@ def test(data,
 
             # Assign all predictions as incorrect
             correct = torch.zeros(pred.shape[0], niou, dtype=torch.bool, device=device)
-            if opt.size_devision:
+            if opt_size_devision:
                 correct_size_devision = {}
                 conf_size_devision = {}
                 for size_devision_ in ['small', 'medium', 'large']:                        
@@ -237,7 +240,7 @@ def test(data,
                                 detected_set.add(d.item())
                                 detected.append(d)
                                 correct[pi[j]] = ious[j] > iouv  # iou_thres is 1xn
-                                if opt.size_devision:
+                                if opt_size_devision:
                                     correct_size_devision[size_devision[ti[i[j]].detach().cpu().numpy()][0]][pi[j]] = ious[j] > iouv
                                     for size_devision__ in ['small', 'medium', 'large']:
                                         if size_devision__ != size_devision[ti[i[j]].detach().cpu().numpy()][0]:
@@ -246,7 +249,7 @@ def test(data,
                                     break
                                 
             # Append statistics (correct, conf, pcls, tcls)
-            if opt.size_devision:
+            if opt_size_devision:
                 for size_devision_ in ['small', 'medium', 'large']:
                     sort_indices = torch.argsort(conf_size_devision[size_devision_], descending=True)
                     correct_size_devision_ = correct_size_devision[size_devision_][sort_indices].cpu()
@@ -265,7 +268,7 @@ def test(data,
             Thread(target=plot_images, args=(img, output_to_target(out), paths, f, names), daemon=True).start()
 
     # Compute statistics
-    if opt.size_devision:
+    if opt_size_devision:
         for size_devision_ in ['small', 'medium', 'large']:
             print(size_devision_+"          Class      Images      Labels           P           R      mAP@.5  mAP@.5:.95")
             size_stats_ = size_stats[size_devision_]
@@ -403,7 +406,8 @@ if __name__ == '__main__':
              save_conf=opt.save_conf,
              trace=not opt.no_trace,
              v5_metric=opt.v5_metric,
-             person_only=opt.person_only
+             person_only=opt.person_only,
+             opt_size_devision=opt.size_devision
              )
 
     elif opt.task == 'speed':  # speed benchmarks
