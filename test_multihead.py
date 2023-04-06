@@ -64,9 +64,9 @@ def test(data,
         model = attempt_load(weights, map_location=device)  # load FP32 model
         gs = max(int(model.stride.max()), 32)  # grid size (max stride)
         imgsz = check_img_size(imgsz, s=gs)  # check img_size
-        
-        if trace:
-            model = TracedModel_multihead(model, head_num, device, imgsz)
+    
+    if trace:
+        model = TracedModel_multihead(model, head_num, device, imgsz)
 
     # Half
     half = device.type != 'cpu' and half_precision  # half precision only supported on CUDA
@@ -127,13 +127,15 @@ def test(data,
             t0 += time_synchronized() - t
 
             # Run NMS
-
             targets[:, 2:] *= torch.Tensor([width, height, width, height]).to(device)  # to pixels
             lb = [targets[targets[:, 0] == i, 1:] for i in range(nb)] if save_hybrid else []  # for autolabelling
             t = time_synchronized()
             
             concat_out = []
-            for multi_head_i, out in enumerate(outs):
+            for multi_head_i, out in outs.items():
+                #print(multi_head_i)
+                #print(out)
+                #print(type(out))
                 out = out[0]
                 out = non_max_suppression(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb, multi_label=True)
                 for p in out:
@@ -250,7 +252,7 @@ def test(data,
                                 detected_set.add(d.item())
                                 detected.append(d)
                                 correct[pi[j]] = ious[j] > iouv  # iou_thres is 1xn
-                                if size_devision:
+                                if opt_size_devision:
                                     correct_size_devision[size_devision[ti[i[j]].detach().cpu().numpy()][0]][pi[j]] = ious[j] > iouv
                                     for size_devision__ in ['small', 'medium', 'large']:
                                         if size_devision__ != size_devision[ti[i[j]].detach().cpu().numpy()][0]:

@@ -77,11 +77,9 @@ def detect(save_img=False):
 
     jdict = []
 
-
     if opt.save_frame:
         os.makedirs(os.path.join(save_dir, 'vis_frames'), exist_ok=True)
         os.makedirs(os.path.join(save_dir, 'clean_frames'), exist_ok=True)
-
 
     t0 = time.time()
     for path, img, im0s, vid_cap in dataset:
