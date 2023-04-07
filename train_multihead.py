@@ -608,8 +608,6 @@ if __name__ == '__main__':
     parser.add_argument('--head-num', default=3, type=int, help='the number of multi heads')
     opt = parser.parse_args()
 
-    head_num = opt.head_num
-
     # Set DDP variables
     opt.world_size = int(os.environ['WORLD_SIZE']) if 'WORLD_SIZE' in os.environ else 1
     opt.global_rank = int(os.environ['RANK']) if 'RANK' in os.environ else -1
@@ -650,8 +648,6 @@ if __name__ == '__main__':
     # Hyperparameters
     with open(opt.hyp) as f:
         hyp = yaml.load(f, Loader=yaml.SafeLoader)  # load hyps
-
-    opt.head_num = head_num
 
     # Train
     logger.info(opt)
