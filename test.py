@@ -219,8 +219,7 @@ def test(data,
 
                 scale_coords(img[si].shape[1:], tbox, shapes[si][0], shapes[si][1])  # native-space labels
                 if plots:
-                    predn_ = torch.clone(predn)
-                    confusion_matrix.process_batch(predn_, torch.cat((labels[:, 0:1], tbox), 1))
+                    confusion_matrix.process_batch(predn, torch.cat((labels[:, 0:1], tbox), 1))
 
                 # Per target class
                 for cls in torch.unique(tcls_tensor):
@@ -230,7 +229,7 @@ def test(data,
                     # Search for detections
                     if pi.shape[0]:
                         # Prediction to target ious
-                        ious, i = box_iou(predn_[pi, :4], tbox[ti]).max(1)  # best ious, indices
+                        ious, i = box_iou(predn[pi, :4], tbox[ti]).max(1)  # best ious, indices
 
                         # Append detections
                         detected_set = set()
