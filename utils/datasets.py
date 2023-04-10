@@ -721,6 +721,26 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 #print((int(random_resize_w), int(random_resize_h)))
                 ciga_img = cv2.resize(ciga_img, (int(random_resize_w), int(random_resize_h)), interpolation=cv2.INTER_LINEAR)
 
+                color_sample = cv2.resize(img, (100,100))
+                b = np.mean(color_sample[:, :, 0])
+                g = np.mean(color_sample[:, :, 1])
+                r = np.mean(color_sample[:, :, 2])
+                origin_color_sum = b + g + r
+                b = b/origin_color_sum
+                g = g/origin_color_sum
+                r = r/origin_color_sum
+
+                for idx_x in range(ciga_img.shape[1]) :
+                    for idx_y in range(ciga_img.shape[0]) :
+
+                        color_sum = np.sum(ciga_img[idx_y][idx_x][0:3])
+
+                        if color_sum > 10 :
+
+                            ciga_img[idx_y][idx_x][0] = min(int(color_sum * b),255)
+                            ciga_img[idx_y][idx_x][1] = min(int(color_sum * g),255)
+                            ciga_img[idx_y][idx_x][2] = min(int(color_sum * r),255)
+
                 # ciga 위치 랜덤하게 지정
                 ciga_img_position_x = random.randint(0, img.shape[1]-ciga_img.shape[1])
                 ciga_img_position_y = random.randint(0, img.shape[0]-ciga_img.shape[0])
