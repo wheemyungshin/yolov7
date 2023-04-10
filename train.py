@@ -352,6 +352,17 @@ def train(hyp, opt, device, tb_writer=None):
             
             print("STOP DISTILLATION!")
             is_distill = False
+        elif epoch == opt.close_data_generation:
+            if hyp.get('render_ciga', None) is not None:
+                hyp['render_ciga'] = None
+            if hyp.get('fakeseatbelt', 0) > 0:
+                hyp['fakeseatbelt'] = 0
+            print("CLOSE data generation!")
+            # Trainloader
+            dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, opt,
+                                                    hyp=hyp, augment=False, cache=opt.cache_images, rect=opt.rect, rank=rank,
+                                                    world_size=opt.world_size, workers=opt.workers,
+                                                    image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data)
 
         mloss = torch.zeros(4, device=device)  # mean losses
         if rank != -1:
@@ -597,6 +608,7 @@ if __name__ == '__main__':
     parser.add_argument('--freeze', nargs='+', type=int, default=[0], help='Freeze layers: backbone of yolov7=50, first3=0 1 2')
     parser.add_argument('--v5-metric', action='store_true', help='assume maximum recall as 1.0 in AP calculation')
     parser.add_argument('--close-mosaic', type=int, default=0, help='stop mosaic augmentation and distillation')
+    parser.add_argument('--close-data-generation', type=int, default=300, help='stop mosaic augmentation and distillation')
     opt = parser.parse_args()
 
     device = opt.device
