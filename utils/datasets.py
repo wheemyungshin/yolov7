@@ -813,6 +813,43 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             img[int(label[2]):int(label[4]), int(label[1]):int(label[3]), :] = 0
                 labels = np.array(labels_after_filter)
 
+        # 투명도는 30, 60, 100 중 하나 
+        if hyp.get('render_ciga', None) is not None:
+            num_of_ciga_img = [5,10]
+            num_of_ciga = random.randint(num_of_ciga_img[0], num_of_ciga_img[1])
+            ciga_imgs = os.listdir(os.path.join(hyp.get('render_ciga', None)[0], '100'))
+            for idx in range(num_of_ciga) :
+                opacity = [30, 60, 100][random.randint(0, 2)]
+                ciga_img = cv2.imread(os.path.join(hyp.get('render_ciga', None)[0], str(opacity), ciga_imgs[random.randint(0, len(ciga_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
+                if ciga_img.shape[0] < ciga_img.shape[1]:
+                    random_resize_w = max(img.shape[1]*(0.1+random.random()*0.15), 8)
+                    random_resize_h = random_resize_w * ciga_img.shape[0] / ciga_img.shape[1]
+                else:
+                    random_resize_h = max(img.shape[0]*(0.1+random.random()*0.15), 8)
+                    random_resize_w = random_resize_h * ciga_img.shape[1] / ciga_img.shape[0]
+
+                #print((int(random_resize_w), int(random_resize_h)))
+                ciga_img = cv2.resize(ciga_img, (int(random_resize_w), int(random_resize_h)), interpolation=cv2.INTER_LINEAR)
+
+                # ciga 위치 랜덤하게 지정
+                ciga_img_position_x = random.randint(0, img.shape[1]-ciga_img.shape[1])
+                ciga_img_position_y = random.randint(0, img.shape[0]-ciga_img.shape[0])
+                img_crop = img[ciga_img_position_y:ciga_img_position_y+ciga_img.shape[0], ciga_img_position_x:ciga_img_position_x+ciga_img.shape[1]]
+                img_crop = cv2.cvtColor(img_crop, cv2.COLOR_RGB2RGBA)
+
+
+                # Pillow 에서 Alpha Blending
+                ciga_img_pillow = Image.fromarray(ciga_img)
+                img_crop_pillow = Image.fromarray(img_crop)
+                blended_pillow = Image.alpha_composite(img_crop_pillow, ciga_img_pillow)
+                blended_img=np.array(blended_pillow)  
+
+                # 원본 이미지에 다시 합치기
+                blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
+                img[ciga_img_position_y:ciga_img_position_y+ciga_img.shape[0], ciga_img_position_x:ciga_img_position_x+ciga_img.shape[1]] = blended_img
+
+                labels = np.append(labels, [[hyp.get('render_ciga', None)[1], ciga_img_position_x, ciga_img_position_y, ciga_img_position_x+ciga_img.shape[1], ciga_img_position_y+ciga_img.shape[0]]], axis=0)
+
         nL = len(labels)  # number of labels
         if nL:
             labels[:, 1:5] = xyxy2xywh(labels[:, 1:5])  # convert xyxy to xywh
