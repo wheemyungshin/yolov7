@@ -622,17 +622,17 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         if mosaic:
             # Load mosaic
             if random.random() < 0.8:
-                img, labels, poses = load_mosaic(self, index)
+                img, labels, poses = load_mosaic(self, hyp, index)
             else:
-                img, labels, poses = load_mosaic9(self, index)
+                img, labels, poses = load_mosaic9(self, hyp, index)
             shapes = None
 
             # MixUp https://arxiv.org/pdf/1710.09412.pdf
             if random.random() < hyp['mixup']:
                 if random.random() < 0.8:
-                    img2, labels2, poses2= load_mosaic(self, random.randint(0, len(self.labels) - 1))
+                    img2, labels2, poses2= load_mosaic(self, hyp, random.randint(0, len(self.labels) - 1))
                 else:
-                    img2, labels2, poses2 = load_mosaic9(self, random.randint(0, len(self.labels) - 1))
+                    img2, labels2, poses2 = load_mosaic9(self, hyp, random.randint(0, len(self.labels) - 1))
                 r = np.random.beta(8.0, 8.0)  # mixup ratio, alpha=beta=8.0
                 img = (img * r + img2 * (1 - r)).astype(np.uint8)
                 labels = np.concatenate((labels, labels2), 0)
@@ -702,6 +702,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         cutx_max = int(min(max(cutx + cutw/2, 0), img.shape[1]))
                         cuty_max = int(min(max(cuty + cuth/2, 0), img.shape[0]))
                         img[cuty_min : cuty_max, cutx_min : cutx_max, :] = random.random()*255
+                        
                 
         if self.augment:
             # Augment imagespace
@@ -812,6 +813,33 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         else:
                             img[int(label[2]):int(label[4]), int(label[1]):int(label[3]), :] = 0
                 labels = np.array(labels_after_filter)
+
+            if hyp is not None and random.random() < hyp.get('fakeseatbelt', 0):
+                if 1 in labels[:, 0] and 0 not in labels[:, 0] and len(labels[:, 0])==1:#face exists, seatbelt does not exist
+                    face_label = labels[0]
+                    if int(face_label[4]) < img.shape[0]*0.8:
+                        seat_x1_range = max(face_label[1]-(face_label[3]-face_label[1])*1.5, 0)
+                        seat_y1_range = face_label[4]
+                        seat_x2_range = min(face_label[3]+(face_label[3]-face_label[1])*1.5, img.shape[1])
+                        seat_y2_range = img.shape[0]               
+                        color_element = 32+int(random.random()*128)
+                        mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
+                        thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
+                        if random.random() < 0.5:
+                            x1 = int(seat_x1_range)
+                            y1 = int(seat_y1_range)
+                            x2 = int(seat_x1_range+(seat_x2_range-seat_x1_range)*(0.8+random.random()*0.2))
+                            y2 = int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1))
+                            img = cv2.line(img, [x1, y1], [x2, y2], 
+                                (color_element, color_element, color_element), thickness, lineType=cv2.LINE_AA)
+                        else:
+                            x2 = int(seat_x2_range)
+                            y1 = int(seat_y1_range)
+                            x1 = int(seat_x1_range+(seat_x2_range-seat_x1_range)*(random.random()*0.2))
+                            y2 = int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1))
+                            img = cv2.line(img, [x2, y1], [x1, y2], 
+                                (color_element, color_element, color_element), thickness, lineType=cv2.LINE_AA)
+                        labels = np.append(labels, np.array([[0, seat_x1_range, seat_y1_range, seat_x2_range, seat_y2_range]]), axis=0) 
 
         # 투명도는 30, 60, 100 중 하나 
         if hyp.get('render_ciga', None) is not None:
@@ -973,7 +1001,7 @@ def hist_equalize(img, clahe=True, bgr=False):
     return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR if bgr else cv2.COLOR_YUV2RGB)  # convert YUV image to RGB
 
 
-def load_mosaic(self, index):
+def load_mosaic(self, hyp, index):
     # loads images in a 4-mosaic
 
     labels4, segments4, poses4 = [], [], []
@@ -1018,6 +1046,34 @@ def load_mosaic(self, index):
             segments = [xyn2xy(x, w, h, padw, padh) for x in segments]
             if self.pose_data is not None:
                 poses = [pose_xyn2xy(x, w, h, padw, padh) for x in poses]
+            
+            if hyp is not None and random.random() < hyp.get('fakeseatbelt', 0):
+                if 1 in labels[:, 0] and 0 not in labels[:, 0] and len(labels[:, 0])==1:#face exists, seatbelt does not exist
+                    face_label = labels[0]
+                    if int(face_label[4]) < int(y1a)+(int(y2a)-int(y1a))*0.8:
+                        seat_x1_range = max(face_label[1]-(face_label[3]-face_label[1])*1.5, x1a)
+                        seat_y1_range = face_label[4]
+                        seat_x2_range = min(face_label[3]+(face_label[3]-face_label[1])*1.5, x2a)
+                        seat_y2_range = y2a               
+                        color_element = 32+int(random.random()*128)
+                        mosaic_patch_size = ((x2a-x1a)*(y2a-y1a))**0.5
+                        thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
+                        if random.random() < 0.5:
+                            x1 = int(seat_x1_range)
+                            y1 = int(seat_y1_range)
+                            x2 = int(seat_x1_range+(seat_x2_range-seat_x1_range)*(0.8+random.random()*0.2))
+                            y2 = int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1))
+                            img4 = cv2.line(img4, [x1, y1], [x2, y2], 
+                                (color_element, color_element, color_element), thickness, lineType=cv2.LINE_AA)
+                        else:
+                            x2 = int(seat_x2_range)
+                            y1 = int(seat_y1_range)
+                            x1 = int(seat_x1_range+(seat_x2_range-seat_x1_range)*(random.random()*0.2))
+                            y2 = int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1))
+                            img4 = cv2.line(img4, [x2, y1], [x1, y2], 
+                                (color_element, color_element, color_element), thickness, lineType=cv2.LINE_AA)
+                        labels = np.append(labels, np.array([[0, seat_x1_range, seat_y1_range, seat_x2_range, seat_y2_range]]), axis=0)    
+
         labels4.append(labels)
         segments4.extend(segments)
         if self.pose_data is not None:
@@ -1055,7 +1111,7 @@ def load_mosaic(self, index):
 
 
 
-def load_mosaic9(self, index):
+def load_mosaic9(self, hyp, index):
     # loads images in a 9-mosaic
 
     labels9, segments9, poses9 = [], [], []
@@ -1093,7 +1149,7 @@ def load_mosaic9(self, index):
             c = xs - w, ys + h0 - hp - h, xs, ys + h0 - hp
 
         padx, pady = c[:2]
-        x1, y1, x2, y2 = [max(x, 0) for x in c]  # allocate coords
+        x1a, y1a, x2a, y2a = [max(x, 0) for x in c]  # allocate coords
 
         # Labels
         labels, segments = self.labels[index].copy(), self.segments[index].copy()
@@ -1104,13 +1160,41 @@ def load_mosaic9(self, index):
             segments = [xyn2xy(x, w, h, padx, pady) for x in segments]
             if self.pose_data is not None:
                 poses = [pose_xyn2xy(x, w, h, padx, pady) for x in poses]
+
+            if hyp is not None and random.random() < hyp.get('fakeseatbelt', 0):
+                if 1 in labels[:, 0] and 0 not in labels[:, 0] and len(labels[:, 0])==1:#face exists, seatbelt does not exist
+                    face_label = labels[0]
+                    if int(face_label[4]) < int(y1a)+(int(y2a)-int(y1a))*0.8:
+                        seat_x1_range = max(face_label[1]-(face_label[3]-face_label[1])*1.5, x1a)
+                        seat_y1_range = face_label[4]
+                        seat_x2_range = min(face_label[3]+(face_label[3]-face_label[1])*1.5, x2a)
+                        seat_y2_range = y2a               
+                        color_element = 32+int(random.random()*128)
+                        mosaic_patch_size = ((x2a-x1a)*(y2a-y1a))**0.5
+                        thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
+                        if random.random() < 0.5:
+                            x1 = int(seat_x1_range)
+                            y1 = int(seat_y1_range)
+                            x2 = int(seat_x1_range+(seat_x2_range-seat_x1_range)*(0.8+random.random()*0.2))
+                            y2 = int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1))
+                            img9 = cv2.line(img9, [x1, y1], [x2, y2], 
+                                (color_element, color_element, color_element), thickness, lineType=cv2.LINE_AA)
+                        else:
+                            x2 = int(seat_x2_range)
+                            y1 = int(seat_y1_range)
+                            x1 = int(seat_x1_range+(seat_x2_range-seat_x1_range)*(random.random()*0.2))
+                            y2 = int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1))
+                            img9 = cv2.line(img9, [x2, y1], [x1, y2], 
+                                (color_element, color_element, color_element), thickness, lineType=cv2.LINE_AA)
+                        labels = np.append(labels, np.array([[0, seat_x1_range, seat_y1_range, seat_x2_range, seat_y2_range]]), axis=0) 
+
         labels9.append(labels)
         segments9.extend(segments)
         if self.pose_data is not None:
             poses9.extend(poses)
 
         # Image
-        img9[y1:y2, x1:x2] = img[y1 - pady:, x1 - padx:]  # img9[ymin:ymax, xmin:xmax]
+        img9[y1a:y2a, x1a:x2a] = img[y1a - pady:, x1a - padx:]  # img9[ymin:ymax, xmin:xmax]
         hp, wp = h, w  # height, width previous
 
     # Offset
