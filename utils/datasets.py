@@ -903,15 +903,24 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 fire_imgs = os.listdir(hyp.get('render_fire', None)[0])
                 if len(labels[labels[:, 0]==2]) > 0:
                     is_valid_ciga = labels[:, 0]==2
-                    for valid_idx, is_valid in enumerate(is_valid_ciga):
+                    valid_idx = 0
+                    while valid_idx < len(is_valid_ciga):
+                        is_valid = is_valid_ciga[valid_idx]
                         if not is_valid:
                             if valid_idx-1 >= 0:
                                 is_valid_ciga[valid_idx-1] = False
+                                valid_idx+=1
                             if valid_idx+1 < len(is_valid_ciga):
-                                is_valid_ciga[valid_idx+1] = False
+                                if is_valid_ciga[valid_idx+1]==True:
+                                    is_valid_ciga[valid_idx+1] = False
+                                    valid_idx+=2
+                                else:
+                                    valid_idx+=1
+                        else:
+                            valid_idx+=1
                     for idx, ciga_label in enumerate(labels[is_valid_ciga]) :
-                        if min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2]) > 12:
-                            fire_size = random.randint(int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/2.5), int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/1.3))
+                        if min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2]) > 16 and random.randint(0,1) == 0 :
+                            fire_size = random.randint(int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/2), int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/1.3))
                             fire_img = cv2.imread(os.path.join(hyp.get('render_fire', None)[0], fire_imgs[random.randint(0, len(fire_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
                             fire_img = cv2.resize(fire_img, (fire_size, fire_size), cv2.INTER_CUBIC)
 
