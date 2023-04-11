@@ -1,0 +1,14 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [/data/Pitta2ND_DB/fire/train.txt, 
+/data/crop_ciga_ncap_pitta_1st/ncap/train.txt,
+/data/crop_ciga_ncap_pitta_1st/pitta_1st/train.txt] # 27325 + 967 + 2023
+val: [/data/crop_ciga_ncap_pitta_1st/ncap/train.txt] # 967
+test: [/data/crop_ciga_ncap_pitta_1st/ncap/train.txt] # 967
+
+# number of classes
+nc: 3
+
+# class names
+names: ['fire', 'burn', 'ciga']
+
+valid_idx: [0, 1, 2]
