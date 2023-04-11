@@ -378,6 +378,8 @@ def train(hyp, opt, device, tb_writer=None):
         elif epoch == opt.close_data_generation:
             if hyp.get('render_ciga', None) is not None:
                 hyp['render_ciga'] = None
+            if hyp.get('render_fire', None) is not None:
+                hyp['render_fire'] = None
             if hyp.get('fakeseatbelt', 0) > 0:
                 hyp['fakeseatbelt'] = 0
             print("CLOSE data generation!")
