@@ -759,62 +759,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 img[ciga_img_position_y:ciga_img_position_y+ciga_img.shape[0], ciga_img_position_x:ciga_img_position_x+ciga_img.shape[1]] = blended_img
 
                 labels = np.append(labels, [[hyp.get('render_ciga', None)[1], ciga_img_position_x, ciga_img_position_y, ciga_img_position_x+ciga_img.shape[1], ciga_img_position_y+ciga_img.shape[0]]], axis=0)
-                    
-        if hyp.get('render_fire', None) is not None:
-            nL = len(labels)  # number of labels
-            if nL:
-                fire_imgs = os.listdir(hyp.get('render_fire', None)[0])
-                if len(labels[labels[:, 0]!=2]) == 0:
-                    for idx, ciga_label in enumerate(labels[labels[:, 0]==2]) :
-                        if min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2]) > 24:
-                            fire_size = random.randint(int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/4), int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/1.5))
-                            fire_img = cv2.imread(os.path.join(hyp.get('render_fire', None)[0], fire_imgs[random.randint(0, len(fire_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
-                            fire_img = cv2.resize(fire_img, (fire_size, fire_size), cv2.INTER_CUBIC)
-
-                            # 원본 이미지 색상 계열에 맞추기
-                            color_sample = cv2.resize(img, (100,100))
-                            b = np.mean(color_sample[:, :, 0])
-                            g = np.mean(color_sample[:, :, 1])
-                            r = np.mean(color_sample[:, :, 2])
-                            origin_color_sum = b + g + r
-                            b = b/origin_color_sum
-                            g = g/origin_color_sum
-                            r = r/origin_color_sum
-
-                            for idx_x in range(fire_img.shape[1]) :
-                                for idx_y in range(fire_img.shape[0]) :
-                                    color_sum = np.sum(fire_img[idx_y][idx_x][0:3])
-                                    if color_sum > 10 :
-                                        fire_img[idx_y][idx_x][0] = min(int(color_sum * b),255)
-                                        fire_img[idx_y][idx_x][1] = min(int(color_sum * g),255)
-                                        fire_img[idx_y][idx_x][2] = min(int(color_sum * r),255)
-
-                            # 회전 여부 랜덤
-                            if random.randint(0,1) == 0 :
-                                fire_img = cv2.flip(fire_img, 0)
-                            if random.randint(0,1) == 0 :
-                                fire_img = cv2.flip(fire_img, 1)
-
-                            # fire 위치 랜덤하게 지정
-                            fire_img_position_x = random.randint(int(ciga_label[1]), int(ciga_label[3])-fire_img.shape[1])
-                            fire_img_position_y = random.randint(int(ciga_label[2]), int(ciga_label[4])-fire_img.shape[0])
-                            img_crop = img[fire_img_position_y:fire_img_position_y+fire_img.shape[0], fire_img_position_x:fire_img_position_x+fire_img.shape[1]]
-                            img_crop = cv2.cvtColor(img_crop, cv2.COLOR_RGB2RGBA)
-
-                            # Pillow 에서 Alpha Blending
-                            fire_img_pillow = Image.fromarray(fire_img)
-                            img_crop_pillow = Image.fromarray(img_crop)
-                            blended_pillow = Image.alpha_composite(img_crop_pillow, fire_img_pillow)
-                            blended_img=np.array(blended_pillow)  
-
-                            # 원본 이미지에 다시 합치기
-                            blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
-                            img[fire_img_position_y:fire_img_position_y+fire_img.shape[0], fire_img_position_x:fire_img_position_x+fire_img.shape[1]] = blended_img
-
-                            # 빛 번짐 감안하여 이미지에 margin 을 주었기 때문에 0.23 씩 상하좌우 빼줍니다.
-                            labels = np.append(labels, [[hyp.get('render_fire', None)[1], 
-                                fire_img_position_x + int(fire_img.shape[1]* 0.23), fire_img_position_y + int(fire_img.shape[0]* 0.23), 
-                                fire_img_position_x + fire_img.shape[1] -int(fire_img.shape[1]*0.23), fire_img_position_y + fire_img.shape[0] -int(fire_img.shape[0]*0.23)]], axis=0)
 
         if self.augment:
             # Augment imagespace
@@ -952,6 +896,73 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             img = cv2.line(img, [x2, y1], [x1, y2], 
                                 (color_element, color_element, color_element), thickness, lineType=cv2.LINE_AA)
                         labels = np.append(labels, np.array([[0, seat_x1_range, seat_y1_range, seat_x2_range, seat_y2_range]]), axis=0) 
+                    
+        if hyp.get('render_fire', None) is not None:
+            nL = len(labels)  # number of labels
+            if nL:
+                fire_imgs = os.listdir(hyp.get('render_fire', None)[0])
+                if len(labels[labels[:, 0]!=2]) == 0:
+                    for idx, ciga_label in enumerate(labels[labels[:, 0]==2]) :
+                        if min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2]) > 12:
+                            fire_size = random.randint(int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/2.5), int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/1.3))
+                            fire_img = cv2.imread(os.path.join(hyp.get('render_fire', None)[0], fire_imgs[random.randint(0, len(fire_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
+                            fire_img = cv2.resize(fire_img, (fire_size, fire_size), cv2.INTER_CUBIC)
+
+                            # 원본 이미지 색상 계열에 맞추기
+                            color_sample = cv2.resize(img, (100,100))
+                            b = np.mean(color_sample[:, :, 0])
+                            g = np.mean(color_sample[:, :, 1])
+                            r = np.mean(color_sample[:, :, 2])
+                            origin_color_sum = b + g + r
+                            b = b/origin_color_sum
+                            g = g/origin_color_sum
+                            r = r/origin_color_sum
+
+                            for idx_x in range(fire_img.shape[1]) :
+                                for idx_y in range(fire_img.shape[0]) :
+                                    color_sum = np.sum(fire_img[idx_y][idx_x][0:3])
+                                    if color_sum > 10 :
+                                        fire_img[idx_y][idx_x][0] = min(int(color_sum * b),255)
+                                        fire_img[idx_y][idx_x][1] = min(int(color_sum * g),255)
+                                        fire_img[idx_y][idx_x][2] = min(int(color_sum * r),255)
+
+                            # 회전 여부 랜덤
+                            if random.randint(0,1) == 0 :
+                                fire_img = cv2.flip(fire_img, 0)
+                            if random.randint(0,1) == 0 :
+                                fire_img = cv2.flip(fire_img, 1)
+
+                            # fire 위치 랜덤하게 지정
+                            if (ciga_label[3]-ciga_label[1])*2 < (ciga_label[4]-ciga_label[2]): # h is longer
+                                fire_img_position_x = random.randint(int(ciga_label[1]), int(ciga_label[3])-fire_img.shape[1])
+                                fire_img_position_y = random.choice([int(ciga_label[2]), int(ciga_label[4])-fire_img.shape[0]])
+                            elif (ciga_label[4]-ciga_label[2])*2 < (ciga_label[3]-ciga_label[1]): # w is longer
+                                fire_img_position_x = random.choice([int(ciga_label[1]), int(ciga_label[3])-fire_img.shape[1]])
+                                fire_img_position_y = random.randint(int(ciga_label[2]), int(ciga_label[4])-fire_img.shape[0])
+                            else:
+                                if random.randint(0,1) == 0 :
+                                    fire_img_position_x = random.randint(int(ciga_label[1]), int(ciga_label[3])-fire_img.shape[1])
+                                    fire_img_position_y = random.choice([int(ciga_label[2]), int(ciga_label[4])-fire_img.shape[0]])
+                                else:
+                                    fire_img_position_x = random.choice([int(ciga_label[1]), int(ciga_label[3])-fire_img.shape[1]])
+                                    fire_img_position_y = random.randint(int(ciga_label[2]), int(ciga_label[4])-fire_img.shape[0])
+                            img_crop = img[fire_img_position_y:fire_img_position_y+fire_img.shape[0], fire_img_position_x:fire_img_position_x+fire_img.shape[1]]
+                            img_crop = cv2.cvtColor(img_crop, cv2.COLOR_RGB2RGBA)
+
+                            # Pillow 에서 Alpha Blending
+                            fire_img_pillow = Image.fromarray(fire_img)
+                            img_crop_pillow = Image.fromarray(img_crop)
+                            blended_pillow = Image.alpha_composite(img_crop_pillow, fire_img_pillow)
+                            blended_img=np.array(blended_pillow)  
+
+                            # 원본 이미지에 다시 합치기
+                            blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
+                            img[fire_img_position_y:fire_img_position_y+fire_img.shape[0], fire_img_position_x:fire_img_position_x+fire_img.shape[1]] = blended_img
+
+                            # 빛 번짐 감안하여 이미지에 margin 을 주었기 때문에 0.23 씩 상하좌우 빼줍니다.
+                            labels = np.append(labels, [[hyp.get('render_fire', None)[1], 
+                                fire_img_position_x + int(fire_img.shape[1]* 0.23), fire_img_position_y + int(fire_img.shape[0]* 0.23), 
+                                fire_img_position_x + fire_img.shape[1] -int(fire_img.shape[1]*0.23), fire_img_position_y + fire_img.shape[0] -int(fire_img.shape[0]*0.23)]], axis=0)
 
         nL = len(labels)  # number of labels
         if nL:
