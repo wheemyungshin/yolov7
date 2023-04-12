@@ -705,7 +705,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         # 투명도는 30, 60, 100 중 하나 
         if hyp.get('render_ciga', None) is not None:
-            num_of_ciga_img = [5,10]
+            num_of_ciga_img = [0,2]
             num_of_ciga = random.randint(num_of_ciga_img[0], num_of_ciga_img[1])
             ciga_imgs = os.listdir(os.path.join(hyp.get('render_ciga', None)[0], '100'))
             for idx in range(num_of_ciga) :
@@ -742,23 +742,34 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             ciga_img[idx_y][idx_x][2] = min(int(color_sum * r),255)
 
                 # ciga 위치 랜덤하게 지정
-                ciga_img_position_x = random.randint(0, img.shape[1]-ciga_img.shape[1])
-                ciga_img_position_y = random.randint(0, img.shape[0]-ciga_img.shape[0])
-                img_crop = img[ciga_img_position_y:ciga_img_position_y+ciga_img.shape[0], ciga_img_position_x:ciga_img_position_x+ciga_img.shape[1]]
-                img_crop = cv2.cvtColor(img_crop, cv2.COLOR_RGB2RGBA)
+                try_max = 20
+                try_count = 0
+                is_invalid_position = True
+                while is_invalid_position and try_count < try_max:
+                    ciga_img_position_x = random.randint(0, img.shape[1]-ciga_img.shape[1])
+                    ciga_img_position_y = random.randint(0, img.shape[0]-ciga_img.shape[0])
+                    try_count+=1
+                    is_invalid_position = False
+                    for ciga_label in labels[labels[:, 0]==hyp.get('render_ciga', None)[1]]:
+                        if ciga_label[1] < ciga_img_position_x < ciga_label[3] and ciga_label[2] < ciga_img_position_y < ciga_label[4]:
+                            is_invalid_position = True
+                
+                if not is_invalid_position:
+                    img_crop = img[ciga_img_position_y:ciga_img_position_y+ciga_img.shape[0], ciga_img_position_x:ciga_img_position_x+ciga_img.shape[1]]
+                    img_crop = cv2.cvtColor(img_crop, cv2.COLOR_RGB2RGBA)
 
 
-                # Pillow 에서 Alpha Blending
-                ciga_img_pillow = Image.fromarray(ciga_img)
-                img_crop_pillow = Image.fromarray(img_crop)
-                blended_pillow = Image.alpha_composite(img_crop_pillow, ciga_img_pillow)
-                blended_img=np.array(blended_pillow)  
+                    # Pillow 에서 Alpha Blending
+                    ciga_img_pillow = Image.fromarray(ciga_img)
+                    img_crop_pillow = Image.fromarray(img_crop)
+                    blended_pillow = Image.alpha_composite(img_crop_pillow, ciga_img_pillow)
+                    blended_img=np.array(blended_pillow)  
 
-                # 원본 이미지에 다시 합치기
-                blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
-                img[ciga_img_position_y:ciga_img_position_y+ciga_img.shape[0], ciga_img_position_x:ciga_img_position_x+ciga_img.shape[1]] = blended_img
+                    # 원본 이미지에 다시 합치기
+                    blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
+                    img[ciga_img_position_y:ciga_img_position_y+ciga_img.shape[0], ciga_img_position_x:ciga_img_position_x+ciga_img.shape[1]] = blended_img
 
-                labels = np.append(labels, [[hyp.get('render_ciga', None)[1], ciga_img_position_x, ciga_img_position_y, ciga_img_position_x+ciga_img.shape[1], ciga_img_position_y+ciga_img.shape[0]]], axis=0)
+                    labels = np.append(labels, [[hyp.get('render_ciga', None)[1], ciga_img_position_x, ciga_img_position_y, ciga_img_position_x+ciga_img.shape[1], ciga_img_position_y+ciga_img.shape[0]]], axis=0)
 
         if self.augment:
             # Augment imagespace
@@ -909,18 +920,19 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         if not is_valid:
                             if valid_idx-1 >= 0:
                                 is_valid_ciga[valid_idx-1] = False
-                                valid_idx+=1
                             if valid_idx+1 < len(is_valid_ciga):
                                 if is_valid_ciga[valid_idx+1]==True:
                                     is_valid_ciga[valid_idx+1] = False
                                     valid_idx+=2
                                 else:
                                     valid_idx+=1
+                            else:
+                                valid_idx+=1
                         else:
                             valid_idx+=1
                     for idx, ciga_label in enumerate(labels[is_valid_ciga]) :
-                        if min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2]) > 16 and random.randint(0,1) == 0 :
-                            fire_size = random.randint(int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/2), int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/1.3))
+                        if min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2]) > 16 and random.random() < 0.8:
+                            fire_size = max(10, random.randint(int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/1.7), int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/1.2)))
                             fire_img = cv2.imread(os.path.join(hyp.get('render_fire', None)[0], fire_imgs[random.randint(0, len(fire_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
                             fire_img = cv2.resize(fire_img, (fire_size, fire_size), cv2.INTER_CUBIC)
 
