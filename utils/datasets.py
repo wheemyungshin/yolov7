@@ -736,7 +736,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         color_sum = np.sum(ciga_img[idx_y][idx_x][0:3])
 
                         if color_sum > 10 :
-
                             ciga_img[idx_y][idx_x][0] = min(int(color_sum * b),255)
                             ciga_img[idx_y][idx_x][1] = min(int(color_sum * g),255)
                             ciga_img[idx_y][idx_x][2] = min(int(color_sum * r),255)
@@ -931,7 +930,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         else:
                             valid_idx+=1
                     for idx, ciga_label in enumerate(labels[is_valid_ciga]) :
-                        if min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2]) > 16 and random.random() < 0.8:
+                        min_ciga_size = 16
+                        if min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2]) > min_ciga_size and random.random() < 0.5:
                             fire_size = max(10, random.randint(int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/1.7), int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/1.2)))
                             fire_img = cv2.imread(os.path.join(hyp.get('render_fire', None)[0], fire_imgs[random.randint(0, len(fire_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
                             fire_img = cv2.resize(fire_img, (fire_size, fire_size), cv2.INTER_CUBIC)
@@ -962,18 +962,18 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
                             # fire 위치 랜덤하게 지정
                             if (ciga_label[3]-ciga_label[1])*2 < (ciga_label[4]-ciga_label[2]): # h is longer
-                                fire_img_position_x = random.randint(int(ciga_label[1]), int(ciga_label[3])-fire_img.shape[1])
+                                fire_img_position_x = random.randint(max(int(ciga_label[1])-int(min_ciga_size/2), 0), 
+                                    min(int(ciga_label[3])-fire_img.shape[1]+int(min_ciga_size/2), img.shape[1]))
                                 fire_img_position_y = random.choice([int(ciga_label[2]), int(ciga_label[4])-fire_img.shape[0]])
                             elif (ciga_label[4]-ciga_label[2])*2 < (ciga_label[3]-ciga_label[1]): # w is longer
                                 fire_img_position_x = random.choice([int(ciga_label[1]), int(ciga_label[3])-fire_img.shape[1]])
-                                fire_img_position_y = random.randint(int(ciga_label[2]), int(ciga_label[4])-fire_img.shape[0])
+                                fire_img_position_y = random.randint(max(int(ciga_label[2])-int(min_ciga_size/2), 0), 
+                                    min(int(ciga_label[4])-fire_img.shape[0]+int(min_ciga_size/2), img.shape[0]))
                             else:
-                                if random.randint(0,1) == 0 :
-                                    fire_img_position_x = random.randint(int(ciga_label[1]), int(ciga_label[3])-fire_img.shape[1])
-                                    fire_img_position_y = random.choice([int(ciga_label[2]), int(ciga_label[4])-fire_img.shape[0]])
-                                else:
-                                    fire_img_position_x = random.choice([int(ciga_label[1]), int(ciga_label[3])-fire_img.shape[1]])
-                                    fire_img_position_y = random.randint(int(ciga_label[2]), int(ciga_label[4])-fire_img.shape[0])
+                                fire_img_position_x = random.randint(max(int(ciga_label[1])-int(min_ciga_size/2), 0), 
+                                    min(int(ciga_label[3])-fire_img.shape[1]+int(min_ciga_size/2), img.shape[1]-fire_img.shape[1]))
+                                fire_img_position_y = random.randint(max(int(ciga_label[2])-int(min_ciga_size/2), 0), 
+                                    min(int(ciga_label[4])-fire_img.shape[0]+int(min_ciga_size/2), img.shape[0]-fire_img.shape[1]))
                             img_crop = img[fire_img_position_y:fire_img_position_y+fire_img.shape[0], fire_img_position_x:fire_img_position_x+fire_img.shape[1]]
                             img_crop = cv2.cvtColor(img_crop, cv2.COLOR_RGB2RGBA)
 
