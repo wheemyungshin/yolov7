@@ -2,8 +2,8 @@
 train: [/data/Pitta2ND_DB/fire/train.txt, 
 /data/crop_ciga_ncap_pitta_1st/ncap/train.txt,
 /data/crop_ciga_ncap_pitta_1st/pitta_1st/train.txt] # 27325 + 967 + 2023
-val: [/data/crop_ciga_ncap_pitta_1st/ncap/train.txt] # 967
-test: [/data/crop_ciga_ncap_pitta_1st/ncap/train.txt] # 967
+val: [/data/Pitta2ND_DB/fire/train.txt] # 967
+test: [/data/Pitta2ND_DB/fire/train.txt] # 967
 
 # number of classes
 nc: 3
