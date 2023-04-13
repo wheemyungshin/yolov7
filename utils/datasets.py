@@ -704,7 +704,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         img[cuty_min : cuty_max, cutx_min : cutx_max, :] = random.random()*255
 
         # 투명도는 30, 60, 100 중 하나 
-        if hyp.get('render_ciga', None) is not None:
+        if hyp is not None and hyp.get('render_ciga', None) is not None:
             num_of_ciga_img = [0,2]
             num_of_ciga = random.randint(num_of_ciga_img[0], num_of_ciga_img[1])
             ciga_imgs = os.listdir(os.path.join(hyp.get('render_ciga', None)[0], '100'))
@@ -907,7 +907,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                 (color_element, color_element, color_element), thickness, lineType=cv2.LINE_AA)
                         labels = np.append(labels, np.array([[0, seat_x1_range, seat_y1_range, seat_x2_range, seat_y2_range]]), axis=0) 
                     
-        if hyp.get('render_fire', None) is not None:
+        if hyp is not None and hyp.get('render_fire', None) is not None:
             nL = len(labels)  # number of labels
             if nL:
                 fire_imgs = os.listdir(hyp.get('render_fire', None)[0])
