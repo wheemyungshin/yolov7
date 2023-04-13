@@ -730,15 +730,18 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 g = g/origin_color_sum
                 r = r/origin_color_sum
 
-                for idx_x in range(ciga_img.shape[1]) :
-                    for idx_y in range(ciga_img.shape[0]) :
+                try:
+                    for idx_x in range(ciga_img.shape[1]) :
+                        for idx_y in range(ciga_img.shape[0]) :
 
-                        color_sum = np.sum(ciga_img[idx_y][idx_x][0:3])
+                            color_sum = np.sum(ciga_img[idx_y][idx_x][0:3])
 
-                        if color_sum > 10 :
-                            ciga_img[idx_y][idx_x][0] = min(int(color_sum * b),255)
-                            ciga_img[idx_y][idx_x][1] = min(int(color_sum * g),255)
-                            ciga_img[idx_y][idx_x][2] = min(int(color_sum * r),255)
+                            if color_sum > 10 :
+                                ciga_img[idx_y][idx_x][0] = min(int(color_sum * b),255)
+                                ciga_img[idx_y][idx_x][1] = min(int(color_sum * g),255)
+                                ciga_img[idx_y][idx_x][2] = min(int(color_sum * r),255)
+                except:
+                    ciga_img = ciga_img
 
                 # ciga 위치 랜덤하게 지정
                 try_max = 20
