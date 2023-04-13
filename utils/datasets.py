@@ -713,10 +713,10 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 ciga_img = cv2.imread(os.path.join(hyp.get('render_ciga', None)[0], str(opacity), ciga_imgs[random.randint(0, len(ciga_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
                 if ciga_img.shape[0] < ciga_img.shape[1]:
                     random_resize_w = max(img.shape[1]*(0.1+random.random()*0.15), 8)
-                    random_resize_h = random_resize_w * ciga_img.shape[0] / ciga_img.shape[1]
+                    random_resize_h = max(random_resize_w * ciga_img.shape[0] / ciga_img.shape[1], 2)
                 else:
                     random_resize_h = max(img.shape[0]*(0.1+random.random()*0.15), 8)
-                    random_resize_w = random_resize_h * ciga_img.shape[1] / ciga_img.shape[0]
+                    random_resize_w = max(random_resize_h * ciga_img.shape[1] / ciga_img.shape[0], 2)
 
                 #print((int(random_resize_w), int(random_resize_h)))
                 ciga_img = cv2.resize(ciga_img, (int(random_resize_w), int(random_resize_h)), interpolation=cv2.INTER_LINEAR)
