@@ -938,7 +938,10 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         if min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2]) > min_ciga_size and random.random() < 0.5:
                             fire_size = max(10, random.randint(int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/1.7), int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/1.2)))
                             fire_img = cv2.imread(os.path.join(hyp.get('render_fire', None)[0], fire_imgs[random.randint(0, len(fire_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
+                            
                             fire_img = cv2.resize(fire_img, (fire_size, fire_size), cv2.INTER_CUBIC)
+                            #random_shine_ratio = 1+random.random()*0.5
+                            #fire_img = np.clip(fire_img * random_shine_ratio, 0, 255).astype((np.uint8))
 
                             # 원본 이미지 색상 계열에 맞추기
                             color_sample = cv2.resize(img, (100,100))
