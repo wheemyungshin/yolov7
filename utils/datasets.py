@@ -942,7 +942,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             fire_img = cv2.resize(fire_img, (fire_size, fire_size), cv2.INTER_CUBIC)
                             #random_shine_ratio = 1+random.random()*0.5
                             #fire_img = np.clip(fire_img * random_shine_ratio, 0, 255).astype((np.uint8))
-
+                            
                             # 원본 이미지 색상 계열에 맞추기
                             color_sample = cv2.resize(img, (100,100))
                             b = np.mean(color_sample[:, :, 0])
