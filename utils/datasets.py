@@ -884,32 +884,33 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 labels = np.array(labels_after_filter)
 
             if hyp is not None and random.random() < hyp.get('fakeseatbelt', 0):
-                if 1 in labels[:, 0] and 0 not in labels[:, 0] and len(labels[:, 0])==1:#face exists, seatbelt does not exist
-                    face_label = labels[0]
-                    if int(face_label[4]) < img.shape[0]*0.8:
-                        seat_x1_range = max(face_label[1]-(face_label[3]-face_label[1])*1.5, 0)
-                        seat_y1_range = face_label[4]
-                        seat_x2_range = min(face_label[3]+(face_label[3]-face_label[1])*1.5, img.shape[1])
-                        seat_y2_range = img.shape[0]               
-                        color_element = 32+int(random.random()*128)
-                        mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
-                        thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
-                        if random.random() < 0.5:
-                            x1 = int(seat_x1_range)
-                            y1 = int(seat_y1_range)
-                            x2 = int(seat_x1_range+(seat_x2_range-seat_x1_range)*(0.8+random.random()*0.2))
-                            y2 = int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1))
-                            img = cv2.line(img, [x1, y1], [x2, y2], 
-                                (color_element, color_element, color_element), thickness, lineType=cv2.LINE_AA)
-                        else:
-                            x2 = int(seat_x2_range)
-                            y1 = int(seat_y1_range)
-                            x1 = int(seat_x1_range+(seat_x2_range-seat_x1_range)*(random.random()*0.2))
-                            y2 = int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1))
-                            img = cv2.line(img, [x2, y1], [x1, y2], 
-                                (color_element, color_element, color_element), thickness, lineType=cv2.LINE_AA)
-                        labels = np.append(labels, np.array([[0, seat_x1_range, seat_y1_range, seat_x2_range, seat_y2_range]]), axis=0) 
-                    
+                if len(labels) > 0:
+                    if 1 in labels[:, 0] and 0 not in labels[:, 0] and len(labels[:, 0])==1:#face exists, seatbelt does not exist
+                        face_label = labels[0]
+                        if int(face_label[4]) < img.shape[0]*0.8:
+                            seat_x1_range = max(face_label[1]-(face_label[3]-face_label[1])*1.5, 0)
+                            seat_y1_range = face_label[4]
+                            seat_x2_range = min(face_label[3]+(face_label[3]-face_label[1])*1.5, img.shape[1])
+                            seat_y2_range = img.shape[0]               
+                            color_element = 32+int(random.random()*128)
+                            mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
+                            thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
+                            if random.random() < 0.5:
+                                x1 = int(seat_x1_range)
+                                y1 = int(seat_y1_range)
+                                x2 = int(seat_x1_range+(seat_x2_range-seat_x1_range)*(0.8+random.random()*0.2))
+                                y2 = int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1))
+                                img = cv2.line(img, [x1, y1], [x2, y2], 
+                                    (color_element, color_element, color_element), thickness, lineType=cv2.LINE_AA)
+                            else:
+                                x2 = int(seat_x2_range)
+                                y1 = int(seat_y1_range)
+                                x1 = int(seat_x1_range+(seat_x2_range-seat_x1_range)*(random.random()*0.2))
+                                y2 = int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1))
+                                img = cv2.line(img, [x2, y1], [x1, y2], 
+                                    (color_element, color_element, color_element), thickness, lineType=cv2.LINE_AA)
+                            labels = np.append(labels, np.array([[0, seat_x1_range, seat_y1_range, seat_x2_range, seat_y2_range]]), axis=0) 
+                        
         if hyp is not None and hyp.get('render_fire', None) is not None:
             nL = len(labels)  # number of labels
             if nL:
@@ -934,7 +935,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             valid_idx+=1
                     for idx, ciga_label in enumerate(labels[is_valid_ciga]) :
                         min_ciga_size = 16
-                        if min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2]) > min_ciga_size and random.random() < 0.1:
+                        if min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2]) > min_ciga_size and random.random() < 0.5:
                             fire_size = max(10, random.randint(int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/1.7), int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/1.2)))
                             fire_img = cv2.imread(os.path.join(hyp.get('render_fire', None)[0], fire_imgs[random.randint(0, len(fire_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
                             fire_img = cv2.resize(fire_img, (fire_size, fire_size), cv2.INTER_CUBIC)
