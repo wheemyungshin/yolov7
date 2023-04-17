@@ -895,20 +895,30 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             color_element = 32+int(random.random()*128)
                             mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
                             thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
+
+                            color_sample = cv2.resize(img, (100,100))
+                            b = np.mean(color_sample[:, :, 0])
+                            g = np.mean(color_sample[:, :, 1])
+                            r = np.mean(color_sample[:, :, 2])
+                            origin_color_sum = (b + g + r)
+                            b = b/origin_color_sum
+                            g = g/origin_color_sum
+                            r = r/origin_color_sum
+
                             if random.random() < 0.5:
                                 x1 = int(seat_x1_range)
                                 y1 = int(seat_y1_range)
                                 x2 = int(seat_x1_range+(seat_x2_range-seat_x1_range)*(0.8+random.random()*0.2))
                                 y2 = int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1))
                                 img = cv2.line(img, [x1, y1], [x2, y2], 
-                                    (color_element, color_element, color_element), thickness, lineType=cv2.LINE_AA)
+                                    (color_element*b*3, color_element*g*3, color_element*r*3), thickness, lineType=cv2.LINE_AA)                                
                             else:
                                 x2 = int(seat_x2_range)
                                 y1 = int(seat_y1_range)
                                 x1 = int(seat_x1_range+(seat_x2_range-seat_x1_range)*(random.random()*0.2))
                                 y2 = int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1))
                                 img = cv2.line(img, [x2, y1], [x1, y2], 
-                                    (color_element, color_element, color_element), thickness, lineType=cv2.LINE_AA)
+                                    (color_element*b*3, color_element*g*3, color_element*r*3), thickness, lineType=cv2.LINE_AA)                            
                             labels = np.append(labels, np.array([[0, seat_x1_range, seat_y1_range, seat_x2_range, seat_y2_range]]), axis=0) 
                         
         if hyp is not None and hyp.get('render_fire', None) is not None:
@@ -1179,20 +1189,30 @@ def load_mosaic(self, hyp, index):
                         color_element = 32+int(random.random()*128)
                         mosaic_patch_size = ((x2a-x1a)*(y2a-y1a))**0.5
                         thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
+
+                        color_sample = cv2.resize(img, (100,100))
+                        b = np.mean(color_sample[:, :, 0])
+                        g = np.mean(color_sample[:, :, 1])
+                        r = np.mean(color_sample[:, :, 2])
+                        origin_color_sum = (b + g + r)
+                        b = b/origin_color_sum
+                        g = g/origin_color_sum
+                        r = r/origin_color_sum
+
                         if random.random() < 0.5:
                             x1 = int(seat_x1_range)
                             y1 = int(seat_y1_range)
                             x2 = int(seat_x1_range+(seat_x2_range-seat_x1_range)*(0.8+random.random()*0.2))
                             y2 = int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1))
-                            img4 = cv2.line(img4, [x1, y1], [x2, y2], 
-                                (color_element, color_element, color_element), thickness, lineType=cv2.LINE_AA)
+                            img = cv2.line(img, [x1, y1], [x2, y2], 
+                                (color_element*b*3, color_element*g*3, color_element*r*3), thickness, lineType=cv2.LINE_AA)                                
                         else:
                             x2 = int(seat_x2_range)
                             y1 = int(seat_y1_range)
                             x1 = int(seat_x1_range+(seat_x2_range-seat_x1_range)*(random.random()*0.2))
                             y2 = int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1))
-                            img4 = cv2.line(img4, [x2, y1], [x1, y2], 
-                                (color_element, color_element, color_element), thickness, lineType=cv2.LINE_AA)
+                            img = cv2.line(img, [x2, y1], [x1, y2], 
+                                (color_element*b*3, color_element*g*3, color_element*r*3), thickness, lineType=cv2.LINE_AA)
                         labels = np.append(labels, np.array([[0, seat_x1_range, seat_y1_range, seat_x2_range, seat_y2_range]]), axis=0)    
 
         labels4.append(labels)
@@ -1293,20 +1313,30 @@ def load_mosaic9(self, hyp, index):
                         color_element = 32+int(random.random()*128)
                         mosaic_patch_size = ((x2a-x1a)*(y2a-y1a))**0.5
                         thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
+
+                        color_sample = cv2.resize(img, (100,100))
+                        b = np.mean(color_sample[:, :, 0])
+                        g = np.mean(color_sample[:, :, 1])
+                        r = np.mean(color_sample[:, :, 2])
+                        origin_color_sum = (b + g + r)
+                        b = b/origin_color_sum
+                        g = g/origin_color_sum
+                        r = r/origin_color_sum
+
                         if random.random() < 0.5:
                             x1 = int(seat_x1_range)
                             y1 = int(seat_y1_range)
                             x2 = int(seat_x1_range+(seat_x2_range-seat_x1_range)*(0.8+random.random()*0.2))
                             y2 = int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1))
-                            img9 = cv2.line(img9, [x1, y1], [x2, y2], 
-                                (color_element, color_element, color_element), thickness, lineType=cv2.LINE_AA)
+                            img = cv2.line(img, [x1, y1], [x2, y2], 
+                                (color_element*b*3, color_element*g*3, color_element*r*3), thickness, lineType=cv2.LINE_AA)                                
                         else:
                             x2 = int(seat_x2_range)
                             y1 = int(seat_y1_range)
                             x1 = int(seat_x1_range+(seat_x2_range-seat_x1_range)*(random.random()*0.2))
                             y2 = int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1))
-                            img9 = cv2.line(img9, [x2, y1], [x1, y2], 
-                                (color_element, color_element, color_element), thickness, lineType=cv2.LINE_AA)
+                            img = cv2.line(img, [x2, y1], [x1, y2], 
+                                (color_element*b*3, color_element*g*3, color_element*r*3), thickness, lineType=cv2.LINE_AA)
                         labels = np.append(labels, np.array([[0, seat_x1_range, seat_y1_range, seat_x2_range, seat_y2_range]]), axis=0) 
 
         labels9.append(labels)
