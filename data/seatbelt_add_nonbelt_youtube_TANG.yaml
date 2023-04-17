@@ -3,8 +3,7 @@ train: [/data/Pitta2ND_DB/seatbelt/train.txt,
       /data/smoke_non_seatbelt_filter/smoke_data_BFC/train.txt,
       /data/smoke_non_seatbelt_filter/valid_pitta_smoke_BFC2/train.txt,
       /data/AVATAR_Game_Beauty_Youtuber_body_crops/1-002/train.txt,
-      /data/AVATAR_Game_Beauty_Youtuber_body_crops/2-001/train.txt,
-      /data/seatbelt_TANG_after_inspection/train.txt] # 14695 + 23494
+      /data/AVATAR_Game_Beauty_Youtuber_body_crops/2-001/train.txt] # 14695 + 23494 + (5784 + 17230)
 val: [/data/Pitta2ND_DB/seatbelt/train.txt]   
 test: [/data/Pitta2ND_DB/seatbelt/train.txt]   
 
