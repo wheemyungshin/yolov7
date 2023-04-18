@@ -882,30 +882,43 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         else:
                             img[int(label[2]):int(label[4]), int(label[1]):int(label[3]), :] = 0
                 labels = np.array(labels_after_filter)
-
+                                    
             if hyp is not None and random.random() < hyp.get('fakeseatbelt3', [None, 0])[1]:
                 if len(labels) > 0:
-                    if 1 in labels[:, 0] and 0 not in labels[:, 0] and len(labels[:, 0])==1:#face exists, seatbelt does not exist
-                    
-                        seatbelt_imgs = os.listdir(hyp.get('fakeseatbelt3', [None, 0])[0])                        
-                        seatbelt_img = cv2.imread(os.path.join(hyp.get('fakeseatbelt3', [None, 0])[0], seatbelt_imgs[random.randint(0, len(seatbelt_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
+                    if 1 in labels[:, 0] and 0 not in labels[:, 0] and len(labels[:, 0])==1:#face exists, seatbelt does not exist                    
+                        seatbelt_imgs = os.listdir(hyp.get('fakeseatbelt3', [None, 0])[0])      
+                        seatbelt_filename = seatbelt_imgs[random.randint(0, len(seatbelt_imgs) - 1)]
+                        seatbelt_img = cv2.imread(os.path.join(hyp.get('fakeseatbelt3', [None, 0])[0], seatbelt_filename), cv2.IMREAD_UNCHANGED)
                         
                         face_label = labels[0]
                         if int(face_label[4]) < img.shape[0]*0.8:
-                            seat_x1_range = max(face_label[1]-(face_label[3]-face_label[1])*1.5, 0)
-                            seat_y1_range = face_label[4]
-                            seat_x2_range = min(face_label[3]+(face_label[3]-face_label[1])*1.5, img.shape[1])
-                            seat_y2_range = img.shape[0]               
+                            seat_x1_range = min(max(face_label[1]-(face_label[3]-face_label[1])*(1.1), 0), img.shape[1])
+                            seat_y1_range = min(max(face_label[4]-(face_label[4]-face_label[2])*random.random()*0.2, 0), img.shape[0])
+                            seat_x2_range = min(max(face_label[3]+(face_label[3]-face_label[1])*(1.1), 0), img.shape[1])
+                            seat_y2_range = min(max(img.shape[0], 0), img.shape[0])
+
+                            if seatbelt_filename.startswith('03') or seatbelt_filename.startswith('04') :
+                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*1.5, 0), img.shape[1]))
+                                seat_y1_start = int(seat_y1_range)
+                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*1.5, 0), img.shape[1]))
+                                seat_y2_start = int(seat_y2_range)
+                            else:
+                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*(1.5+random.random()*0.5), 0), img.shape[1]))
+                                seat_y1_start = int(min(max(random.randint(int(face_label[2]), int(seat_y1_range)), 0), img.shape[0]))
+                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*(1.5+random.random()*0.5), 0), img.shape[1]))
+                                seat_y2_start = int(seat_y2_range)
+
                             color_element = 32+int(random.random()*128)
                             mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
                             thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
 
                             x1 = int(seat_x1_range)
                             y1 = int(seat_y1_range)
-                            x2 = int(seat_x1_range+(seat_x2_range-seat_x1_range)*(0.8+random.random()*0.2))
-                            y2 = int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1))
-                            if (x2-x1) > 0 and (y2-y1) > 0 :
-                                seatbelt_img = cv2.resize(seatbelt_img, (int(x2-x1), int(y2-y1)), interpolation=cv2.INTER_LINEAR)
+                            x2 = min(max(int(seat_x1_range+(seat_x2_range-seat_x1_range)*(0.8+random.random()*0.2)), 0), img.shape[1])      
+                            y2 = min(max(int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1)), 0), img.shape[0])     
+                            
+                            if (seat_x2_start-seat_x1_start) > 0 and (seat_y2_start-seat_y1_start) > 0 :
+                                seatbelt_img = cv2.resize(seatbelt_img, ((seat_x2_start-seat_x1_start), (seat_y2_start-seat_y1_start)), interpolation=cv2.INTER_LINEAR)
 
                                 color_sample = cv2.resize(img, (100,100))
                                 b = np.mean(color_sample[:, :, 0])
@@ -932,7 +945,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                 if random.randint(0,1) == 0 :
                                     seatbelt_img = cv2.flip(seatbelt_img, 1)
 
-                                img_crop = img[y1:y2, x1:x2]
+                                img_crop = img[seat_y1_start:seat_y2_start, seat_x1_start:seat_x2_start]
                                 img_crop = cv2.cvtColor(img_crop, cv2.COLOR_RGB2RGBA)
 
                                 # Pillow 에서 Alpha Blending
@@ -943,7 +956,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
                                 # 원본 이미지에 다시 합치기
                                 blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
-                                img[y1:y2, x1:x2] = blended_img
+                                img[seat_y1_start:seat_y2_start, seat_x1_start:seat_x2_start] = blended_img
 
                                 labels = np.append(labels, np.array([[0, x1, y1, x2, y2]]), axis=0) 
                         
@@ -1203,20 +1216,32 @@ def load_mosaic(self, hyp, index):
             segments = [xyn2xy(x, w, h, padw, padh) for x in segments]
             if self.pose_data is not None:
                 poses = [pose_xyn2xy(x, w, h, padw, padh) for x in poses]
-            
+                        
             if hyp is not None and random.random() < hyp.get('fakeseatbelt3', [None, 0])[1]:
                 if len(labels) > 0:
-                    if 1 in labels[:, 0] and 0 not in labels[:, 0] and len(labels[:, 0])==1:#face exists, seatbelt does not exist
-                    
-                        seatbelt_imgs = os.listdir(hyp.get('fakeseatbelt3', [None, 0])[0])                        
-                        seatbelt_img = cv2.imread(os.path.join(hyp.get('fakeseatbelt3', [None, 0])[0], seatbelt_imgs[random.randint(0, len(seatbelt_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
+                    if 1 in labels[:, 0] and 0 not in labels[:, 0] and len(labels[:, 0])==1:#face exists, seatbelt does not exist                    
+                        seatbelt_imgs = os.listdir(hyp.get('fakeseatbelt3', [None, 0])[0])      
+                        seatbelt_filename = seatbelt_imgs[random.randint(0, len(seatbelt_imgs) - 1)]
+                        seatbelt_img = cv2.imread(os.path.join(hyp.get('fakeseatbelt3', [None, 0])[0], seatbelt_filename), cv2.IMREAD_UNCHANGED)
                         
                         face_label = labels[0]
                         if int(face_label[4]) < img.shape[0]*0.8:
-                            seat_x1_range = min(max(face_label[1]-(face_label[3]-face_label[1])*1.5, 0), img.shape[1])
-                            seat_y1_range = min(max(face_label[4], 0), img.shape[0])
-                            seat_x2_range = min(max(face_label[3]+(face_label[3]-face_label[1])*1.5, 0), img.shape[1])
-                            seat_y2_range = min(max(img.shape[0], 0), img.shape[0])               
+                            seat_x1_range = min(max(face_label[1]-(face_label[3]-face_label[1])*(1.1), 0), img.shape[1])
+                            seat_y1_range = min(max(face_label[4]-(face_label[4]-face_label[2])*random.random()*0.2, 0), img.shape[0])
+                            seat_x2_range = min(max(face_label[3]+(face_label[3]-face_label[1])*(1.1), 0), img.shape[1])
+                            seat_y2_range = min(max(img.shape[0], 0), img.shape[0])
+
+                            if seatbelt_filename.startswith('03') or seatbelt_filename.startswith('04') :
+                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*1.5, 0), img.shape[1]))
+                                seat_y1_start = int(seat_y1_range)
+                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*1.5, 0), img.shape[1]))
+                                seat_y2_start = int(seat_y2_range)
+                            else:
+                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*(1.5+random.random()*0.5), 0), img.shape[1]))
+                                seat_y1_start = int(min(max(random.randint(int(face_label[2]), int(seat_y1_range)), 0), img.shape[0]))
+                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*(1.5+random.random()*0.5), 0), img.shape[1]))
+                                seat_y2_start = int(seat_y2_range)
+
                             color_element = 32+int(random.random()*128)
                             mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
                             thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
@@ -1226,8 +1251,8 @@ def load_mosaic(self, hyp, index):
                             x2 = min(max(int(seat_x1_range+(seat_x2_range-seat_x1_range)*(0.8+random.random()*0.2)), 0), img.shape[1])      
                             y2 = min(max(int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1)), 0), img.shape[0])     
                             
-                            if (x2-x1) > 0 and (y2-y1) > 0 :
-                                seatbelt_img = cv2.resize(seatbelt_img, ((x2-x1), (y2-y1)), interpolation=cv2.INTER_LINEAR)
+                            if (seat_x2_start-seat_x1_start) > 0 and (seat_y2_start-seat_y1_start) > 0 :
+                                seatbelt_img = cv2.resize(seatbelt_img, ((seat_x2_start-seat_x1_start), (seat_y2_start-seat_y1_start)), interpolation=cv2.INTER_LINEAR)
 
                                 color_sample = cv2.resize(img, (100,100))
                                 b = np.mean(color_sample[:, :, 0])
@@ -1254,7 +1279,7 @@ def load_mosaic(self, hyp, index):
                                 if random.randint(0,1) == 0 :
                                     seatbelt_img = cv2.flip(seatbelt_img, 1)
 
-                                img_crop = img[y1:y2, x1:x2]
+                                img_crop = img[seat_y1_start:seat_y2_start, seat_x1_start:seat_x2_start]
                                 img_crop = cv2.cvtColor(img_crop, cv2.COLOR_RGB2RGBA)
 
                                 # Pillow 에서 Alpha Blending
@@ -1265,7 +1290,7 @@ def load_mosaic(self, hyp, index):
 
                                 # 원본 이미지에 다시 합치기
                                 blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
-                                img[y1:y2, x1:x2] = blended_img
+                                img[seat_y1_start:seat_y2_start, seat_x1_start:seat_x2_start] = blended_img
 
                                 labels = np.append(labels, np.array([[0, x1, y1, x2, y2]]), axis=0) 
 
@@ -1355,30 +1380,43 @@ def load_mosaic9(self, hyp, index):
             segments = [xyn2xy(x, w, h, padx, pady) for x in segments]
             if self.pose_data is not None:
                 poses = [pose_xyn2xy(x, w, h, padx, pady) for x in poses]
-            
+                                    
             if hyp is not None and random.random() < hyp.get('fakeseatbelt3', [None, 0])[1]:
                 if len(labels) > 0:
-                    if 1 in labels[:, 0] and 0 not in labels[:, 0] and len(labels[:, 0])==1:#face exists, seatbelt does not exist
-                    
-                        seatbelt_imgs = os.listdir(hyp.get('fakeseatbelt3', [None, 0])[0])                        
-                        seatbelt_img = cv2.imread(os.path.join(hyp.get('fakeseatbelt3', [None, 0])[0], seatbelt_imgs[random.randint(0, len(seatbelt_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
+                    if 1 in labels[:, 0] and 0 not in labels[:, 0] and len(labels[:, 0])==1:#face exists, seatbelt does not exist                    
+                        seatbelt_imgs = os.listdir(hyp.get('fakeseatbelt3', [None, 0])[0])      
+                        seatbelt_filename = seatbelt_imgs[random.randint(0, len(seatbelt_imgs) - 1)]
+                        seatbelt_img = cv2.imread(os.path.join(hyp.get('fakeseatbelt3', [None, 0])[0], seatbelt_filename), cv2.IMREAD_UNCHANGED)
                         
                         face_label = labels[0]
                         if int(face_label[4]) < img.shape[0]*0.8:
-                            seat_x1_range = max(face_label[1]-(face_label[3]-face_label[1])*1.5, 0)
-                            seat_y1_range = face_label[4]
-                            seat_x2_range = min(face_label[3]+(face_label[3]-face_label[1])*1.5, img.shape[1])
-                            seat_y2_range = img.shape[0]               
+                            seat_x1_range = min(max(face_label[1]-(face_label[3]-face_label[1])*(1.1), 0), img.shape[1])
+                            seat_y1_range = min(max(face_label[4]-(face_label[4]-face_label[2])*random.random()*0.2, 0), img.shape[0])
+                            seat_x2_range = min(max(face_label[3]+(face_label[3]-face_label[1])*(1.1), 0), img.shape[1])
+                            seat_y2_range = min(max(img.shape[0], 0), img.shape[0])
+
+                            if seatbelt_filename.startswith('03') or seatbelt_filename.startswith('04') :
+                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*1.5, 0), img.shape[1]))
+                                seat_y1_start = int(seat_y1_range)
+                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*1.5, 0), img.shape[1]))
+                                seat_y2_start = int(seat_y2_range)
+                            else:
+                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*(1.5+random.random()*0.5), 0), img.shape[1]))
+                                seat_y1_start = int(min(max(random.randint(int(face_label[2]), int(seat_y1_range)), 0), img.shape[0]))
+                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*(1.5+random.random()*0.5), 0), img.shape[1]))
+                                seat_y2_start = int(seat_y2_range)
+
                             color_element = 32+int(random.random()*128)
                             mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
                             thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
 
                             x1 = int(seat_x1_range)
                             y1 = int(seat_y1_range)
-                            x2 = int(seat_x1_range+(seat_x2_range-seat_x1_range)*(0.8+random.random()*0.2))
-                            y2 = int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1))
-                            if (x2-x1) > 0 and (y2-y1) > 0 :
-                                seatbelt_img = cv2.resize(seatbelt_img, (int(x2-x1), int(y2-y1)), interpolation=cv2.INTER_LINEAR)
+                            x2 = min(max(int(seat_x1_range+(seat_x2_range-seat_x1_range)*(0.8+random.random()*0.2)), 0), img.shape[1])      
+                            y2 = min(max(int(seat_y1_range+(seat_y2_range-seat_y1_range)*(0.9+random.random()*0.1)), 0), img.shape[0])     
+                            
+                            if (seat_x2_start-seat_x1_start) > 0 and (seat_y2_start-seat_y1_start) > 0 :
+                                seatbelt_img = cv2.resize(seatbelt_img, ((seat_x2_start-seat_x1_start), (seat_y2_start-seat_y1_start)), interpolation=cv2.INTER_LINEAR)
 
                                 color_sample = cv2.resize(img, (100,100))
                                 b = np.mean(color_sample[:, :, 0])
@@ -1405,7 +1443,7 @@ def load_mosaic9(self, hyp, index):
                                 if random.randint(0,1) == 0 :
                                     seatbelt_img = cv2.flip(seatbelt_img, 1)
 
-                                img_crop = img[y1:y2, x1:x2]
+                                img_crop = img[seat_y1_start:seat_y2_start, seat_x1_start:seat_x2_start]
                                 img_crop = cv2.cvtColor(img_crop, cv2.COLOR_RGB2RGBA)
 
                                 # Pillow 에서 Alpha Blending
@@ -1416,7 +1454,7 @@ def load_mosaic9(self, hyp, index):
 
                                 # 원본 이미지에 다시 합치기
                                 blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
-                                img[y1:y2, x1:x2] = blended_img
+                                img[seat_y1_start:seat_y2_start, seat_x1_start:seat_x2_start] = blended_img
 
                                 labels = np.append(labels, np.array([[0, x1, y1, x2, y2]]), axis=0) 
 
