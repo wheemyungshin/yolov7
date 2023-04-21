@@ -64,6 +64,24 @@ def exif_size(img):
 
     return s
 
+def random_wave(img):
+    rows, cols = img.shape[:2]
+
+    # Randomly generate displacement fields
+    dx = (np.random.rand(rows, cols) - 0.5) * 1
+    #dy = (np.random.rand(rows, cols) - 0.5) * 10
+
+    # Generate grid coordinates
+    x, y = np.meshgrid(np.arange(cols), np.arange(rows))
+
+    # Add the displacement fields to the grid coordinates
+    map_x = (x + np.random.randint(2,6) * np.sin(y / np.random.randint(4,32))).astype(np.float32)
+    map_y = (y + np.random.randint(2,6) * np.sin(map_x / np.random.randint(4,32))).astype(np.float32)
+
+    # Warp the image using the generated map
+    warped_img = cv2.remap(img, map_x, map_y, cv2.INTER_LINEAR)
+
+    return warped_img
 
 def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=False, cache=False, pad=0.0, rect=False, ratio_maintain=True,
                       rank=-1, world_size=1, workers=8, image_weights=False, quad=False, prefix='', valid_idx=None, pose_data=None):
@@ -916,6 +934,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                     (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA) 
                             seatbelt_img = cv2.line(seatbelt_img, [semi_x, semi_y], [end_x, end_y], 
                                     (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA)
+                        seatbelt_img = random_wave(seatbelt_img)
                             #seatbelt_alpha = np.zeros([192, 192, 1]) 
                             #seatbelt_alpha = cv2.line(seatbelt_alpha, [0, 0], [semi_x, semi_y], 
                             #        (1), thickness, lineType=cv2.LINE_AA) 
@@ -1277,6 +1296,7 @@ def load_mosaic(self, hyp, index):
                                     (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA) 
                             seatbelt_img = cv2.line(seatbelt_img, [semi_x, semi_y], [end_x, end_y], 
                                     (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA)
+                        seatbelt_img = random_wave(seatbelt_img)
                             #seatbelt_alpha = np.zeros([192, 192, 1]) 
                             #seatbelt_alpha = cv2.line(seatbelt_alpha, [0, 0], [semi_x, semi_y], 
                             #        (1), thickness, lineType=cv2.LINE_AA) 
@@ -1468,6 +1488,7 @@ def load_mosaic9(self, hyp, index):
                                     (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA) 
                             seatbelt_img = cv2.line(seatbelt_img, [semi_x, semi_y], [end_x, end_y], 
                                     (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA)
+                        seatbelt_img = random_wave(seatbelt_img)
                             #seatbelt_alpha = np.zeros([192, 192, 1]) 
                             #seatbelt_alpha = cv2.line(seatbelt_alpha, [0, 0], [semi_x, semi_y], 
                             #        (1), thickness, lineType=cv2.LINE_AA) 
