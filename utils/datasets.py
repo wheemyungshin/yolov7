@@ -75,8 +75,8 @@ def random_wave(img):
     x, y = np.meshgrid(np.arange(cols), np.arange(rows))
 
     # Add the displacement fields to the grid coordinates
-    map_x = (x + np.random.randint(2,6) * np.sin(y / np.random.randint(4,32))).astype(np.float32)
-    map_y = (y + np.random.randint(2,6) * np.sin(map_x / np.random.randint(4,32))).astype(np.float32)
+    map_x = (x + np.random.randint(2,6) * np.sin(y / np.random.randint(16,64))).astype(np.float32)
+    map_y = (y + np.random.randint(2,6) * np.sin(map_x / np.random.randint(16,64))).astype(np.float32)
 
     # Warp the image using the generated map
     warped_img = cv2.remap(img, map_x, map_y, cv2.INTER_LINEAR)
@@ -209,7 +209,6 @@ class LoadImages:  # for inference
             self.count += 1
             img0 = cv2.imread(path)  # BGR
             assert img0 is not None, 'Image Not Found ' + path
-            #print(f'image {self.count}/{self.nf} {path}: ', end='')
 
         # Padded resize
         img = letterbox(img0, self.img_size, stride=self.stride)[0]
@@ -393,28 +392,46 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         #self.albumentations = Albumentations() if augment else None
         
         if pose_data is not None:
-            self.pose_data = defaultdict(list)
-            with open(pose_data[0], 'r') as f:
-                train_pose = json.load(f)['annotations']
-                for p_dict in train_pose:
-                    p_list = np.zeros([17,2])
-                    if 'keypoints' in p_dict and 'bbox' in p_dict:
-                        for i in range(17):
-                            if p_dict['keypoints'][i*3+2]!= 0:
-                                p_list[i,0] = p_dict['keypoints'][i*3]
-                                p_list[i,1] = p_dict['keypoints'][i*3+1]
-                        self.pose_data[p_dict['image_id']].append(p_list)
+            if pose_data[0] is not None:
+                self.pose_data = defaultdict(list)
+                for pose_data_ in pose_data[0]:
+                    with open(pose_data_, 'r') as f:
+                        train_pose_image_info = json.load(f)['images']
+                        image_id_name_match = {}
+                        for info_ in train_pose_image_info:
+                            image_id_name_match[info_['id']] = info_['file_name']
 
-            with open(pose_data[1], 'r') as f:
-                test_pose = json.load(f)['annotations']
-                for p_dict in test_pose:
-                    p_list = np.zeros([17,2])
-                    if 'keypoints' in p_dict and 'bbox' in p_dict:
-                        for i in range(17):
-                            if p_dict['keypoints'][i*3+2]!= 0:
-                                p_list[i,0] = p_dict['keypoints'][i*3]
-                                p_list[i,1] = p_dict['keypoints'][i*3+1]
-                        self.pose_data[p_dict['image_id']].append(p_list)
+                    with open(pose_data_, 'r') as f:
+                        train_pose = json.load(f)['annotations']
+                        for p_dict in train_pose:
+                            p_list = np.zeros([17,2])
+                            if 'keypoints' in p_dict and 'bbox' in p_dict:
+                                for i in range(17):
+                                    if p_dict['keypoints'][i*3+2]!= 0:
+                                        p_list[i,0] = p_dict['keypoints'][i*3]
+                                        p_list[i,1] = p_dict['keypoints'][i*3+1]
+                                info_file_name = image_id_name_match[p_dict['image_id']]
+                                self.pose_data[info_file_name].append(p_list)
+
+            if pose_data[1] is not None:
+                for pose_data_ in pose_data[1]:
+                    with open(pose_data_, 'r') as f:
+                        test_pose_image_info = json.load(f)['images']
+                        image_id_name_match = {}
+                        for info_ in test_pose_image_info:
+                            image_id_name_match[info_['id']] = info_['file_name']
+
+                    with open(pose_data_, 'r') as f:
+                        test_pose = json.load(f)['annotations']
+                        for p_dict in test_pose:
+                            p_list = np.zeros([17,2])
+                            if 'keypoints' in p_dict and 'bbox' in p_dict:
+                                for i in range(17):
+                                    if p_dict['keypoints'][i*3+2]!= 0:
+                                        p_list[i,0] = p_dict['keypoints'][i*3]
+                                        p_list[i,1] = p_dict['keypoints'][i*3+1]
+                                info_file_name = image_id_name_match[p_dict['image_id']]
+                                self.pose_data[info_file_name].append(p_list)
         else:
             self.pose_data = None
 
@@ -494,17 +511,20 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         if self.pose_data is not None:
             new_pose_data = []
             for i, img_file in enumerate(self.img_files):
-                image_id = int(img_file.split("/")[-1].split(".")[0])
+                image_file_name = img_file.split("/")[-1]
                 rescale_pose_data = []
-                for p_data_i, p_data in enumerate(self.pose_data[image_id]):
-                    if p_data_i < len(self.labels[i]):
-                        rescale_pose_data.append(p_data / self.shapes[i])
+                if image_file_name in self.pose_data:
+                    for p_data_i, p_data in enumerate(self.pose_data[image_file_name]):
+                        if p_data_i < len(self.labels[i]):
+                            rescale_pose_data.append(p_data / self.shapes[i])
+                else:
+                    none_array = np.full((17, 2), None)
+                    rescale_pose_data.append(none_array)
                 new_pose_data.append(rescale_pose_data)
             self.pose_data = new_pose_data
 
         if hyp is not None:
             box_margin = hyp.get('box_margin', 1.0)
-            print(box_margin)
             for i, x in enumerate(self.labels):
                 self.labels[i][:, 3] = x[:, 3]*box_margin
                 self.labels[i][:, 4] = x[:, 4]*box_margin
@@ -515,7 +535,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         n = len(self.shapes)  # number of images
         bi = np.floor(np.arange(n) / batch_size).astype(np.int)  # batch index
-        print(bi)
         nb = bi[-1] + 1  # number of batches
         self.batch = bi  # batch index of image
         self.n = n
@@ -694,7 +713,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 labels[:, 1:] = xywhn2xyxy(labels[:, 1:], ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1])
                 if self.pose_data is not None:
                     poses = self.pose_data[index].copy()
-                    poses = [pose_xyn2xy(x, ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1]) for x in poses]
+                    poses = np.array([pose_xyn2xy(x, ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1]) if x.any() is not None else x for x in poses])
             if hyp is not None:
                 for _ in range(hyp.get('max_num_face_cut_out', 0)):
                     if random.random() < hyp.get('face_cut_out', 0):
@@ -736,7 +755,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     random_resize_h = max(img.shape[0]*(0.1+random.random()*0.15), 8)
                     random_resize_w = max(random_resize_h * ciga_img.shape[1] / ciga_img.shape[0], 2)
 
-                #print((int(random_resize_w), int(random_resize_h)))
                 ciga_img = cv2.resize(ciga_img, (int(random_resize_w), int(random_resize_h)), interpolation=cv2.INTER_LINEAR)
 
                 color_sample = cv2.resize(img, (100,100))
@@ -794,7 +812,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         if self.augment:
             # Augment imagespace
             if not mosaic:
-                img, labels, poses = random_perspective(img, labels, poses,
+                img, labels, poses = random_perspective(img, labels, poses=poses,
                                                  degrees=hyp['degrees'],
                                                  translate=hyp['translate'],
                                                  scale=hyp['scale'],
@@ -818,7 +836,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     sample_labels += sample_labels_
                     sample_images += sample_images_
                     sample_masks += sample_masks_
-                    #print(len(sample_labels))
                     if len(sample_labels) == 0:
                         break
                 labels = pastein(img, labels, sample_labels, sample_images, sample_masks)
@@ -943,7 +960,45 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             #seatbelt_img = np.concatenate((seatbelt_img, seatbelt_alpha), axis=2)
 
                         face_label = labels[0]
-                        if int(face_label[4]) < img.shape[0]*0.8:
+                        do_fake_seatbelt = False
+                        if len(poses) > 0:#print(poses.shape)#((4 or 9), 17, 2)
+                            for pose in poses:
+                                do_fake_seatbelt_temp = True
+                                for p in pose[:7]:
+                                    if p[0] is None or np.isnan(p[0]) or p[1] is None or np.isnan(p[1]):
+                                        do_fake_seatbelt_temp = False
+                                
+                                if do_fake_seatbelt_temp:
+                                    seat_x1_range = min(max((pose[6, 0]+np.min(pose[:5, 0]))/2, 0), img.shape[1])
+                                    seat_y1_range = min(max(pose[6, 1], 0), img.shape[0])
+                                    seat_x2_range = min(max((pose[5, 0]+np.max(pose[:5, 0]))/2, 0), img.shape[1])
+                                    if pose[11, 1] is None or np.isnan(pose[11, 1]):
+                                        seat_y2_range = min(max(np.max(pose[:, 1][np.logical_not(np.isnan(pose[:, 1].astype(np.float64)))]), 0), img.shape[0])
+                                        if (seat_y1_range+img.shape[0])/2 > seat_y2_range:
+                                            seat_y2_range = min(max(img.shape[0], 0), img.shape[0])
+                                    else:
+                                        seat_y2_range = min(max(pose[11, 1], 0), img.shape[0])
+                                    
+                                    if seatbelt_filename is not None and (seatbelt_filename.startswith('03') or seatbelt_filename.startswith('04')):
+                                        seat_x1_start = int(min(max(pose[6, 0]-(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
+                                        seat_y1_start = int(seat_y1_range)
+                                        if pose[11, 0] is None or np.isnan(pose[11, 0]):
+                                            seat_x2_start = int(min(max(seat_x2_range+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
+                                        else:
+                                            seat_x2_start = int(min(max(pose[11, 0]+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
+                                        seat_y2_start = int(seat_y2_range)
+                                        
+                                    else:
+                                        seat_x1_start = int(min(max(pose[6, 0]-(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
+                                        seat_y1_start = int(min(max(np.mean(pose[:5, 1]), 0), img.shape[0]))
+                                        if pose[11, 0] is None or np.isnan(pose[11, 0]):
+                                            seat_x2_start = int(min(max(seat_x2_range+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
+                                        else:
+                                            seat_x2_start = int(min(max(pose[11, 0]+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
+                                        seat_y2_start = int(seat_y2_range)
+                                    do_fake_seatbelt = True
+
+                        if not do_fake_seatbelt and int(face_label[4]) < img.shape[0]*0.8:
                             seat_x1_range = min(max(face_label[1]-(face_label[3]-face_label[1]), 0), img.shape[1])
                             seat_y1_range = min(max(face_label[4]-(face_label[4]-face_label[2])*random.random()*0.2, 0), img.shape[0])
                             seat_x2_range = min(max(face_label[3]+(face_label[3]-face_label[1])*(1.1), 0), img.shape[1])
@@ -959,7 +1014,9 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                 seat_y1_start = int(min(max(random.randint(int(face_label[2]), int(seat_y1_range)), 0), img.shape[0]))
                                 seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*(-0.25+random.random()), 0), img.shape[1]))
                                 seat_y2_start = int(seat_y2_range)
+                            do_fake_seatbelt = True
 
+                        if do_fake_seatbelt:
                             color_element = 32+int(random.random()*128)
                             mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
                             thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
@@ -1106,20 +1163,41 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 img = np.flipud(img)
                 if nL:
                     labels[:, 2] = 1 - labels[:, 2]
+                if len(poses) > 0:
+                    for poses_i in range(len(poses)):
+                        for poses_j in range(len(poses[poses_i])):
+                            if poses[poses_i][poses_j].any() is not None and not np.isnan(poses[poses_i, poses_j, 1]):
+                                poses[poses_i, poses_j, 1] = img.shape[0] - poses[poses_i, poses_j, 1]
 
             # flip left-right
             if random.random() < hyp['fliplr']:
                 img = np.fliplr(img)
                 if nL:
                     labels[:, 1] = 1 - labels[:, 1]
+                if len(poses) > 0:
+                    for poses_i in range(len(poses)):
+                        for poses_j in range(len(poses[poses_i])):
+                            if poses[poses_i][poses_j].any() is not None and not np.isnan(poses[poses_i, poses_j, 0]):
+                                poses[poses_i, poses_j, 0] = img.shape[1] - poses[poses_i, poses_j, 0]
 
         labels_out = torch.zeros((nL, 6))
         if nL:
             labels_out[:, 1:] = torch.from_numpy(labels)
         
+        #Visualize pose joints
+        #print(poses.shape)#((4 or 9), 17, 2)
+        '''
+        img = img.copy()
+        if len(poses) > 0:
+            for pose in poses:
+                for p in pose:
+                    if p.any() is not None and not np.isnan(p[0]) and not np.isnan(p[1]):
+                        img = cv2.circle(img, (int(p[0]), int(p[1])), 9, (255, 0, 0), -1)
+        '''
 
         # Convert
         img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
+
         img = np.ascontiguousarray(img)
 
         return torch.from_numpy(img), labels_out, self.img_files[index], shapes
@@ -1261,8 +1339,8 @@ def load_mosaic(self, hyp, index):
             labels[:, 1:] = xywhn2xyxy(labels[:, 1:], w, h, padw, padh)  # normalized xywh to pixel xyxy format
             segments = [xyn2xy(x, w, h, padw, padh) for x in segments]
             if self.pose_data is not None:
-                poses = [pose_xyn2xy(x, w, h, padw, padh) for x in poses]
-                
+                poses = [pose_xyn2xy(x, w, h, padw, padh) if x.any() is not None else x for x in poses]
+
             if hyp is not None and random.random() < hyp.get('fakeseatbelt3', [None, 0])[1]:
                 if len(labels) > 0:
                     if 1 in labels[:, 0] and 0 not in labels[:, 0] and len(labels[:, 0])==1:#face exists, seatbelt does not exist                    
@@ -1305,7 +1383,45 @@ def load_mosaic(self, hyp, index):
                             #seatbelt_img = np.concatenate((seatbelt_img, seatbelt_alpha), axis=2)
 
                         face_label = labels[0]
-                        if int(face_label[4]) < img.shape[0]*0.8:
+                        do_fake_seatbelt = False
+                        if len(poses) > 0:#print(poses.shape)#((4 or 9), 17, 2)
+                            for pose in poses:
+                                do_fake_seatbelt_temp = True
+                                for p in pose[:7]:
+                                    if p[0] is None or np.isnan(p[0]) or p[1] is None or np.isnan(p[1]):
+                                        do_fake_seatbelt_temp = False
+                                
+                                if do_fake_seatbelt_temp:
+                                    seat_x1_range = min(max((pose[6, 0]+np.min(pose[:5, 0]))/2, 0), img.shape[1])
+                                    seat_y1_range = min(max(pose[6, 1], 0), img.shape[0])
+                                    seat_x2_range = min(max((pose[5, 0]+np.max(pose[:5, 0]))/2, 0), img.shape[1])
+                                    if pose[11, 1] is None or np.isnan(pose[11, 1]):
+                                        seat_y2_range = min(max(np.max(pose[:, 1][np.logical_not(np.isnan(pose[:, 1].astype(np.float64)))]), 0), img.shape[0])
+                                        if (seat_y1_range+img.shape[0])/2 > seat_y2_range:
+                                            seat_y2_range = min(max(img.shape[0], 0), img.shape[0])
+                                    else:
+                                        seat_y2_range = min(max(pose[11, 1], 0), img.shape[0])
+                                    
+                                    if seatbelt_filename is not None and (seatbelt_filename.startswith('03') or seatbelt_filename.startswith('04')):
+                                        seat_x1_start = int(min(max(pose[6, 0]-(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
+                                        seat_y1_start = int(seat_y1_range)
+                                        if pose[11, 0] is None or np.isnan(pose[11, 0]):
+                                            seat_x2_start = int(min(max(seat_x2_range+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
+                                        else:
+                                            seat_x2_start = int(min(max(pose[11, 0]+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
+                                        seat_y2_start = int(seat_y2_range)
+                                        
+                                    else:
+                                        seat_x1_start = int(min(max(pose[6, 0]-(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
+                                        seat_y1_start = int(min(max(np.mean(pose[:5, 1]), 0), img.shape[0]))
+                                        if pose[11, 0] is None or np.isnan(pose[11, 0]):
+                                            seat_x2_start = int(min(max(seat_x2_range+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
+                                        else:
+                                            seat_x2_start = int(min(max(pose[11, 0]+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
+                                        seat_y2_start = int(seat_y2_range)
+                                    do_fake_seatbelt = True
+
+                        if not do_fake_seatbelt and int(face_label[4]) < img.shape[0]*0.8:
                             seat_x1_range = min(max(face_label[1]-(face_label[3]-face_label[1]), 0), img.shape[1])
                             seat_y1_range = min(max(face_label[4]-(face_label[4]-face_label[2])*random.random()*0.2, 0), img.shape[0])
                             seat_x2_range = min(max(face_label[3]+(face_label[3]-face_label[1])*(1.1), 0), img.shape[1])
@@ -1321,7 +1437,9 @@ def load_mosaic(self, hyp, index):
                                 seat_y1_start = int(min(max(random.randint(int(face_label[2]), int(seat_y1_range)), 0), img.shape[0]))
                                 seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*(-0.25+random.random()), 0), img.shape[1]))
                                 seat_y2_start = int(seat_y2_range)
+                            do_fake_seatbelt = True
 
+                        if do_fake_seatbelt:
                             color_element = 32+int(random.random()*128)
                             mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
                             thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
@@ -1382,7 +1500,8 @@ def load_mosaic(self, hyp, index):
     poses4 = np.array(poses4)
     if self.pose_data is not None:
         for x in poses4:
-            np.clip(x, 0, 2 * max(xs, ys), out=x)
+            if x.any() is not None:
+                np.clip(x, 0, 2 * max(xs, ys), out=x)
             
     # Augment
     #img4, labels4, segments4 = remove_background(img4, labels4, segments4)
@@ -1453,7 +1572,7 @@ def load_mosaic9(self, hyp, index):
             labels[:, 1:] = xywhn2xyxy(labels[:, 1:], w, h, padx, pady)  # normalized xywh to pixel xyxy format
             segments = [xyn2xy(x, w, h, padx, pady) for x in segments]
             if self.pose_data is not None:
-                poses = [pose_xyn2xy(x, w, h, padx, pady) for x in poses]
+                poses = [pose_xyn2xy(x, w, h, padx, pady) if x.any() is not None else x for x in poses]
 
             if hyp is not None and random.random() < hyp.get('fakeseatbelt3', [None, 0])[1]:
                 if len(labels) > 0:
@@ -1497,7 +1616,45 @@ def load_mosaic9(self, hyp, index):
                             #seatbelt_img = np.concatenate((seatbelt_img, seatbelt_alpha), axis=2)
 
                         face_label = labels[0]
-                        if int(face_label[4]) < img.shape[0]*0.8:
+                        do_fake_seatbelt = False
+                        if len(poses) > 0:#print(poses.shape)#((4 or 9), 17, 2)
+                            for pose in poses:
+                                do_fake_seatbelt_temp = True
+                                for p in pose[:7]:
+                                    if p[0] is None or np.isnan(p[0]) or p[1] is None or np.isnan(p[1]):
+                                        do_fake_seatbelt_temp = False
+                                
+                                if do_fake_seatbelt_temp:
+                                    seat_x1_range = min(max((pose[6, 0]+np.min(pose[:5, 0]))/2, 0), img.shape[1])
+                                    seat_y1_range = min(max(pose[6, 1], 0), img.shape[0])
+                                    seat_x2_range = min(max((pose[5, 0]+np.max(pose[:5, 0]))/2, 0), img.shape[1])
+                                    if pose[11, 1] is None or np.isnan(pose[11, 1]):
+                                        seat_y2_range = min(max(np.max(pose[:, 1][np.logical_not(np.isnan(pose[:, 1].astype(np.float64)))]), 0), img.shape[0])
+                                        if (seat_y1_range+img.shape[0])/2 > seat_y2_range:
+                                            seat_y2_range = min(max(img.shape[0], 0), img.shape[0])
+                                    else:
+                                        seat_y2_range = min(max(pose[11, 1], 0), img.shape[0])
+                                    
+                                    if seatbelt_filename is not None and (seatbelt_filename.startswith('03') or seatbelt_filename.startswith('04')):
+                                        seat_x1_start = int(min(max(pose[6, 0]-(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
+                                        seat_y1_start = int(seat_y1_range)
+                                        if pose[11, 0] is None or np.isnan(pose[11, 0]):
+                                            seat_x2_start = int(min(max(seat_x2_range+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
+                                        else:
+                                            seat_x2_start = int(min(max(pose[11, 0]+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
+                                        seat_y2_start = int(seat_y2_range)
+                                        
+                                    else:
+                                        seat_x1_start = int(min(max(pose[6, 0]-(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
+                                        seat_y1_start = int(min(max(np.mean(pose[:5, 1]), 0), img.shape[0]))
+                                        if pose[11, 0] is None or np.isnan(pose[11, 0]):
+                                            seat_x2_start = int(min(max(seat_x2_range+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
+                                        else:
+                                            seat_x2_start = int(min(max(pose[11, 0]+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
+                                        seat_y2_start = int(seat_y2_range)
+                                    do_fake_seatbelt = True
+
+                        if not do_fake_seatbelt and int(face_label[4]) < img.shape[0]*0.8:
                             seat_x1_range = min(max(face_label[1]-(face_label[3]-face_label[1]), 0), img.shape[1])
                             seat_y1_range = min(max(face_label[4]-(face_label[4]-face_label[2])*random.random()*0.2, 0), img.shape[0])
                             seat_x2_range = min(max(face_label[3]+(face_label[3]-face_label[1])*(1.1), 0), img.shape[1])
@@ -1513,7 +1670,9 @@ def load_mosaic9(self, hyp, index):
                                 seat_y1_start = int(min(max(random.randint(int(face_label[2]), int(seat_y1_range)), 0), img.shape[0]))
                                 seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*(-0.25+random.random()), 0), img.shape[1]))
                                 seat_y2_start = int(seat_y2_range)
+                            do_fake_seatbelt = True
 
+                        if do_fake_seatbelt:
                             color_element = 32+int(random.random()*128)
                             mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
                             thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
@@ -1584,11 +1743,12 @@ def load_mosaic9(self, hyp, index):
         np.clip(x, 0, 2 * max(xs, ys), out=x)  # clip when using random_perspective()
     # img9, labels9 = replicate(img9, labels9)  # replicate
 
-    poses9 = [x - c for x in poses9]
+    poses9 = [x - c if x.any() is not None else x for x in poses9]
     poses9 = np.array(poses9)
     if self.pose_data is not None:
         for x in poses9:
-            np.clip(x, 0, 2 * max(xs, ys), out=x)
+            if x.any() is not None:
+                np.clip(x, 0, 2 * max(xs, ys), out=x)
 
     # Augment
     #img9, labels9, segments9 = remove_background(img9, labels9, segments9)
@@ -1877,19 +2037,24 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
         new = xy[:, :2].reshape(pose_n, 17, 2)
         # clip
         new_ = poses.copy()
-        new_[poses>0] = new[poses>0]
-        new_[new_[:, :, 0]<=0 , :] = 0
-        new_[new_[:, :, 1]<=0 , :] = 0
-        new_[new_[:, :, 0]>width , :] = 0
-        new_[new_[:, :, 1]>height , :] = 0
+        for pose_i in range(pose_n):
+            if poses[pose_i].any() is not None:
+                new_[pose_i][poses[pose_i]>0] = new[pose_i][poses[pose_i]>0]
+                new_[pose_i][new_[pose_i, :, 0]<=0 , :] = -1
+                new_[pose_i][new_[pose_i, :, 1]<=0 , :] = -1
+                new_[pose_i][new_[pose_i, :, 0]>width , :] = -1
+                new_[pose_i][new_[pose_i, :, 1]>height , :] = -1                
+            else:
+                new_[pose_i] = poses[pose_i].copy()
+            new_[new_==-1] = np.nan
 
         # filter candidates
-        new_poses = new_[i]
-        i = valid_pose_box(targets, new_poses, min_points=3, upper_only=True)
-        targets = targets[i]
-        return img, targets, new_poses
+        new_poses = new_#[i]
+        #i = valid_pose_box(targets, new_poses, min_points=3, upper_only=True)
+        #targets = targets[i]
+        poses = new_poses
 
-    return img, targets, np.array([])
+    return img, targets, poses
 
 def valid_pose_box(box, pose, min_points=1, upper_only=False):
     valid_idx = []
@@ -1994,12 +2159,6 @@ def pastein(image, labels, sample_labels, sample_images, sample_masks):
         
         if (ioa < 0.30).all() and len(sample_labels) and (xmax > xmin+20) and (ymax > ymin+20):  # allow 30% obscuration of existing labels
             sel_ind = random.randint(0, len(sample_labels)-1)
-            #print(len(sample_labels))
-            #print(sel_ind)
-            #print((xmax-xmin, ymax-ymin))
-            #print(image[ymin:ymax, xmin:xmax].shape)
-            #print([[sample_labels[sel_ind], *box]])
-            #print(labels.shape)
             hs, ws, cs = sample_images[sel_ind].shape
             r_scale = min((ymax-ymin)/hs, (xmax-xmin)/ws)
             r_w = int(ws*r_scale)
@@ -2012,9 +2171,6 @@ def pastein(image, labels, sample_labels, sample_images, sample_masks):
                 m_ind = r_mask > 0
                 if m_ind.astype(np.int).sum() > 60:
                     temp_crop[m_ind] = r_image[m_ind]
-                    #print(sample_labels[sel_ind])
-                    #print(sample_images[sel_ind].shape)
-                    #print(temp_crop.shape)
                     box = np.array([xmin, ymin, xmin+r_w, ymin+r_h], dtype=np.float32)
                     if len(labels):
                         labels = np.concatenate((labels, [[sample_labels[sel_ind], *box]]), 0)
