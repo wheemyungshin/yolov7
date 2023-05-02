@@ -966,7 +966,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
                         face_label = labels[0]
                         do_fake_seatbelt = False
-                        if len(poses) > 0:#print(poses.shape)#((4 or 9), 17, 2)
+                        if self.pose_data is not None and len(poses) > 0:#print(poses.shape)#((4 or 9), 17, 2)
                             for pose in poses:
                                 do_fake_seatbelt_temp = True
                                 for p in pose[:7]:
@@ -1168,7 +1168,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 img = np.flipud(img)
                 if nL:
                     labels[:, 2] = 1 - labels[:, 2]
-                if len(poses) > 0:
+                if self.pose_data is not None and len(poses) > 0:
                     for poses_i in range(len(poses)):
                         for poses_j in range(len(poses[poses_i])):
                             if poses[poses_i][poses_j].any() is not None and not np.isnan(poses[poses_i, poses_j, 1]):
@@ -1179,7 +1179,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 img = np.fliplr(img)
                 if nL:
                     labels[:, 1] = 1 - labels[:, 1]
-                if len(poses) > 0:
+                if self.pose_data is not None and len(poses) > 0:
                     for poses_i in range(len(poses)):
                         for poses_j in range(len(poses[poses_i])):
                             if poses[poses_i][poses_j].any() is not None and not np.isnan(poses[poses_i, poses_j, 0]):
@@ -1193,7 +1193,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         #print(poses.shape)#((4 or 9), 17, 2)
         '''
         img = img.copy()
-        if len(poses) > 0:
+        if self.pose_data is not None and len(poses) > 0:
             for pose in poses:
                 for p in pose:
                     if p.any() is not None and not np.isnan(p[0]) and not np.isnan(p[1]):
@@ -1393,7 +1393,7 @@ def load_mosaic(self, hyp, index):
 
                         face_label = labels[0]
                         do_fake_seatbelt = False
-                        if len(poses) > 0:#print(poses.shape)#((4 or 9), 17, 2)
+                        if self.pose_data is not None and len(poses) > 0:#print(poses.shape)#((4 or 9), 17, 2)
                             for pose in poses:
                                 do_fake_seatbelt_temp = True
                                 for p in pose[:7]:
@@ -1630,7 +1630,7 @@ def load_mosaic9(self, hyp, index):
 
                         face_label = labels[0]
                         do_fake_seatbelt = False
-                        if len(poses) > 0:#print(poses.shape)#((4 or 9), 17, 2)
+                        if self.pose_data is not None and len(poses) > 0:#print(poses.shape)#((4 or 9), 17, 2)
                             for pose in poses:
                                 do_fake_seatbelt_temp = True
                                 for p in pose[:7]:
