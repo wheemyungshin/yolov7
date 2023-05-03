@@ -957,71 +957,29 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             seatbelt_img = cv2.line(seatbelt_img, [semi_x, semi_y], [end_x, end_y], 
                                     (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA)
                         seatbelt_img = random_wave(seatbelt_img)
-                            #seatbelt_alpha = np.zeros([192, 192, 1]) 
-                            #seatbelt_alpha = cv2.line(seatbelt_alpha, [0, 0], [semi_x, semi_y], 
-                            #        (1), thickness, lineType=cv2.LINE_AA) 
-                            #seatbelt_alpha = cv2.line(seatbelt_alpha, [semi_x, semi_y], [192, 192], 
-                            #        (1), thickness, lineType=cv2.LINE_AA)
-                            #seatbelt_img = np.concatenate((seatbelt_img, seatbelt_alpha), axis=2)
 
                         face_label = labels[0]
-                        do_fake_seatbelt = False
-                        if self.pose_data is not None and len(poses) > 0:#print(poses.shape)#((4 or 9), 17, 2)
-                            for pose in poses:
-                                do_fake_seatbelt_temp = True
-                                for p in pose[:7]:
-                                    if p[0] is None or np.isnan(p[0]) or p[1] is None or np.isnan(p[1]):
-                                        do_fake_seatbelt_temp = False
-                                
-                                if do_fake_seatbelt_temp:
-                                    seat_x1_range = min(max((pose[6, 0]+np.min(pose[:5, 0]))/2, 0), img.shape[1])
-                                    seat_y1_range = min(max(pose[6, 1], 0), img.shape[0])
-                                    seat_x2_range = min(max((pose[5, 0]+np.max(pose[:5, 0]))/2, 0), img.shape[1])
-                                    if pose[11, 1] is None or np.isnan(pose[11, 1]):
-                                        seat_y2_range = min(max(np.max(pose[:, 1][np.logical_not(np.isnan(pose[:, 1].astype(np.float64)))]), 0), img.shape[0])
-                                        if (seat_y1_range+img.shape[0])/2 > seat_y2_range:
-                                            seat_y2_range = min(max(img.shape[0], 0), img.shape[0])
-                                    else:
-                                        seat_y2_range = min(max(pose[11, 1], 0), img.shape[0])
-                                    
-                                    if seatbelt_filename is not None and (seatbelt_filename.startswith('03') or seatbelt_filename.startswith('04')):
-                                        seat_x1_start = int(min(max(pose[6, 0]-(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
-                                        seat_y1_start = int(seat_y1_range)
-                                        if pose[11, 0] is None or np.isnan(pose[11, 0]):
-                                            seat_x2_start = int(min(max(seat_x2_range+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
-                                        else:
-                                            seat_x2_start = int(min(max(pose[11, 0]+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
-                                        seat_y2_start = int(seat_y2_range)
-                                        
-                                    else:
-                                        seat_x1_start = int(min(max(pose[6, 0]-(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
-                                        seat_y1_start = int(min(max(np.mean(pose[:5, 1]), 0), img.shape[0]))
-                                        if pose[11, 0] is None or np.isnan(pose[11, 0]):
-                                            seat_x2_start = int(min(max(seat_x2_range+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
-                                        else:
-                                            seat_x2_start = int(min(max(pose[11, 0]+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
-                                        seat_y2_start = int(seat_y2_range)
-                                    do_fake_seatbelt = True
-
-                        if not do_fake_seatbelt and int(face_label[4]) < img.shape[0]*0.8:
-                            seat_x1_range = min(max(face_label[1]-(face_label[3]-face_label[1]), 0), img.shape[1])
+                        if int(face_label[4]) < img.shape[0]*0.8:
+                            random_x_transpose = (random.random()-0.5)*(face_label[3]-face_label[1])
+                            seat_x1_range = min(max(face_label[1]-(face_label[3]-face_label[1])+random_x_transpose, 0), img.shape[1])
                             seat_y1_range = min(max(face_label[4]-(face_label[4]-face_label[2])*random.random()*0.2, 0), img.shape[0])
-                            seat_x2_range = min(max(face_label[3]+(face_label[3]-face_label[1])*(1.1), 0), img.shape[1])
-                            seat_y2_range = min(max(img.shape[0], 0), img.shape[0])
+                            seat_x2_range = min(max(face_label[3]+(face_label[3]-face_label[1])*(1.1)+random_x_transpose, 0), img.shape[1])
+                            if face_label[2] < 1:                                
+                                seat_y2_range = min(max(face_label[4]+(face_label[3]-face_label[1])*(1+random.random()), 0), img.shape[0])
+                            else:
+                                seat_y2_range = min(max(face_label[4]+(face_label[4]-face_label[2])*(1+random.random()), 0), img.shape[0])
 
                             if seatbelt_filename is not None and (seatbelt_filename.startswith('03') or seatbelt_filename.startswith('04')):
-                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*1.5, 0), img.shape[1]))
+                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*1.5+random_x_transpose, 0), img.shape[1]))
                                 seat_y1_start = int(seat_y1_range)
-                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*1.5, 0), img.shape[1]))
+                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*1.5+random_x_transpose, 0), img.shape[1]))
                                 seat_y2_start = int(seat_y2_range)
                             else:
-                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*(0.25+random.random()*0.5), 0), img.shape[1]))
+                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*(0.25+random.random()*0.5)+random_x_transpose, 0), img.shape[1]))
                                 seat_y1_start = int(min(max(random.randint(int(face_label[2]), int(seat_y1_range)), 0), img.shape[0]))
-                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*(-0.25+random.random()), 0), img.shape[1]))
+                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*(-0.25+random.random())+random_x_transpose, 0), img.shape[1]))
                                 seat_y2_start = int(seat_y2_range)
-                            do_fake_seatbelt = True
 
-                        if do_fake_seatbelt:
                             color_element = 32+int(random.random()*128)
                             mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
                             thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
@@ -1381,74 +1339,30 @@ def load_mosaic(self, hyp, index):
                             else:
                                 seatbelt_img = cv2.line(seatbelt_img, [random.randint(20, 45), random.randint(30, 70)], [semi_x, semi_y], 
                                     (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA) 
+
                             seatbelt_img = cv2.line(seatbelt_img, [semi_x, semi_y], [end_x, end_y], 
                                     (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA)
                         seatbelt_img = random_wave(seatbelt_img)
-                            #seatbelt_alpha = np.zeros([192, 192, 1]) 
-                            #seatbelt_alpha = cv2.line(seatbelt_alpha, [0, 0], [semi_x, semi_y], 
-                            #        (1), thickness, lineType=cv2.LINE_AA) 
-                            #seatbelt_alpha = cv2.line(seatbelt_alpha, [semi_x, semi_y], [192, 192], 
-                            #        (1), thickness, lineType=cv2.LINE_AA)
-                            #seatbelt_img = np.concatenate((seatbelt_img, seatbelt_alpha), axis=2)
 
                         face_label = labels[0]
-                        do_fake_seatbelt = False
-                        if self.pose_data is not None and len(poses) > 0:#print(poses.shape)#((4 or 9), 17, 2)
-                            for pose in poses:
-                                do_fake_seatbelt_temp = True
-                                for p in pose[:7]:
-                                    if p[0] is None or np.isnan(p[0]) or p[1] is None or np.isnan(p[1]):
-                                        do_fake_seatbelt_temp = False
-                                
-                                if do_fake_seatbelt_temp:
-                                    seat_x1_range = min(max((pose[6, 0]+np.min(pose[:5, 0]))/2, 0), img.shape[1])
-                                    seat_y1_range = min(max(pose[6, 1], 0), img.shape[0])
-                                    seat_x2_range = min(max((pose[5, 0]+np.max(pose[:5, 0]))/2, 0), img.shape[1])
-                                    if pose[11, 1] is None or np.isnan(pose[11, 1]):
-                                        seat_y2_range = min(max(np.max(pose[:, 1][np.logical_not(np.isnan(pose[:, 1].astype(np.float64)))]), 0), img.shape[0])
-                                        if (seat_y1_range+img.shape[0])/2 > seat_y2_range:
-                                            seat_y2_range = min(max(img.shape[0], 0), img.shape[0])
-                                    else:
-                                        seat_y2_range = min(max(pose[11, 1], 0), img.shape[0])
-                                    
-                                    if seatbelt_filename is not None and (seatbelt_filename.startswith('03') or seatbelt_filename.startswith('04')):
-                                        seat_x1_start = int(min(max(pose[6, 0]-(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
-                                        seat_y1_start = int(seat_y1_range)
-                                        if pose[11, 0] is None or np.isnan(pose[11, 0]):
-                                            seat_x2_start = int(min(max(seat_x2_range+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
-                                        else:
-                                            seat_x2_start = int(min(max(pose[11, 0]+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
-                                        seat_y2_start = int(seat_y2_range)
-                                        
-                                    else:
-                                        seat_x1_start = int(min(max(pose[6, 0]-(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
-                                        seat_y1_start = int(min(max(np.mean(pose[:5, 1]), 0), img.shape[0]))
-                                        if pose[11, 0] is None or np.isnan(pose[11, 0]):
-                                            seat_x2_start = int(min(max(seat_x2_range+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
-                                        else:
-                                            seat_x2_start = int(min(max(pose[11, 0]+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
-                                        seat_y2_start = int(seat_y2_range)
-                                    do_fake_seatbelt = True
-
-                        if not do_fake_seatbelt and int(face_label[4]) < img.shape[0]*0.8:
-                            seat_x1_range = min(max(face_label[1]-(face_label[3]-face_label[1]), 0), img.shape[1])
+                        if int(face_label[4]) < img.shape[0]*0.8:
+                            random_x_transpose = (random.random()-0.5)*(face_label[3]-face_label[1])
+                            seat_x1_range = min(max(face_label[1]-(face_label[3]-face_label[1])+random_x_transpose, 0), img.shape[1])
                             seat_y1_range = min(max(face_label[4]-(face_label[4]-face_label[2])*random.random()*0.2, 0), img.shape[0])
-                            seat_x2_range = min(max(face_label[3]+(face_label[3]-face_label[1])*(1.1), 0), img.shape[1])
-                            seat_y2_range = min(max(img.shape[0], 0), img.shape[0])
+                            seat_x2_range = min(max(face_label[3]+(face_label[3]-face_label[1])*(1.1)+random_x_transpose, 0), img.shape[1])
+                            seat_y2_range = min(max(face_label[4]+(face_label[4]-face_label[2])*(1+random.random()), 0), img.shape[0])
 
                             if seatbelt_filename is not None and (seatbelt_filename.startswith('03') or seatbelt_filename.startswith('04')):
-                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*1.5, 0), img.shape[1]))
+                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*1.5+random_x_transpose, 0), img.shape[1]))
                                 seat_y1_start = int(seat_y1_range)
-                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*1.5, 0), img.shape[1]))
+                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*1.5+random_x_transpose, 0), img.shape[1]))
                                 seat_y2_start = int(seat_y2_range)
                             else:
-                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*(0.25+random.random()*0.5), 0), img.shape[1]))
+                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*(0.25+random.random()*0.5)+random_x_transpose, 0), img.shape[1]))
                                 seat_y1_start = int(min(max(random.randint(int(face_label[2]), int(seat_y1_range)), 0), img.shape[0]))
-                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*(-0.25+random.random()), 0), img.shape[1]))
+                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*(-0.25+random.random())+random_x_transpose, 0), img.shape[1]))
                                 seat_y2_start = int(seat_y2_range)
-                            do_fake_seatbelt = True
 
-                        if do_fake_seatbelt:
                             color_element = 32+int(random.random()*128)
                             mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
                             thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
@@ -1618,74 +1532,30 @@ def load_mosaic9(self, hyp, index):
                             else:
                                 seatbelt_img = cv2.line(seatbelt_img, [random.randint(20, 45), random.randint(30, 70)], [semi_x, semi_y], 
                                     (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA) 
+
                             seatbelt_img = cv2.line(seatbelt_img, [semi_x, semi_y], [end_x, end_y], 
                                     (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA)
                         seatbelt_img = random_wave(seatbelt_img)
-                            #seatbelt_alpha = np.zeros([192, 192, 1]) 
-                            #seatbelt_alpha = cv2.line(seatbelt_alpha, [0, 0], [semi_x, semi_y], 
-                            #        (1), thickness, lineType=cv2.LINE_AA) 
-                            #seatbelt_alpha = cv2.line(seatbelt_alpha, [semi_x, semi_y], [192, 192], 
-                            #        (1), thickness, lineType=cv2.LINE_AA)
-                            #seatbelt_img = np.concatenate((seatbelt_img, seatbelt_alpha), axis=2)
 
                         face_label = labels[0]
-                        do_fake_seatbelt = False
-                        if self.pose_data is not None and len(poses) > 0:#print(poses.shape)#((4 or 9), 17, 2)
-                            for pose in poses:
-                                do_fake_seatbelt_temp = True
-                                for p in pose[:7]:
-                                    if p[0] is None or np.isnan(p[0]) or p[1] is None or np.isnan(p[1]):
-                                        do_fake_seatbelt_temp = False
-                                
-                                if do_fake_seatbelt_temp:
-                                    seat_x1_range = min(max((pose[6, 0]+np.min(pose[:5, 0]))/2, 0), img.shape[1])
-                                    seat_y1_range = min(max(pose[6, 1], 0), img.shape[0])
-                                    seat_x2_range = min(max((pose[5, 0]+np.max(pose[:5, 0]))/2, 0), img.shape[1])
-                                    if pose[11, 1] is None or np.isnan(pose[11, 1]):
-                                        seat_y2_range = min(max(np.max(pose[:, 1][np.logical_not(np.isnan(pose[:, 1].astype(np.float64)))]), 0), img.shape[0])
-                                        if (seat_y1_range+img.shape[0])/2 > seat_y2_range:
-                                            seat_y2_range = min(max(img.shape[0], 0), img.shape[0])
-                                    else:
-                                        seat_y2_range = min(max(pose[11, 1], 0), img.shape[0])
-                                    
-                                    if seatbelt_filename is not None and (seatbelt_filename.startswith('03') or seatbelt_filename.startswith('04')):
-                                        seat_x1_start = int(min(max(pose[6, 0]-(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
-                                        seat_y1_start = int(seat_y1_range)
-                                        if pose[11, 0] is None or np.isnan(pose[11, 0]):
-                                            seat_x2_start = int(min(max(seat_x2_range+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
-                                        else:
-                                            seat_x2_start = int(min(max(pose[11, 0]+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
-                                        seat_y2_start = int(seat_y2_range)
-                                        
-                                    else:
-                                        seat_x1_start = int(min(max(pose[6, 0]-(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
-                                        seat_y1_start = int(min(max(np.mean(pose[:5, 1]), 0), img.shape[0]))
-                                        if pose[11, 0] is None or np.isnan(pose[11, 0]):
-                                            seat_x2_start = int(min(max(seat_x2_range+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
-                                        else:
-                                            seat_x2_start = int(min(max(pose[11, 0]+(np.max(pose[:5, 0])-np.min(pose[:5, 0]))*random.random()*0.1, 0), img.shape[1]))
-                                        seat_y2_start = int(seat_y2_range)
-                                    do_fake_seatbelt = True
-
-                        if not do_fake_seatbelt and int(face_label[4]) < img.shape[0]*0.8:
-                            seat_x1_range = min(max(face_label[1]-(face_label[3]-face_label[1]), 0), img.shape[1])
+                        if int(face_label[4]) < img.shape[0]*0.8:
+                            random_x_transpose = (random.random()-0.5)*(face_label[3]-face_label[1])
+                            seat_x1_range = min(max(face_label[1]-(face_label[3]-face_label[1])+random_x_transpose, 0), img.shape[1])
                             seat_y1_range = min(max(face_label[4]-(face_label[4]-face_label[2])*random.random()*0.2, 0), img.shape[0])
-                            seat_x2_range = min(max(face_label[3]+(face_label[3]-face_label[1])*(1.1), 0), img.shape[1])
-                            seat_y2_range = min(max(img.shape[0], 0), img.shape[0])
+                            seat_x2_range = min(max(face_label[3]+(face_label[3]-face_label[1])*(1.1)+random_x_transpose, 0), img.shape[1])
+                            seat_y2_range = min(max(face_label[4]+(face_label[4]-face_label[2])*(1+random.random()), 0), img.shape[0])
 
                             if seatbelt_filename is not None and (seatbelt_filename.startswith('03') or seatbelt_filename.startswith('04')):
-                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*1.5, 0), img.shape[1]))
+                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*1.5+random_x_transpose, 0), img.shape[1]))
                                 seat_y1_start = int(seat_y1_range)
-                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*1.5, 0), img.shape[1]))
+                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*1.5+random_x_transpose, 0), img.shape[1]))
                                 seat_y2_start = int(seat_y2_range)
                             else:
-                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*(0.25+random.random()*0.5), 0), img.shape[1]))
+                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*(0.25+random.random()*0.5)+random_x_transpose, 0), img.shape[1]))
                                 seat_y1_start = int(min(max(random.randint(int(face_label[2]), int(seat_y1_range)), 0), img.shape[0]))
-                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*(-0.25+random.random()), 0), img.shape[1]))
+                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*(-0.25+random.random())+random_x_transpose, 0), img.shape[1]))
                                 seat_y2_start = int(seat_y2_range)
-                            do_fake_seatbelt = True
 
-                        if do_fake_seatbelt:
                             color_element = 32+int(random.random()*128)
                             mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
                             thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
