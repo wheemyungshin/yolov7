@@ -1,0 +1,17 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+/data/crop_ciga_ncap_pitta_1st/ncap/train.txt, #967
+/data/crop_ciga_ncap_pitta_1st/pitta_1st/train.txt, #2023
+/data/fire_3rd_labeled/train.txt, # 37377
+/data/smoke_edge/train.txt,
+/data/fire_new0412/auto_label_fire_new0412_smoke_all_crop_yolov7-tiny_s576_576_c/train.txt] # 2430
+val: [/data/fire_3rd_labeled/val.txt] # 5778
+test: [/data/fire_3rd_labeled/test.txt] # 4890
+
+# number of classes
+nc: 3
+
+# class names
+names: ['fire', 'burn', 'edge']
+
+valid_idx: [0, 1, 3]
