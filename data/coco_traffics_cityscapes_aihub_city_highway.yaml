@@ -1,0 +1,14 @@
+train: [/data/coco/train2017.txt, 
+/data/cityscapes/yolov7_det/train_coco_indexing.txt, /data/cityscapes/yolov7_det/val_coco_indexing.txt,
+/data/AIHUB_CCTV_city_yolo_valid_crop_sampling/train.txt, /data/AIHUB_CCTV_city_yolo_valid_crop_sampling/val.txt,
+/data/AIHUB_CCTV_highway_yolo/val.txt]
+val: [/data/coco/val2017.txt] 
+test: [/data/coco/val2017.txt]
+
+# number of classes
+nc: 8
+
+# class names
+names: ['person', 'bicycle', 'car', 'motorcycle', 'bus', 'truck', 'traffic light', 'stop sign']
+
+valid_idx: [0, 1, 2, 3, 5, 7, 9, 11]
