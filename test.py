@@ -139,7 +139,8 @@ def test(data,
         #print(out)#[torch.size([bboxnum, 6])*32]
         # Statistics per image
         for si, pred in enumerate(out):
-            labels = targets[targets[:, 0] == si, 1:]
+            labels = targets[targets[:, 0] == si, 1:]            
+            #print(labels) # [[  cls,  x,  y,  w,  h], ... ]
             nl = len(labels)
             tcls = labels[:, 0].tolist() if nl else []  # target class
             path = Path(paths[si])
