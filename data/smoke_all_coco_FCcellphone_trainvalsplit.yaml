@@ -3,7 +3,10 @@ train: [/data/smoke_data_BFC/train.txt,
 /data/valid_ciga_data_cbf_for_training/tang.txt,
 /data/valid_ciga_data_cbf_for_training/ncap.txt,
 /data/PITTA_2ND_ir_smoke_frames_after_inspection/train.txt,
-/data/valid_pitta_smoke_BFC2/train.txt] # 43297 + 2754
+/data/valid_pitta_smoke_BFC2/train.txt,
+/data/BFcellphone/auto_PITTA_2ND_divided_cellphone_yolov7-e6e_s384_after_inspection/train.txt,
+/data/BFcellphone/auto_TANG_phones_yolov7-e6e_s384_after_inspection/train.txt,
+/data/coco_face_from_kpts/train.txt, /data/coco_face_from_kpts/val.txt] # 43297 + 2754
 val: [/data/valid_ciga_data_cbf_for_training/pitta_1st.txt] # 2023
 test: [/data/valid_ciga_data_cbf_for_training/pitta_1st.txt] # 2023 
 
@@ -11,6 +14,6 @@ test: [/data/valid_ciga_data_cbf_for_training/pitta_1st.txt] # 2023
 nc: 3
 
 # class names
-names: ['person', 'face', 'smoke']
+names: ['face', 'smoke', 'cellphone']
 
-valid_idx: [0, 1, 2]
+valid_idx: [1, 2, 3]

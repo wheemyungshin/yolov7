@@ -7,8 +7,8 @@ train: [/data/smoke_data_BFC/train.txt,
 /data/valid_pitta_smoke_BFC2/train.txt,
 /data/BFcellphone/auto_PITTA_2ND_divided_cellphone_yolov7-e6e_s384_after_inspection/train.txt,
 /data/BFcellphone/auto_TANG_phones_yolov7-e6e_s384_after_inspection/train.txt] # 43297 + 2754
-val: [/data/PITTA_2ND_ir_smoke_frames_after_inspection/train.txt] # 2391
-test: [/data/PITTA_2ND_ir_smoke_frames_after_inspection/train.txt]   
+val: [/data/BFcellphone/auto_PITTA_2ND_divided_cellphone_yolov7-e6e_s384_after_inspection/train.txt] # 2391
+test: [/data/BFcellphone/auto_PITTA_2ND_divided_cellphone_yolov7-e6e_s384_after_inspection/train.txt]   
 
 # number of classes
 nc: 4
