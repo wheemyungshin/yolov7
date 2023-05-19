@@ -87,7 +87,7 @@ def train(hyp, opt, device, tb_writer=None):
             attempt_download(weights)  # download if not found locally
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
         model = Model(opt.cfg or ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
-        exclude = ['anchor'] if (opt.cfg or hyp.get('anchors')) and not opt.resume else []  # exclude keys
+        exclude = ['anchor'] if not (opt.load_head_weight) and not opt.resume else []  # exclude keys
         state_dict = ckpt['model'].float().state_dict()  # to FP32
         state_dict = intersect_dicts(state_dict, model.state_dict(), exclude=exclude)  # intersect
         model.load_state_dict(state_dict, strict=False)  # load
@@ -389,6 +389,7 @@ def train(hyp, opt, device, tb_writer=None):
                     x['lr'] = np.interp(ni, xi, [hyp['warmup_bias_lr'] if j == 2 else 0.0, x['initial_lr'] * lf(epoch)])
                     if 'momentum' in x:
                         x['momentum'] = np.interp(ni, xi, [hyp['warmup_momentum'], hyp['momentum']])
+                    print(x['lr'])
 
             # Multi-scale
             if opt.multi_scale:
@@ -611,6 +612,7 @@ if __name__ == '__main__':
     parser.add_argument('--v5-metric', action='store_true', help='assume maximum recall as 1.0 in AP calculation')
     parser.add_argument('--close-mosaic', type=int, default=0, help='stop mosaic augmentation and distillation')
     parser.add_argument('--close-data-generation', type=int, default=300, help='stop mosaic augmentation and distillation')
+    parser.add_argument('--load-head-weight', action='store_true', help='Load head weights as well, when using pretrained model')
     opt = parser.parse_args()
 
     device = opt.device
