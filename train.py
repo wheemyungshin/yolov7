@@ -389,8 +389,7 @@ def train(hyp, opt, device, tb_writer=None):
                     x['lr'] = np.interp(ni, xi, [hyp['warmup_bias_lr'] if j == 2 else 0.0, x['initial_lr'] * lf(epoch)])
                     if 'momentum' in x:
                         x['momentum'] = np.interp(ni, xi, [hyp['warmup_momentum'], hyp['momentum']])
-                    print(x['lr'])
-
+                        
             # Multi-scale
             if opt.multi_scale:
                 if isinstance(imgsz, tuple):
