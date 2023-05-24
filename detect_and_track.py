@@ -5,6 +5,7 @@ from pathlib import Path
 import cv2
 import torch
 import torch.backends.cudnn as cudnn
+import numpy as np
 from numpy import random
 
 from models.experimental import attempt_load
@@ -16,7 +17,130 @@ from utils.torch_utils import select_device, load_classifier, time_synchronized,
 
 import json
 import os
+from sort import Sort
 
+def intersect(line1, line2):
+    x1, y1, x2, y2 = line1
+    x3, y3, x4, y4 = line2
+
+    denominator = ((y4 - y3) * (x2 - x1)) - ((x4 - x3) * (y2 - y1))
+
+    if denominator == 0:
+        return False
+
+    ua = (((x4 - x3) * (y1 - y3)) - ((y4 - y3) * (x1 - x3))) / denominator
+    ub = (((x2 - x1) * (y1 - y3)) - ((y2 - y1) * (x1 - x3))) / denominator
+
+    if ua < 0 or ua > 1 or ub < 0 or ub > 1:
+        return False
+
+    intersection_x = x1 + (ua * (x2 - x1))
+    intersection_y = y1 + (ua * (y2 - y1))
+
+    return intersection_x, intersection_y
+
+def count_line_crossing(static_lines, tracking_points_list):
+    # static_lines : [[x1, y1, x2, y2], [x1, y1, x2, y2], ...]
+    # tracking_points : [[(x,y), (x,y), ...], ...]
+    intersections_list = []
+    counts = []
+    for static_line in static_lines:
+        intersections = []
+        count = 0
+        for tracking_points in tracking_points_list:
+            for i, tracking_point in enumerate(tracking_points[:-1]):
+                tracking_line = [tracking_point[0], tracking_point[1], tracking_points[i+1][0], tracking_points[i+1][1]]
+                intersection = intersect(static_line, tracking_line)
+                if intersection:
+                    intersections.append(intersection)
+                    count+=1
+        intersections_list.append(intersections)
+        counts.append(count)
+    return intersections_list, counts
+
+def draw_boxes(img, bbox, identities=None, categories=None, names=None, path=None, offset=(0, 0), colors=None):
+    for i, box in enumerate(bbox):
+        x1, y1, x2, y2 = [int(i) for i in box]
+        x1 += offset[0]
+        x2 += offset[0]
+        y1 += offset[1]
+        y2 += offset[1]
+        cat = int(categories[i]) if categories is not None else 0
+        id = int(identities[i]) if identities is not None else 0
+        color = colors[int(cat)] if identities is not None else (255,0,20)
+        data = (int((box[0]+box[2])/2),(int((box[1]+box[3])/2)))
+        label = str(id) + ":"+ names[cat]
+        (w, h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
+        cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
+        cv2.rectangle(img, (x1, y1 - 20), (x1 + w, y1), color, -1)
+        cv2.putText(img, label, (x1, y1 - 5),cv2.FONT_HERSHEY_SIMPLEX, 
+                    0.6, [255, 255, 255], 1)
+    return img
+
+def tracking(sort_tracker, im0, det, min_age, static_lines, names, txt_path, colors):
+    dets_to_sort = np.empty((0,6))
+    
+    # NOTE: We send in detected object class too
+    for x1,y1,x2,y2,conf,detclass in det.cpu().detach().numpy():
+        dets_to_sort = np.vstack((dets_to_sort, 
+                    np.array([x1, y1, x2, y2, conf, detclass])))
+    
+    # Run SORT
+    tracked_dets = sort_tracker.update(dets_to_sort)
+    tracks =sort_tracker.getTrackers()
+
+    txt_str = ""
+    
+    #loop over tracks
+    tracking_points = []
+    crossing_lines = 0
+    for track in tracks:
+        if track.age > min_age:
+            # color = compute_color_for_labels(id)
+            #draw colored tracks
+            [cv2.line(im0, (int(track.centroidarr[i][0]),
+                            int(track.centroidarr[i][1])), 
+                            (int(track.centroidarr[i+1][0]),
+                            int(track.centroidarr[i+1][1])),
+                            (255,0,0), thickness=2) 
+                            for i,_ in  enumerate(track.centroidarr) 
+                            if i < len(track.centroidarr)-1 ]
+            
+            tracking_points.append(track.centroidarr)
+
+    intersections_list, counts = count_line_crossing(static_lines, tracking_points)
+
+    #vis intersections
+    for static_line in static_lines:
+        cv2.line(im0, (int(static_line[0]),
+                        int(static_line[1])), 
+                        (int(static_line[2]),
+                        int(static_line[3])),
+                        (0,255,0), thickness=1) 
+    for intersections in intersections_list:
+        for intersection in intersections:
+            cv2.circle(im0, (int(intersection[0]), int(intersection[1])) , 1, [0,0,255], -1)
+    
+    for count in counts:
+        crossing_lines+=count
+
+    tl = 3
+    text = "Crossing Lines:"+str(crossing_lines)
+    tf = max(tl - 1, 1)  # font thickness
+    t_size = cv2.getTextSize(text, 0, fontScale=tl / 3, thickness=tf)[0]
+    c1 = (0, t_size[1])
+    c2 = c1[0] + t_size[0], c1[1] - t_size[1]
+    cv2.rectangle(im0, c1, c2, (0,0,0), -1, cv2.LINE_AA)  # filled
+    cv2.putText(im0, text, (c1[0], c1[1] - 2), 0, tl / 3, [255, 255, 255], thickness=tf, lineType=cv2.LINE_AA)
+
+    # draw boxes for visualization
+    if len(tracked_dets)>0:
+        bbox_xyxy = tracked_dets[:,:4]
+        identities = tracked_dets[:, 8]
+        categories = tracked_dets[:, 4]
+        draw_boxes(im0, bbox_xyxy, identities, categories, names, txt_path, colors=colors)
+    
+    return im0
 
 def detect(save_img=False):
     bbox_num = 0
@@ -24,6 +148,19 @@ def detect(save_img=False):
     save_img = not opt.nosave and not source.endswith('.txt')  # save inference images
     webcam = source.isnumeric() or source.endswith('.txt') or source.lower().startswith(
         ('rtsp://', 'rtmp://', 'http://', 'https://'))
+
+
+    #.... Initialize SORT ....  
+    sort_max_age = -1 # negative age means infinite 
+    sort_min_hits = 2
+    sort_iou_thresh = 0.2
+    min_age = 5
+    sort_tracker = Sort(max_age=sort_max_age,
+                       min_hits=sort_min_hits,
+                       iou_threshold=sort_iou_thresh)
+
+    static_lines = [[0, 0, imgsz[1] , imgsz[0]]]
+    #......................... 
 
     # Directories
     save_dir = Path(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
@@ -144,6 +281,8 @@ def detect(save_img=False):
                         n = (det[:, -1] == c).sum()  # detections per class
                         s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
+                    im0 = tracking(sort_tracker, im0, det, min_age=min_age, static_lines=static_lines, names=names, txt_path=txt_path, colors=colors)                    
+
                     # Write results
                     for *xyxy, conf, cls in reversed(det):
                         if save_txt:  # Write to file
@@ -151,10 +290,6 @@ def detect(save_img=False):
                             line = (cls, *xywh, conf) if opt.save_conf else (cls, *xywh)  # label format
                             with open(txt_path + '.txt', 'a') as f:
                                 f.write(('%g ' * len(line)).rstrip() % line + '\n')
-
-                        if save_img or view_img:  # Add bbox to image
-                            label = f'{names[int(cls)]} {conf:.2f}'
-                            plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
                         
                         if opt.save_json:
                             if dataset.mode == 'image':
@@ -188,11 +323,6 @@ def detect(save_img=False):
 
                 # Print time (inference + NMS)
                 print(f'{s}Done. ({(1E3 * (t2 - t1)):.1f}ms) Inference, ({(1E3 * (t3 - t2)):.1f}ms) NMS')
-
-                # Stream results
-                if view_img:
-                    cv2.imshow(str(p), im0)
-                    cv2.waitKey(1)  # 1 millisecond
 
                 # Save results (image with detections)
                 if save_img:
