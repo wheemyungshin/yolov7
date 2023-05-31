@@ -73,7 +73,7 @@ def draw_intersections(im0, intersections_list, counts, static_lines):
                         (0,255,0), thickness=1) 
     for intersections in intersections_list:
         for intersection in intersections:
-            cv2.circle(im0, (int(intersection[0]), int(intersection[1])) , 1, [0,0,255], -1)
+            cv2.circle(im0, (int(intersection[0]), int(intersection[1])) , 4, [0,0,255], 2)
     
     for count in counts:
         crossing_lines+=count
@@ -146,21 +146,22 @@ def draw_boxes(img, bbox, identities=None, categories=None, names=None, offset=(
                     0.6, [255, 255, 255], 1)
     return img
 
-def tracking(sort_tracker, im0, det, min_age, static_lines, roi_polygons, names, colors):
+def tracking(sort_tracker, im0, det, min_age, static_lines, previous_intersections, roi_polygons, names, colors):
+    #im0 : type: numpy, shape: [width, height, 3]
+    #det : type: torch.Tensor, shape: [box_num, 6] (6 for [x1, y1, x2, y2, confidence_score, class_id])   
     dets_to_sort = np.empty((0,6))
     
-    for x1,y1,x2,y2,conf,detclass in det.cpu().detach().numpy():
+    for x1,y1,x2,y2,conf,detclass in det:
         dets_to_sort = np.vstack((dets_to_sort, 
                     np.array([x1, y1, x2, y2, conf, detclass])))
     
     # Run SORT
-    tracked_dets = sort_tracker.update(dets_to_sort)
+    tracked_dets, dead_trackers = sort_tracker.update(dets_to_sort)
     tracks =sort_tracker.getTrackers()
 
-    txt_str = ""
-    
     #loop over tracks
     tracking_points_list = []
+    dead_tracking_points_list = []
     tracking_end_points = []
     for track in tracks:
         if track.age > min_age:
@@ -176,13 +177,28 @@ def tracking(sort_tracker, im0, det, min_age, static_lines, roi_polygons, names,
                             if i < len(track_centroids)-1 ]            
             tracking_points_list.append(track_centroids)
 
+    #add dead trackers
+    for dead_tracker in dead_trackers:
+        if dead_tracker.age > min_age:
+            track_centroids = dead_tracker.centroidarr[min_age:]
+            dead_tracking_points_list.append(track_centroids)
+
     for tracked_det in tracked_dets:
+        #print("tracked_det: ", tracked_det)
         tracking_end_point = [(tracked_det[0]+tracked_det[2])/2, (tracked_det[1]+tracked_det[3])/2]
         tracking_end_points.append(tracking_end_point)
 
     if static_lines is not None:
         intersections_list, counts = count_line_crossing(static_lines, tracking_points_list)
+        dead_intersections_list, dead_counts = count_line_crossing(static_lines, dead_tracking_points_list)
+        for i in range(len(static_lines)):
+            for dead_intersection in dead_intersections_list[i]:
+                previous_intersections[i].append(dead_intersection)
+            counts[i]+=len(previous_intersections[i])
+
+        print(counts)
         im0 = draw_intersections(im0, intersections_list, counts, static_lines)
+        im0 = draw_intersections(im0, previous_intersections, counts, static_lines)
 
     if roi_polygons is not None:
         in_polygon_points_list, in_polygon_counts = count_in_polygon(im0, roi_polygons, tracking_end_points)
@@ -191,11 +207,11 @@ def tracking(sort_tracker, im0, det, min_age, static_lines, roi_polygons, names,
     # draw boxes for visualization
     if len(tracked_dets)>0:
         bbox_xyxy = tracked_dets[:,:4]
-        identities = tracked_dets[:, 8]
+        identities = tracked_dets[:, 5]
         categories = tracked_dets[:, 4]
-        draw_boxes(im0, bbox_xyxy, identities, categories, names, colors=colors)
+        #draw_boxes(im0, bbox_xyxy, identities, categories, names, colors=colors)
     
-    return im0
+    return im0, previous_intersections
 
 def detect(save_img=False):
     bbox_num = 0
@@ -209,7 +225,7 @@ def detect(save_img=False):
     sort_max_age = -1 # negative age means infinite 
     sort_min_hits = 2
     sort_iou_thresh = 0.2
-    min_age = 3
+    min_age = 5
     sort_tracker = Sort(max_age=sort_max_age,
                        min_hits=sort_min_hits,
                        iou_threshold=sort_iou_thresh)
@@ -220,7 +236,7 @@ def detect(save_img=False):
         [int(imgsz[1]/2), int(2*imgsz[0]/3)], 
         [int(2*imgsz[1]/3), int(imgsz[0]/3)]
         ], dtype=np.int32)]
-    
+    previous_intersections = [[]]*len(static_lines)
     #......................... 
 
     # Directories
@@ -342,7 +358,10 @@ def detect(save_img=False):
                         n = (det[:, -1] == c).sum()  # detections per class
                         s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
-                    im0 = tracking(sort_tracker, im0, det, min_age=min_age, static_lines=static_lines, roi_polygons=roi_polygons, names=names, colors=colors)                    
+                    print(frame)
+                    np.save("prediction_examples/det_"+str(frame) , det.detach().cpu().numpy())
+                    im0, previous_intersections = tracking(sort_tracker, im0, det.detach().cpu().numpy(), min_age=min_age, static_lines=static_lines, previous_intersections=previous_intersections,
+                           roi_polygons=roi_polygons, names=names, colors=colors)       
 
                     # Write results
                     for *xyxy, conf, cls in reversed(det):

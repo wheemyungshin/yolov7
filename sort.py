@@ -1,34 +1,12 @@
 from __future__ import print_function
-
-import os
 import numpy as np
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-from skimage import io
-
-import glob
-import time
-import argparse
-from filterpy.kalman import KalmanFilter
+from numpy import zeros, eye
+import cv2
 
 np.random.seed(0)
 
-def linear_assignment(cost_matrix):
-    try:
-        import lap #linear assignment problem solver
-        _, x, y = lap.lapjv(cost_matrix, extend_cost = True)
-        return np.array([[y[i],i] for i in x if i>=0])
-    except ImportError:
-        from scipy.optimize import linear_sum_assignment
-        x,y = linear_sum_assignment(cost_matrix)
-        return np.array(list(zip(x,y)))
-
-
 """From SORT: Computes IOU between two boxes in the form [x1,y1,x2,y2]"""
-def iou_batch(bb_test, bb_gt):
-    
+def iou_batch(bb_test, bb_gt):    
     bb_gt = np.expand_dims(bb_gt, 0)
     bb_test = np.expand_dims(bb_test, 1)
     
@@ -50,7 +28,7 @@ def convert_bbox_to_z(bbox):
     h = bbox[3] - bbox[1]
     x = bbox[0] + w/2.
     y = bbox[1] + h/2.
-    s = w * h    
+    s = float(int(w)) * float(int(h))
     #scale is just area
     r = w / float(h)
     return np.array([x, y, s, r]).reshape((4, 1))
@@ -58,8 +36,8 @@ def convert_bbox_to_z(bbox):
 
 """Takes a bounding box in the centre form [x,y,s,r] and returns it in the form
     [x1,y1,x2,y2] where x1,y1 is the top left and x2,y2 is the bottom right"""
-def convert_x_to_bbox(x, score=None):
-    w = np.sqrt(x[2] * x[3])
+def convert_x_to_bbox(x, score=None): 
+    w = np.sqrt(abs(x[2] * x[3]))        
     h = x[2] / w
     if(score==None):
         return np.array([x[0]-w/2.,x[1]-h/2.,x[0]+w/2.,x[1]+h/2.]).reshape((1,4))
@@ -76,21 +54,27 @@ class KalmanBoxTracker(object):
         
         Parameter 'bbox' must have 'detected class' int number at the -1 position.
         """
-        self.kf = KalmanFilter(dim_x=7, dim_z=4)
-        self.kf.F = np.array([[1,0,0,0,1,0,0],[0,1,0,0,0,1,0],[0,0,1,0,0,0,1],[0,0,0,1,0,0,0],[0,0,0,0,1,0,0],[0,0,0,0,0,1,0],[0,0,0,0,0,0,1]])
-        self.kf.H = np.array([[1,0,0,0,0,0,0],[0,1,0,0,0,0,0],[0,0,1,0,0,0,0],[0,0,0,1,0,0,0]])
+        self.kf = cv2.KalmanFilter(7, 4, 0)
+        self.kf.transitionMatrix = np.array([[1,0,0,0,1,0,0],[0,1,0,0,0,1,0],[0,0,1,0,0,0,1],[0,0,0,1,0,0,0],[0,0,0,0,1,0,0],[0,0,0,0,0,1,0],[0,0,0,0,0,0,1]], dtype=np.float64)
+        self.kf.measurementMatrix = np.array([[1,0,0,0,0,0,0],[0,1,0,0,0,0,0],[0,0,1,0,0,0,0],[0,0,0,1,0,0,0]], dtype=np.float64)
+        self.kf.processNoiseCov = np.eye(7)
+        self.kf.measurementNoiseCov = eye(4)
+        self.kf.errorCovPost = np.eye((7))
+        
+        self.state = zeros((7, 1))
+        self.kf.statePost = self.state.copy()
 
-        self.kf.R[2:,2:] *= 10. # R: Covariance matrix of measurement noise (set to high for noisy inputs -> more 'inertia' of boxes')
-        self.kf.P[4:,4:] *= 1000. #give high uncertainty to the unobservable initial velocities
-        self.kf.P *= 10.
-        self.kf.Q[-1,-1] *= 0.5 # Q: Covariance matrix of process noise (set to high for erratically moving things)
-        self.kf.Q[4:,4:] *= 0.5
-
-        self.kf.x[:4] = convert_bbox_to_z(bbox) # STATE VECTOR
+        self.kf.measurementNoiseCov[2:,2:] *= 10.
+        self.kf.errorCovPost[4:,4:] *= 1000.
+        self.kf.errorCovPost *= 10.
+        self.kf.processNoiseCov[-1,-1] *= 0.5
+        self.kf.processNoiseCov[4:,4:] *= 0.5
+        
+        self.kf.statePost[:4] = convert_bbox_to_z(bbox) # STATE VECTOR 
+        
         self.time_since_update = 0
         self.id = KalmanBoxTracker.count
         KalmanBoxTracker.count += 1
-        self.history = []
         self.hits = 0
         self.hit_streak = 0
         self.age = 0
@@ -101,43 +85,34 @@ class KalmanBoxTracker(object):
         
         #keep yolov5 detected class information
         self.detclass = bbox[5]
-
-        # If we want to store bbox
-        self.bbox_history = [bbox]
         
     def update(self, bbox):
         """
         Updates the state vector with observed bbox
         """
         self.time_since_update = 0
-        self.history = []
         self.hits += 1
         self.hit_streak += 1
-        self.kf.update(convert_bbox_to_z(bbox))
+        self.kf.correct(convert_bbox_to_z(bbox))
+
         self.detclass = bbox[5]
         CX = (bbox[0]+bbox[2])//2
         CY = (bbox[1]+bbox[3])//2
         self.centroidarr.append((CX,CY))
-        self.bbox_history.append(bbox)
     
     def predict(self):
         """
         Advances the state vector and returns the predicted bounding box estimate
         """
-        if((self.kf.x[6]+self.kf.x[2])<=0):
-            self.kf.x[6] *= 0.0
-        self.kf.predict()
+        if((self.state[6]+self.state[2])<=0):
+            self.state[6] *= 0.0
+        self.state = self.kf.predict()
         self.age += 1
         if(self.time_since_update>0):
             self.hit_streak = 0
         self.time_since_update += 1
-        self.history.append(convert_x_to_bbox(self.kf.x))
-        # bbox=self.history[-1]
-        # CX = (bbox[0]+bbox[2])/2
-        # CY = (bbox[1]+bbox[3])/2
-        # self.centroidarr.append((CX,CY))
         
-        return self.history[-1]
+        return convert_x_to_bbox(self.state)
     
     
     def get_state(self):
@@ -151,11 +126,7 @@ class KalmanBoxTracker(object):
         """
         arr_detclass = np.expand_dims(np.array([self.detclass]), 0)
         
-        arr_u_dot = np.expand_dims(self.kf.x[4],0)
-        arr_v_dot = np.expand_dims(self.kf.x[5],0)
-        arr_s_dot = np.expand_dims(self.kf.x[6],0)
-        
-        return np.concatenate((convert_x_to_bbox(self.kf.x), arr_detclass, arr_u_dot, arr_v_dot, arr_s_dot), axis=1)
+        return np.concatenate((convert_x_to_bbox(self.kf.statePost), arr_detclass), axis=1)
     
 def associate_detections_to_trackers(detections, trackers, iou_threshold = 0.3):
     """
@@ -163,47 +134,29 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold = 0.3):
     Returns 3 lists of 
     1. matches,
     2. unmatched_detections
-    3. unmatched_trackers
     """
     if(len(trackers)==0):
-        return np.empty((0,2),dtype=int), np.arange(len(detections)), np.empty((0,5),dtype=int)
+        return np.empty((0,2),dtype=int), np.arange(len(detections))
     
     iou_matrix = iou_batch(detections, trackers)
     
-    if min(iou_matrix.shape) > 0:
-        a = (iou_matrix > iou_threshold).astype(np.int32)
-        if a.sum(1).max() == 1 and a.sum(0).max() ==1:
-            matched_indices = np.stack(np.where(a), axis=1)
-        else:
-            matched_indices = linear_assignment(-iou_matrix)
-    else:
-        matched_indices = np.empty(shape=(0,2))
-    
     unmatched_detections = []
-    for d, det in enumerate(detections):
-        if(d not in matched_indices[:,0]):
-            unmatched_detections.append(d)
-    
-    unmatched_trackers = []
-    for t, trk in enumerate(trackers):
-        if(t not in matched_indices[:,1]):
-            unmatched_trackers.append(t)
-    
-    #filter out matched with low IOU
     matches = []
-    for m in matched_indices:
-        if(iou_matrix[m[0], m[1]]<iou_threshold):
-            unmatched_detections.append(m[0])
-            unmatched_trackers.append(m[1])
-        else:
-            matches.append(m.reshape(1,2))
-    
+    if min(iou_matrix.shape) > 0:        
+        for i, j in enumerate(np.argmax(iou_matrix, axis=1)):
+            if iou_matrix[i, j] > iou_threshold:
+                matches.append(np.array([i,j]).reshape(1,2))
+            else:
+                unmatched_detections.append(i)
+    else:
+        matches = np.empty(shape=(0,2))
+
     if(len(matches)==0):
         matches = np.empty((0,2), dtype=int)
     else:
         matches = np.concatenate(matches, axis=0)
         
-    return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
+    return matches, np.array(unmatched_detections)
     
 
 class Sort(object):
@@ -231,6 +184,7 @@ class Sort(object):
         NOTE: The number of objects returned may differ from the number of objects provided.
         """
         self.frame_count += 1
+        dead_trackers = []
         
         # Get predicted locations from existing trackers
         trks = np.zeros((len(self.trackers), 6))
@@ -244,7 +198,7 @@ class Sort(object):
         trks = np.ma.compress_rows(np.ma.masked_invalid(trks))
         for t in reversed(to_del):
             self.trackers.pop(t)
-        matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(dets, trks, self.iou_threshold)
+        matched, unmatched_dets = associate_detections_to_trackers(dets, trks, self.iou_threshold)
         
         # Update matched trackers with assigned detections
         for m in matched:
@@ -253,7 +207,6 @@ class Sort(object):
         # Create and initialize new trackers for unmatched detections
         for i in unmatched_dets:
             trk = KalmanBoxTracker(np.hstack((dets[i,:], np.array([0]))))
-            #trk = KalmanBoxTracker(np.hstack(dets[i,:])
             self.trackers.append(trk)
         
         i = len(self.trackers)
@@ -264,7 +217,7 @@ class Sort(object):
             i -= 1
             #remove dead tracklet
             if(trk.time_since_update > self.max_age) and self.max_age >= 0:
-                self.trackers.pop(i)
+                dead_trackers.append(self.trackers.pop(i))
         if(len(ret) > 0):
-            return np.concatenate(ret)
-        return np.empty((0,6))
+            return np.concatenate(ret), dead_trackers
+        return np.empty((0,6)), dead_trackers
