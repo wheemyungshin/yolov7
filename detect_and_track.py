@@ -19,6 +19,18 @@ import json
 import os
 from sort import Sort
 
+def find_invalid_polygons(roi_polygon):
+    for i in range(len(roi_polygon)-1):
+        line1 = [roi_polygon[i][0], roi_polygon[i][1], roi_polygon[i+1][0], roi_polygon[i+1][1]]
+        for j in range(i+2, len(roi_polygon)-1):
+            line2 = [roi_polygon[j][0], roi_polygon[j][1], roi_polygon[j+1][0], roi_polygon[j+1][1]]
+            intersection = intersect(line1, line2)
+            if intersection:
+                print("Invalid lines: ", line1, line2)
+                print("Intersection: ", intersection)
+                return True
+    return False
+                
 def draw_in_polygon_points(im0, in_polygon_points_list, in_polygon_counts, roi_polygons):
     in_polygons = 0
 
@@ -50,13 +62,10 @@ def count_in_polygon(im0, roi_polygons, tracking_end_points):
     result_points_list = []
     counts = []
     for roi_polygon in roi_polygons:
-        roi_mask = np.zeros(im0.shape[:2])
-        roi_mask = cv2.fillPoly(roi_mask, pts=[roi_polygon], color=1)
-
         result_points = []
         count = 0
         for tracking_end_point in tracking_end_points:
-            if roi_mask[int(tracking_end_point[1]), int(tracking_end_point[0])] == 1:
+            if cv2.pointPolygonTest(roi_polygon, tracking_end_point, False) > 0:
                 result_points.append(tracking_end_point)
                 count+=1
         result_points_list.append(result_points)
@@ -236,6 +245,12 @@ def detect(save_img=False):
         [int(imgsz[1]/2), int(2*imgsz[0]/3)], 
         [int(2*imgsz[1]/3), int(imgsz[0]/3)]
         ], dtype=np.int32)]
+
+    for i, roi_polygon in enumerate(roi_polygons):
+        if find_invalid_polygons(roi_polygon):
+            print("Polygon ("+str(i)+") is invalid.")
+            exit()
+
     previous_intersections = [[]]*len(static_lines)
     #......................... 
 
