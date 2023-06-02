@@ -84,6 +84,7 @@ if __name__ == '__main__':
         model.model[-1].include_nms = True
         y = None
 
+    '''
     # TorchScript export
     try:
         print('\nStarting TorchScript export with torch %s...' % torch.__version__)
@@ -126,6 +127,7 @@ if __name__ == '__main__':
         print('TorchScript-Lite export success, saved as %s' % f)
     except Exception as e:
         print('TorchScript-Lite export failure: %s' % e)
+    '''
 
     # ONNX export
     try:
