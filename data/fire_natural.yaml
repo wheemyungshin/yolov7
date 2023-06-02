@@ -1,0 +1,12 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [/data/D_fire/train/train.txt]
+val: [/data/D_fire/test/test.txt]
+test: [/data/D_fire/test/test.txt]
+
+# number of classes
+nc: 2
+
+# class names
+names: ['fire', 'smoke']
+
+valid_idx: [0, 1]

@@ -44,6 +44,12 @@ for orientation in ExifTags.TAGS.keys():
     if ExifTags.TAGS[orientation] == 'Orientation':
         break
 
+def gaussuian_filter(size, sigma=1): 
+    kernel = np.fromfunction(lambda x, y: (1/(2*math.pi*sigma**2)) * math.e ** ((-1*((x-(15)/2)**2+(y-(15)/2)**2))/(2*sigma**2)), (15, 15))
+    kernel = cv2.resize(kernel, dsize=(size[1], size[0]), interpolation=cv2.INTER_CUBIC)
+    kernel /= np.max(kernel)
+    #kernel -= np.mean(kernel)
+    return kernel
 
 def get_hash(files):
     # Returns a single hash value of a list of files
@@ -1116,6 +1122,30 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             labels = np.append(labels, [[hyp.get('render_fire', None)[1], 
                                 fire_img_position_x + int(fire_img.shape[1]* 0.23), fire_img_position_y + int(fire_img.shape[0]* 0.23), 
                                 fire_img_position_x + fire_img.shape[1] -int(fire_img.shape[1]*0.23), fire_img_position_y + fire_img.shape[0] -int(fire_img.shape[0]*0.23)]], axis=0)
+
+        if hyp is not None and hyp.get('glitter_for_burn', 0) > 0:
+            nL = len(labels)  # number of labels
+            if nL:
+                if len(labels[labels[:, 0]==1]) > 0:
+                    for idx, burn_label in enumerate(labels) :
+                        if burn_label[0]==1 and random.random() < hyp.get('glitter_for_burn', 0):
+                            burn_center_x = (burn_label[1] + burn_label[3]) / 2
+                            burn_center_y = (burn_label[2] + burn_label[4]) / 2
+                            burn_width = burn_label[3] - burn_label[1]
+                            burn_height = burn_label[4] - burn_label[2]
+                            crop_x1 = int(burn_center_x - burn_width*(random.random()*0.3+0.7)/2)
+                            crop_y1 = int(burn_center_y - burn_height*(random.random()*0.3+0.7)/2)
+                            crop_x2 = int(burn_center_x + burn_width*(random.random()*0.3+0.7)/2)
+                            crop_y2 = int(burn_center_y + burn_height*(random.random()*0.3+0.7)/2)
+                            burn_crop = img[crop_y1:crop_y2,crop_x1:crop_x2].copy()
+                            burn_crop[:,:,0] = burn_crop[:,:,0] * (random.random()*0.08+0.77)
+                            burn_crop[:,:,1] = burn_crop[:,:,1] * (random.random()*0.08+0.77)
+                            burn_crop = cv2.convertScaleAbs(burn_crop, alpha=random.random()*0.5+1.0, beta=random.randint(40, 60))
+                            gaus_filter = gaussuian_filter((crop_y2-crop_y1, crop_x2-crop_x1), sigma=5)
+                            random_mask = np.random.random((crop_y2-crop_y1, crop_x2-crop_x1)) * gaus_filter
+                            img[crop_y1:crop_y2,crop_x1:crop_x2][random_mask>0.5] = burn_crop[random_mask>0.5]
+                            labels[idx][0] = 0
+
 
         nL = len(labels)  # number of labels
         if nL:
