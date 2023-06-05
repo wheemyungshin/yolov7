@@ -1141,9 +1141,21 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             burn_crop[:,:,0] = burn_crop[:,:,0] * (random.random()*0.08+0.77)
                             burn_crop[:,:,1] = burn_crop[:,:,1] * (random.random()*0.08+0.77)
                             burn_crop = cv2.convertScaleAbs(burn_crop, alpha=random.random()*0.5+1.0, beta=random.randint(40, 60))
-                            gaus_filter = gaussuian_filter((crop_y2-crop_y1, crop_x2-crop_x1), sigma=5)
-                            random_mask = np.random.random((crop_y2-crop_y1, crop_x2-crop_x1)) * gaus_filter
-                            img[crop_y1:crop_y2,crop_x1:crop_x2][random_mask>0.5] = burn_crop[random_mask>0.5]
+
+                            if random.random() < 0.5:
+                                gaus_filter = gaussuian_filter((crop_y2-crop_y1, crop_x2-crop_x1), sigma=5)
+                                random_mask = np.random.random((crop_y2-crop_y1, crop_x2-crop_x1)) * gaus_filter
+                                img[crop_y1:crop_y2,crop_x1:crop_x2][random_mask>0.5] = burn_crop[random_mask>0.5]
+                            else:
+                                gaus_filter1 = gaussuian_filter((crop_y2-crop_y1, crop_x2-crop_x1), sigma=5)
+                                random_mask = gaus_filter1
+                                if int((crop_y2-crop_y1)/2) > 1 or int((crop_x2-crop_x1)/2) > 1:
+                                    gaus_filter2 = gaussuian_filter((int((crop_y2-crop_y1)/2), int((crop_x2-crop_x1)/2)), sigma=5)
+                                    random_mask[int((crop_y2-crop_y1)/4):int((crop_y2-crop_y1)/4+gaus_filter2.shape[0]), 
+                                        int((crop_x2-crop_x1)/4):int((crop_x2-crop_x1)/4+gaus_filter2.shape[1])] = 1 - gaus_filter2                            
+                                img[crop_y1:crop_y2,crop_x1:crop_x2, 0] = (1-random_mask)*img[crop_y1:crop_y2,crop_x1:crop_x2, 0] + random_mask*burn_crop[:,:,0]
+                                img[crop_y1:crop_y2,crop_x1:crop_x2, 1] = (1-random_mask)*img[crop_y1:crop_y2,crop_x1:crop_x2, 1] + random_mask*burn_crop[:,:,1]
+                                img[crop_y1:crop_y2,crop_x1:crop_x2, 2] = (1-random_mask)*img[crop_y1:crop_y2,crop_x1:crop_x2, 2] + random_mask*burn_crop[:,:,2]
                             labels[idx][0] = 0
 
 
