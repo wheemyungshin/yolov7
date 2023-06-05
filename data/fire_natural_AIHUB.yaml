@@ -1,12 +1,12 @@
 # train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
-train: [/data/D_fire/train/train.txt, /data/AIHUB_fires_yolo/train.txt]
-val: [/data/D_fire/test/test.txt]
-test: [/data/D_fire/test/test.txt]
+train: [/data/AIHUB_fires_yolo/train.txt, /data/AIHUB_fires_yolo/val.txt]
+val: [/data/AIHUB_fires_yolo/val.txt]
+test: [/data/AIHUB_fires_yolo/val.txt]
 
 # number of classes
-nc: 2
+nc: 1
 
 # class names
-names: ['fire', 'smoke']
+names: ['fire']
 
-valid_idx: [0, 1]
+valid_idx: [0]
