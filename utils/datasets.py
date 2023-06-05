@@ -1149,7 +1149,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             else:
                                 gaus_filter1 = gaussuian_filter((crop_y2-crop_y1, crop_x2-crop_x1), sigma=5)
                                 random_mask = gaus_filter1
-                                if int((crop_y2-crop_y1)/2) > 1 or int((crop_x2-crop_x1)/2) > 1:
+                                if int((crop_y2-crop_y1)/2) > 1 and int((crop_x2-crop_x1)/2) > 1:
                                     gaus_filter2 = gaussuian_filter((int((crop_y2-crop_y1)/2), int((crop_x2-crop_x1)/2)), sigma=5)
                                     random_mask[int((crop_y2-crop_y1)/4):int((crop_y2-crop_y1)/4+gaus_filter2.shape[0]), 
                                         int((crop_x2-crop_x1)/4):int((crop_x2-crop_x1)/4+gaus_filter2.shape[1])] = 1 - gaus_filter2                            
