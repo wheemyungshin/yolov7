@@ -2,7 +2,6 @@ import argparse
 import torch.fx
 import torch.nn as nn
 import models_non_dynamic_flow
-from models_non_dynamic_flow.experimental import attempt_load
 from models_non_dynamic_flow.yolo import Model
 from utils.torch_utils import TracedModel
 import yaml
