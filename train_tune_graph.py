@@ -24,7 +24,7 @@ from tqdm import tqdm
 
 import test  # import test.py to get mAP after each epoch
 from models.experimental import attempt_load
-from models.yolo import Model
+from models.yolo import Model, DetectPostPart
 from utils.autoanchor import check_anchors
 from utils.datasets import create_dataloader
 from utils.general import labels_to_class_weights, increment_path, labels_to_image_weights, init_seeds, \
@@ -69,7 +69,7 @@ def train(hyp, opt, device, tb_writer=None):
     loggers = {'wandb': None}  # loggers dict
     if rank in [-1, 0]:
         opt.hyp = hyp  # add hyperparameters
-        run_id = torch.load(weights, map_location=device).get('wandb_id') if weights.endswith('.pt') and os.path.isfile(weights) else None
+        run_id = torch.load('weights/coco_traffics_cityscapes_aihub_city_yolov7-tiny_easyaugment_small_hybrid_s384_640.pt', map_location=device).get('wandb_id') if weights.endswith('.pt') and os.path.isfile(weights) else None
         wandb_logger = WandbLogger(opt, Path(opt.save_dir).stem, run_id, data_dict)
         loggers['wandb'] = wandb_logger.wandb
         data_dict = wandb_logger.data_dict
@@ -81,19 +81,23 @@ def train(hyp, opt, device, tb_writer=None):
     assert len(names) == nc, '%g names found for nc=%g dataset in %s' % (len(names), nc, opt.data)  # check
 
     # Model
-    pretrained = weights.endswith('.pt')
-    if pretrained:
-        with torch_distributed_zero_first(rank):
-            attempt_download(weights)  # download if not found locally
-        ckpt = torch.load(weights, map_location=device)  # load checkpoint
-        model = Model(opt.cfg or ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
-        exclude = ['anchor'] if not (opt.load_head_weight) and not opt.resume else []  # exclude keys
-        state_dict = ckpt['model'].float().state_dict()  # to FP32
-        state_dict = intersect_dicts(state_dict, model.state_dict(), exclude=exclude)  # intersect
-        model.load_state_dict(state_dict, strict=False)  # load
-        logger.info('Transferred %g/%g items from %s' % (len(state_dict), len(model.state_dict()), weights))  # report
-    else:
-        model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+    with torch_distributed_zero_first(rank):
+        attempt_download(weights)  # download if not found locally
+    model = torch.load(weights, map_location=device)  # load checkpoint
+    model_for_hyp = Model(opt.cfg or ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+    detector_for_hyp = model_for_hyp.model[-1]
+    stride, names = model_for_hyp.stride, model_for_hyp.names
+    na, nc, nl, anchors, anchor_grid, grid, no = detector_for_hyp.na, detector_for_hyp.nc, detector_for_hyp.nl,detector_for_hyp.anchors, \
+                                                detector_for_hyp.anchor_grid, detector_for_hyp.grid, detector_for_hyp.no
+    
+    del model_for_hyp, detector_for_hyp
+
+    model.stride = stride
+    model.names = names
+    # attach post part of Detect(IDetect)
+    detect_post_part = DetectPostPart(na,nc,nl,anchors,stride,anchor_grid,grid,no)
+    model.model = nn.Sequential(detect_post_part)
+
     with torch_distributed_zero_first(rank):
         check_dataset(data_dict)  # check
     train_path = data_dict['train']
@@ -125,8 +129,11 @@ def train(hyp, opt, device, tb_writer=None):
             if hasattr(v.im, 'implicit'):           
                 pg0.append(v.im.implicit)
             else:
-                for iv in v.im:
-                    pg0.append(iv.implicit)
+                for vk,vm in v.im._modules.items():
+                    if hasattr(vm, 'implicit_'):
+                        pg0.append(getattr(vm,'implicit_'))
+                    elif hasattr(vm, 'implicit'):
+                        pg0.append(getattr(vm,'implicit'))
         if hasattr(v, 'imc'):
             if hasattr(v.imc, 'implicit'):           
                 pg0.append(v.imc.implicit)
@@ -149,8 +156,11 @@ def train(hyp, opt, device, tb_writer=None):
             if hasattr(v.ia, 'implicit'):           
                 pg0.append(v.ia.implicit)
             else:
-                for iv in v.ia:
-                    pg0.append(iv.implicit)
+                for vk,va in v.ia._modules.items():
+                    if hasattr(va,'implicit_'):
+                        pg0.append(getattr(va,'implicit_'))
+                    elif hasattr(va,'implicit'):
+                        pg0.append(getattr(va,'implicit')) 
         if hasattr(v, 'attn'):
             if hasattr(v.attn, 'logit_scale'):   
                 pg0.append(v.attn.logit_scale)
