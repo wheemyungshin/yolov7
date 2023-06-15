@@ -29,6 +29,6 @@ mixup: 0.15  # image mixup (probability)
 copy_paste: 0.0  # image copy paste (probability)
 paste_in: 0.15  # image copy paste (probability), use 0 for faster training
 loss_ota: 0 # use ComputeLossOTA, use 0 for faster training
-render_fire: ['/data/fire_render/fire', 0]
+render_fire: [['/data/fire_render/fire', '/data/fire_image'], 0]
 min_size: 64
 min_scale_up: 64
