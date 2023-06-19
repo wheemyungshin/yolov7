@@ -153,7 +153,8 @@ def detect(save_img=False):
                                 f.write(('%g ' * len(line)).rstrip() % line + '\n')
 
                         if save_img or view_img:  # Add bbox to image
-                            label = f'{names[int(cls)]} {conf:.2f}'
+                            size = (xyxy[2]-xyxy[0])*(xyxy[3]-xyxy[1])
+                            label = f'{names[int(cls)]} {conf:.2f} {size}'
                             plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
                         
                         if opt.save_json:
