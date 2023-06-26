@@ -77,8 +77,19 @@ def train(hyp, opt, device, tb_writer=None):
         if wandb_logger.wandb:
             weights, epochs, hyp = opt.weights, opt.epochs, opt.hyp  # WandbLogger might update weights, epochs if resuming
 
-    nc = 1 if opt.single_cls else int(data_dict['nc'])  # number of classes
-    names = ['item'] if opt.single_cls and len(data_dict['names']) != 1 else data_dict['names']  # class names
+    with open(opt.cfg) as f:
+        cfg_yaml = yaml.load(f, Loader=yaml.SafeLoader)
+        multihead_matcher = cfg_yaml['multihead_matcher']
+
+    nc = 0
+    for matched_multi_class_num in multihead_matcher:
+        nc+=matched_multi_class_num
+    
+    if nc == int(data_dict['nc']):
+        names = data_dict['names']  # class names
+    else:
+        names = [str(nc_i) for nc_i in range(nc)]
+    
     assert len(names) == nc, '%g names found for nc=%g dataset in %s' % (len(names), nc, opt.data)  # check
 
     # Model
@@ -87,7 +98,7 @@ def train(hyp, opt, device, tb_writer=None):
         with torch_distributed_zero_first(rank):
             attempt_download(weights)  # download if not found locally
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
-        model = Model(opt.cfg or ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+        model = Model(opt.cfg or ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get('anchors'), multi_head_num=len(multihead_matcher)).to(device)  # create
         exclude = ['anchor'] if not (opt.load_head_weight) and not opt.resume else []  # exclude keys
         state_dict = ckpt['model'].float().state_dict()  # to FP32
         state_dict = intersect_dicts(state_dict, model.state_dict(), exclude=exclude)  # intersect
@@ -259,7 +270,8 @@ def train(hyp, opt, device, tb_writer=None):
     dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, opt,
                                             hyp=hyp, augment=True, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                             world_size=opt.world_size, workers=opt.workers,
-                                            image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data)
+                                            image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '),
+                                            valid_idx=valid_idx, pose_data=pose_data)
     mlc = np.concatenate(dataset.labels, 0)[:, 0].max()  # max label class
     nb = len(dataloader)  # number of batches
     assert mlc < nc, 'Label class %g exceeds nc=%g in %s. Possible class labels are 0-%g' % (mlc, nc, opt.data, nc - 1)
@@ -283,7 +295,7 @@ def train(hyp, opt, device, tb_writer=None):
 
             # Anchors
             if not opt.noautoanchor:
-                check_anchors_multihead(dataset, model=model, multi_head_num=opt.head_num, thr=hyp['anchor_t'], imgsz=imgsz)
+                check_anchors_multihead(dataset, model=model, multi_head_num=len(multihead_matcher), thr=hyp['anchor_t'], imgsz=imgsz)
             model.half().float()  # pre-reduce anchor precision
 
     # DDP mode
@@ -374,6 +386,7 @@ def train(hyp, opt, device, tb_writer=None):
         if rank in [-1, 0]:
             pbar = tqdm(pbar, total=nb)  # progress bar
         optimizer.zero_grad()
+
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
             ni = i + nb * epoch  # number integrated batches (since train start)
             imgs = imgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
@@ -414,10 +427,25 @@ def train(hyp, opt, device, tb_writer=None):
                 else:
                     loss = torch.zeros(1, device=device)
                     loss_items = torch.zeros(4, device=device)
-                    for multi_head_i in range(nc):
-                        loss_, loss_items_ = compute_loss(pred[multi_head_i], targets[targets[:, 1]==multi_head_i].to(device))
-                        loss = loss + loss_
-                        loss_items = loss_items + loss_items_
+                    global_multi_class = 0
+                    for multi_head_i, matched_multi_class_num in enumerate(multihead_matcher):
+                        if multi_head_i in opt.trainable_heads:
+                            global_multi_classes = [global_multi_class+matched_multi_class for matched_multi_class in range(matched_multi_class_num)]
+                            target_mask = torch.zeros_like(targets[:, 1], dtype=torch.bool)
+                            for gmc in global_multi_classes:
+                                target_mask[target_mask==0] = (targets[:, 1] == gmc)[target_mask==0]
+                            loss_, loss_items_ = compute_loss(pred[multi_head_i], targets[target_mask].to(device))
+                            loss = loss + loss_
+                            loss_items = loss_items + loss_items_
+                            global_multi_class+=matched_multi_class_num
+                        else:
+                            loss_ = torch.zeros(1, device=device)
+                            for p in pred[multi_head_i]:
+                                loss_ += (p*0).mean().to(device)
+                            loss_items_ = torch.cat((loss_, loss_, loss_, loss_))
+                            loss = loss + loss_
+                            loss_items = loss_items + loss_items_
+
                 if rank != -1:
                     loss *= opt.world_size  # gradient averaged between devices in DDP mode
                 if opt.quad:
@@ -471,7 +499,6 @@ def train(hyp, opt, device, tb_writer=None):
                                                  batch_size=batch_size * 2,
                                                  imgsz=imgsz_test,
                                                  model=ema.ema,
-                                                 single_cls=opt.single_cls,
                                                  dataloader=testloader,
                                                  save_dir=save_dir,
                                                  verbose=nc < 50 and final_epoch,
@@ -479,7 +506,8 @@ def train(hyp, opt, device, tb_writer=None):
                                                  wandb_logger=wandb_logger,
                                                  is_coco=is_coco,
                                                  v5_metric=opt.v5_metric,
-                                                 head_num=opt.head_num)
+                                                 multihead_matcher=multihead_matcher,
+                                                 trainable_heads=opt.trainable_heads)
 
             # Write
             with open(results_file, 'a') as f:
@@ -544,6 +572,7 @@ def train(hyp, opt, device, tb_writer=None):
                 wandb_logger.log({"Results": [wandb_logger.wandb.Image(str(save_dir / f), caption=f) for f in files
                                               if (save_dir / f).exists()]})
         # Test best.pt
+        '''
         logger.info('%g epochs completed in %.3f hours.\n' % (epoch - start_epoch + 1, (time.time() - t0) / 3600))
         if opt.data.endswith('coco.yaml') and nc == 80:  # if COCO
             for m in (last, best) if best.exists() else (last):  # speed, mAP tests
@@ -553,13 +582,13 @@ def train(hyp, opt, device, tb_writer=None):
                                           conf_thres=0.001,
                                           iou_thres=0.7,
                                           model=attempt_load(m, device).half(),
-                                          single_cls=opt.single_cls,
                                           dataloader=testloader,
                                           save_dir=save_dir,
                                           save_json=True,
                                           plots=False,
                                           is_coco=is_coco,
                                           v5_metric=opt.v5_metric)
+        '''
 
         # Strip optimizers
         final = best if best.exists() else last  # final model
@@ -615,12 +644,12 @@ if __name__ == '__main__':
     parser.add_argument('--bbox_interval', type=int, default=-1, help='Set bounding-box image logging interval for W&B')
     parser.add_argument('--save_period', type=int, default=-1, help='Log model after every "save_period" epoch')
     parser.add_argument('--artifact_alias', type=str, default="latest", help='version of dataset artifact to be used')
-    parser.add_argument('--freeze', nargs='+', type=int, default=[0], help='Freeze layers: backbone of yolov7=50, first3=0 1 2')
+    parser.add_argument('--freeze', nargs='+', type=int, default=[0], help='Freeze layers: backbone of yolov7=50, first3=0 1 2, layer num +1 required')
     parser.add_argument('--v5-metric', action='store_true', help='assume maximum recall as 1.0 in AP calculation')
     parser.add_argument('--close-mosaic', type=int, default=0, help='stop mosaic augmentation and distillation')
     parser.add_argument('--close-data-generation', type=int, default=300, help='stop mosaic augmentation and distillation')
-    parser.add_argument('--head-num', default=3, type=int, help='the number of multi heads')
     parser.add_argument('--load-head-weight', action='store_true', help='Load head weights as well, when using pretrained model')
+    parser.add_argument('--trainable-heads', nargs='+', type=int, default=list(range(80)), help='train target heads: Watch out the class indexing')
     opt = parser.parse_args()
 
     # Set DDP variables
@@ -632,6 +661,7 @@ if __name__ == '__main__':
     #    check_requirements()
 
     # Resume
+    batch_size = opt.batch_size
     wandb_run = check_wandb_resume(opt)
     if opt.resume and not wandb_run:  # resume an interrupted run
         ckpt = opt.resume if isinstance(opt.resume, str) else get_latest_run()  # specified or most recent path
@@ -650,6 +680,7 @@ if __name__ == '__main__':
         opt.save_dir = increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok | opt.evolve)  # increment run
 
     # DDP mode
+    opt.batch_size = batch_size
     opt.total_batch_size = opt.batch_size
     device = select_device(opt.device, batch_size=opt.batch_size)
     if opt.local_rank != -1:

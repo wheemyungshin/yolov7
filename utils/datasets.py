@@ -1062,7 +1062,13 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         else:
                             valid_idx+=1
                     
-                    '''
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+                    
+=======
+>>>>>>> 00b358df59b3809e9a6fe1535f4e87bdb9bed924
+>>>>>>> a7a25b4c74b6c52f798ec4f0664aa33e3849848c
                     for idx, ciga_label in enumerate(labels[is_valid_ciga]) :
                         min_ciga_size = 16
                         if min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2]) > min_ciga_size and random.random() < 0.5:
@@ -1132,7 +1138,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                 fire_img_position_x + int(fire_img.shape[1]* 0.13), fire_img_position_y + int(fire_img.shape[0]* 0.13), 
                                 fire_img_position_x + fire_img.shape[1] -int(fire_img.shape[1]*0.13), fire_img_position_y + fire_img.shape[0] -int(fire_img.shape[0]*0.13)]], axis=0)
 
-                    '''
 
                     # retry for edge
                     for idx, edge_label in enumerate(labels[labels[:, 0]==3]) :
