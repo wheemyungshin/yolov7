@@ -21,12 +21,12 @@ import os
 def detect(save_img=False):
     bbox_num = 0
     source, weights, view_img, save_txt, imgsz, trace = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, not opt.no_trace
-    head_num = opt.head_num
+    multihead_matcher = opt.multihead_matcher
     save_img = not opt.nosave and not source.endswith('.txt')  # save inference images
     webcam = source.isnumeric() or source.endswith('.txt') or source.lower().startswith(
         ('rtsp://', 'rtmp://', 'http://', 'https://'))
 
-    assert head_num > 0
+    assert len(multihead_matcher) > 0    
     
     # Directories
     save_dir = Path(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
@@ -45,7 +45,7 @@ def detect(save_img=False):
     print(model)
     
     if trace:
-        model = TracedModel_multihead(model, head_num, device, tuple(opt.img_size))
+        model = TracedModel_multihead(model, len(multihead_matcher), device, tuple(opt.img_size))
 
     if half:
         model.half()  # to FP16
@@ -109,6 +109,7 @@ def detect(save_img=False):
         t2 = time_synchronized()
 
         concat_pred = []
+        global_multi_class = 0
         for multi_head_i, pred in enumerate(preds):
             pred = pred[0]
             print(multi_head_i, " : ", pred)
@@ -117,16 +118,18 @@ def detect(save_img=False):
             pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=None, agnostic=opt.agnostic_nms)
             print(multi_head_i, " (nms) : ", pred)
             for p in pred:
-                p[:, -1] = multi_head_i
+                p[:, -1] += global_multi_class
             for p in pred:
                 if len(concat_pred) == 0:
                     concat_pred.append(p)
                 else:
                     concat_pred[0] = torch.cat((concat_pred[0], p), 0)
+            global_multi_class += multihead_matcher[multi_head_i]
         t3 = time_synchronized()
                 
         pred = concat_pred
         print("concat: ", pred)
+
 
         # Apply Classifier
         if classify:
@@ -281,10 +284,10 @@ if __name__ == '__main__':
     parser.add_argument('--name', default='exp', help='save results to project/name')
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
     parser.add_argument('--no-trace', action='store_true', help='don`t trace model')
-    parser.add_argument('--head-num', default=0, type=int, help='the number of multi heads')
     parser.add_argument('--save-json', action='store_true', help='save a cocoapi-compatible JSON results file')
     parser.add_argument('--frame-ratio', default=1, type=int, help='save frame ratio')
     parser.add_argument('--save-frame', action='store_true', help='save each frame of video results')
+    parser.add_argument('--multihead-matcher', nargs='+', type=int, default=[1, 1, 1], help='Number of classes for each head')
     opt = parser.parse_args()
     print(opt)
     #check_requirements(exclude=('pycocotools', 'thop'))

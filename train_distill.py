@@ -670,6 +670,7 @@ if __name__ == '__main__':
     #    check_requirements()
 
     # Resume
+    batch_size = opt.batch_size
     wandb_run = check_wandb_resume(opt)
     if opt.resume and not wandb_run:  # resume an interrupted run
         ckpt = opt.resume if isinstance(opt.resume, str) else get_latest_run()  # specified or most recent path
@@ -688,6 +689,7 @@ if __name__ == '__main__':
         opt.save_dir = increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok | opt.evolve)  # increment run
 
     # DDP mode
+    opt.batch_size = batch_size
     opt.total_batch_size = opt.batch_size
     device = select_device(opt.device, batch_size=opt.batch_size)
     if opt.local_rank != -1:
