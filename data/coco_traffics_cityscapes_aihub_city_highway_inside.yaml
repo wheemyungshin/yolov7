@@ -2,8 +2,8 @@ train: [/data/coco/train2017.txt, # 117266
 /data/cityscapes/yolov7_det/train_coco_indexing.txt, /data/cityscapes/yolov7_det/val_coco_indexing.txt, # 2975 + 500
 /data/AIHUB_CCTV_city_yolo_valid_crop_sampling/train.txt, /data/AIHUB_CCTV_city_yolo_valid_crop_sampling/val.txt, # 61614 + 8941
 /data/AIHUB_CCTV_highway_yolo/val.txt, # 25539
-/data/AIHUB_inside_camera_yolo/train.txt, # 27718
-/data/AIHUB_inside_camera_yolo/val.txt, # 45360
+/data/AIHUB_inside_camera_yolo/train.txt, # 45360 
+/data/AIHUB_inside_camera_yolo/val.txt, # 27718
 ]
 val: [/data/coco/val2017.txt] # 4952
 test: [/data/coco/val2017.txt]
