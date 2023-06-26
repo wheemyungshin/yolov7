@@ -34,7 +34,7 @@ if __name__ == '__main__':
     parser.add_argument('--include-nms', action='store_true', help='export end2end onnx')
     parser.add_argument('--fp16', action='store_true', help='CoreML FP16 half-precision export')
     parser.add_argument('--int8', action='store_true', help='CoreML INT8 quantization')
-    parser.add_argument('--head-num', default=0, type=int, help='the number of multi heads')
+    parser.add_argument('--multihead-matcher', nargs='+', type=int, default=[1, 1, 1], help='Number of classes for each head')
     opt = parser.parse_args()
     opt.img_size *= 2 if len(opt.img_size) == 1 else 1  # expand
     opt.dynamic = opt.dynamic and not opt.end2end
@@ -42,7 +42,7 @@ if __name__ == '__main__':
     print(opt)
     set_logging()
     t = time.time()
-    assert opt.head_num > 0
+    assert len(opt.multihead_matcher) > 0
 
     # Load PyTorch model
     device = select_device(opt.device)
@@ -67,8 +67,8 @@ if __name__ == '__main__':
         # elif isinstance(m, models.yolo.Detect):
         #     m.forward = m.forward_export  # assign forward (optional)
     
-    for head_i in range(opt.head_num):
-        model.model[-opt.head_num+head_i].export = not opt.grid  # set Detect() layer grid export
+    for head_i, _ in enumerate(opt.multihead_matcher):
+        model.model[-len(opt.multihead_matcher)+head_i].export = not opt.grid  # set Detect() layer grid export
     y = model(img)  # dry run
     '''
     print(y)
@@ -85,8 +85,8 @@ if __name__ == '__main__':
     exit()
     '''
     if opt.include_nms:
-        for head_i in range(opt.head_num):
-            model.model[-opt.head_num+head_i].include_nms = True
+        for head_i, _ in enumerate(opt.multihead_matcher):
+            model.model[-len(opt.multihead_matcher)+head_i].include_nms = True
         y = None
 
     '''
@@ -166,7 +166,7 @@ if __name__ == '__main__':
     if opt.grid:
         if opt.end2end:
             print('\nStarting export end2end onnx model for %s...' % 'TensorRT' if opt.max_wh is None else 'onnxruntime')
-            model = End2End_multihead(model,opt.head_num,opt.topk_all,opt.iou_thres,opt.conf_thres,opt.max_wh,device,len(labels))
+            model = End2End_multihead(model,opt.multihead_matcher,opt.topk_all,opt.iou_thres,opt.conf_thres,opt.max_wh,device,len(labels))
             if opt.end2end and opt.max_wh is None:
                 output_names = ['num_dets', 'det_boxes', 'det_scores', 'det_classes']
                 shapes = [opt.batch_size, 1, opt.batch_size, opt.topk_all, 4,
@@ -174,8 +174,8 @@ if __name__ == '__main__':
             else:
                 output_names = ['output']
         else:
-            for head_i in range(opt.head_num):
-                model.model[-opt.head_num+head_i].concat = True
+            for head_i, _ in enumerate(opt.multihead_matcher):
+                model.model[-len(opt.multihead_matcher)+head_i].concat = True
 
     torch.onnx.export(model, img, f, verbose=False, opset_version=12, input_names=['images'],
                         output_names=output_names,
