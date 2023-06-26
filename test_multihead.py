@@ -26,7 +26,6 @@ def test(data,
          conf_thres=0.001,
          iou_thres=0.6,  # for NMS
          save_json=False,
-         single_cls=False,
          augment=False,
          verbose=False,
          model=None,
@@ -43,9 +42,10 @@ def test(data,
          v5_metric=False,
          person_only=False,
          opt_size_devision=False,
-         head_num=0):
+         multihead_matcher=None,
+         trainable_heads=list(range(80))):
 
-    assert head_num > 0
+    assert len(multihead_matcher) > 0
     
     # Initialize/load model and set device
     training = model is not None
@@ -66,7 +66,7 @@ def test(data,
         imgsz = check_img_size(imgsz, s=gs)  # check img_size
     
     if trace:
-        model = TracedModel_multihead(model, head_num, device, imgsz)
+        model = TracedModel_multihead(model, len(multihead_matcher), device, imgsz)
 
     # Half
     half = device.type != 'cpu' and half_precision  # half precision only supported on CUDA
@@ -80,7 +80,7 @@ def test(data,
         with open(data) as f:
             data = yaml.load(f, Loader=yaml.SafeLoader)
     check_dataset(data)  # check
-    nc = 1 if single_cls else int(data['nc'])  # number of classes
+    nc = int(data['nc'])  # number of classes
     iouv = torch.linspace(0.5, 0.95, 10).to(device)  # iou vector for mAP@0.5:0.95
     niou = iouv.numel()
 
@@ -132,19 +132,24 @@ def test(data,
             t = time_synchronized()
             
             concat_out = []
+            global_multi_class = 0
             for multi_head_i, out in outs.items():
-                #print(multi_head_i)
-                #print(out)
-                #print(type(out))
-                out = out[0]
-                out = non_max_suppression(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb, multi_label=True)
-                for p in out:
-                    p[:, -1] = multi_head_i
-                if len(concat_out) == 0:
-                    concat_out = out
-                else:
-                    for out_batch_i in range(len(concat_out)):
-                        concat_out[out_batch_i] = torch.cat((concat_out[out_batch_i], out[out_batch_i]), 0)
+                if multi_head_i in trainable_heads:
+                    #print(multi_head_i)
+                    #print(out)
+                    #print(type(out))
+                    out = out[0]
+                    out = non_max_suppression(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb, multi_label=True)
+                    #print(multi_head_i, " (nms) : ", out)
+                    for p in out:
+                        p[:, -1] += global_multi_class
+                    if len(concat_out) == 0:
+                        concat_out = out
+                    else:
+                        for out_batch_i in range(len(concat_out)):
+                            concat_out[out_batch_i] = torch.cat((concat_out[out_batch_i], out[out_batch_i]), 0)
+                    global_multi_class += multihead_matcher[multi_head_i]
+
             t1 += time_synchronized() - t
             out = concat_out
 
@@ -231,8 +236,7 @@ def test(data,
 
                 scale_coords(img[si].shape[1:], tbox, shapes[si][0], shapes[si][1])  # native-space labels
                 if plots:
-                    predn_ = torch.clone(predn)
-                    confusion_matrix.process_batch(predn_, torch.cat((labels[:, 0:1], tbox), 1))
+                    confusion_matrix.process_batch(predn, torch.cat((labels[:, 0:1], tbox), 1))
 
                 # Per target class
                 for cls in torch.unique(tcls_tensor):
@@ -242,7 +246,7 @@ def test(data,
                     # Search for detections
                     if pi.shape[0]:
                         # Prediction to target ious
-                        ious, i = box_iou(predn_[pi, :4], tbox[ti]).max(1)  # best ious, indices
+                        ious, i = box_iou(predn[pi, :4], tbox[ti]).max(1)  # best ious, indices
 
                         # Append detections
                         detected_set = set()
@@ -396,7 +400,8 @@ if __name__ == '__main__':
     parser.add_argument('--person-only', action='store_true', help='assume maximum recall as 1.0 in AP calculation')
     parser.add_argument('--xyxy', action='store_true', help='the box label type is xyxy not xywh')
     parser.add_argument('--size-devision', action='store_true', help='show mAP for small, medium and large objects, respectively')
-    parser.add_argument('--head-num', default=0, type=int, help='the number of multi heads')
+    parser.add_argument('--multihead-matcher', nargs='+', type=int, default=[1, 1, 1], help='Number of classes for each head')
+    parser.add_argument('--trainable-heads', nargs='+', type=int, default=list(range(80)), help='train target heads: Watch out the class indexing')
     opt = parser.parse_args()
     opt.save_json |= opt.data.endswith('coco.yaml')
     opt.data = check_file(opt.data)  # check file
@@ -411,7 +416,6 @@ if __name__ == '__main__':
              opt.conf_thres,
              opt.iou_thres,
              opt.save_json,
-             opt.single_cls,
              opt.augment,
              opt.verbose,
              save_txt=opt.save_txt | opt.save_hybrid,
@@ -421,7 +425,8 @@ if __name__ == '__main__':
              v5_metric=opt.v5_metric,
              person_only=opt.person_only,
              size_devision=opt.size_devision,
-             head_num=opt.head_num
+             multihead_matcher=opt.multihead_matcher,
+             trainable_heads=opt.trainable_heads
              )
 
     elif opt.task == 'speed':  # speed benchmarks
