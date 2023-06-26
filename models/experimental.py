@@ -243,30 +243,32 @@ class End2End(nn.Module):
 
 class End2End_multihead(nn.Module):
     '''export onnx or tensorrt model with NMS operation.'''
-    def __init__(self, model, head_num, max_obj=100, iou_thres=0.45, score_thres=0.25, max_wh=None, device=None, n_classes=80):
+    def __init__(self, model, multihead_matcher, max_obj=100, iou_thres=0.45, score_thres=0.25, max_wh=None, device=None, n_classes=80):
         super().__init__()
         device = device if device else torch.device('cpu')
         assert isinstance(max_wh,(int)) or max_wh is None
         self.model = model.to(device)
-        for head_i in range(head_num):
-            self.model.model[-head_num+head_i].end2end = True
+        for head_i, _ in enumerate(multihead_matcher):
+            self.model.model[-len(multihead_matcher)+head_i].end2end = True
         self.patch_model = ONNX_TRT if max_wh is None else ONNX_ORT
         self.end2end = self.patch_model(max_obj, iou_thres, score_thres, max_wh, device, n_classes)
         self.end2end.eval()
-        self.head_num = head_num
+        self.multihead_matcher = multihead_matcher
 
     def forward(self, x):
         outputs = None
         x = self.model(x)
-        for head_num_i in range(self.head_num):
+        global_multi_class = 0
+        for head_num_i, matched_multi_class_num in enumerate(self.multihead_matcher):
             if outputs is None:
                 output = self.end2end(x[head_num_i])
-                output[:, 5] = head_num_i
+                output[:, 5] += global_multi_class
                 outputs = output
             else:
                 output = self.end2end(x[head_num_i])
-                output[:, 5] = head_num_i
+                output[:, 5] += global_multi_class
                 outputs = torch.cat((outputs, output), 0)
+            global_multi_class += self.multihead_matcher[head_num_i]
         return outputs
 
 
