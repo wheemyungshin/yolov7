@@ -616,7 +616,7 @@ class IBin(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, cfg='yolor-csp-c.yaml', ch=3, nc=None, anchors=None):  # model, input channels, number of classes
+    def __init__(self, cfg='yolor-csp-c.yaml', ch=3, nc=None, anchors=None, multi_head_num=3):  # model, input channels, number of classes
         super(Model, self).__init__()
         self.traced = False
         if isinstance(cfg, dict):
@@ -638,18 +638,18 @@ class Model(nn.Module):
         self.model, self.save = parse_model(deepcopy(self.yaml), ch=[ch])  # model, savelist
         self.names = [str(i) for i in range(self.yaml['nc'])]  # default names
         # print([x.shape for x in self.forward(torch.zeros(1, ch, 64, 64))])
-        self.nc = nc
+        self.multi_head_num = multi_head_num
 
         # Build strides, anchors
-        for multi_head_i in range(self.nc):
-            m = self.model[-self.nc+multi_head_i]  # Detect()
+        for multi_head_i in range(self.multi_head_num):
+            m = self.model[-self.multi_head_num+multi_head_i]  # Detect()
             if isinstance(m, Detect):
                 s = 256  # 2x min stride
                 m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))[0]])  # forward
                 check_anchor_order(m)
                 m.anchors /= m.stride.view(-1, 1, 1)
                 self.stride = m.stride
-                self._initialize_biases(-self.nc+multi_head_i) # run each layer
+                self._initialize_biases(-self.multi_head_num+multi_head_i) # run each layer
                 # print('Strides: %s' % m.stride.tolist())
             if isinstance(m, IDetect):
                 s = 256  # 2x min stride
@@ -657,7 +657,7 @@ class Model(nn.Module):
                 check_anchor_order(m)
                 m.anchors /= m.stride.view(-1, 1, 1)
                 self.stride = m.stride
-                self._initialize_biases(-self.nc+multi_head_i) # run each layer
+                self._initialize_biases(-self.multi_head_num+multi_head_i) # run each layer
                 # print('Strides: %s' % m.stride.tolist())
             if isinstance(m, IAuxDetect):
                 s = 256  # 2x min stride
@@ -907,8 +907,8 @@ class Model(nn.Module):
             mi.bias = torch.nn.Parameter(b.view(-1), requires_grad=True)
 
     def _print_biases(self):
-        for multi_head_i in range(self.nc):
-            m = self.model[-self.nc+multi_head_i]  # Detect()
+        for multi_head_i in range(self.multi_head_num):
+            m = self.model[-self.multi_head_num+multi_head_i]  # Detect()
             for mi in m.m:  # from
                 b = mi.bias.detach().view(m.na, -1).T  # conv.bias(255) to (3,85)
                 print(('%6g Conv2d.bias:' + '%10.3g' * 6) % (mi.weight.shape[1], *b[:5].mean(1).tolist(), b[5:].mean()))
@@ -974,18 +974,18 @@ class Model(nn.Module):
         return self
 
     def nms(self, mode=True):  # add or remove NMS module
-        for multi_head_i in range(self.nc):
-            present = type(self.model[-self.nc+multi_head_i]) is NMS  # last layer is NMS
+        for multi_head_i in range(self.multi_head_num):
+            present = type(self.model[-self.multi_head_num+multi_head_i]) is NMS  # last layer is NMS
             if mode and not present:
                 print('Adding NMS... ')
                 m = NMS()  # module
                 m.f = -1  # from
-                m.i = self.model[-self.nc+multi_head_i].i + self.nc # index
+                m.i = self.model[-self.multi_head_num+multi_head_i].i + self.multi_head_num # index
                 self.model.add_module(name='%s' % m.i, module=m)  # add
                 self.eval()
             elif not mode and present:
                 print('Removing NMS... ')
-                self.model = self.model[:-self.nc]  # remove
+                self.model = self.model[:-self.multi_head_num]  # remove
         return self
 
     def autoshape(self):  # add autoShape module
