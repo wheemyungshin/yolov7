@@ -502,12 +502,21 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 for j, x_line in enumerate(x):
                     for id_index, v_id in enumerate(valid_idx):
                         if int(x_line[0]) == v_id:
-                            new_x.append(np.array([id_index, x_line[1], x_line[2], x_line[3], x_line[4]]))
+                            new_x.append(np.array([id_index, x_line[1].copy(), x_line[2].copy(), x_line[3].copy(), x_line[4].copy()]))
                             if len(seg) > j:
                                 new_seg.append(seg[j])
+                                
+                            else:
+                                new_seg.append(np.array([
+                                    [x_line[1]-x_line[3], x_line[2]-x_line[4]], 
+                                    [x_line[1]+x_line[3], x_line[2]-x_line[4]],  
+                                    [x_line[1]+x_line[3], x_line[2]+x_line[4]],
+                                    [x_line[1]-x_line[3], x_line[2]+x_line[4]]
+                                    ]))
                 
                 new_labels.append(np.array(new_x))
                 new_segments.append(np.array(new_seg))
+                    
             self.labels = new_labels
             self.segments = new_segments
             
@@ -847,7 +856,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     sample_masks += sample_masks_
                     if len(sample_labels) == 0:
                         break
-                labels = pastein(img, labels, sample_labels, sample_images, sample_masks)
+                img, labels = pastein(img, labels, sample_labels, sample_images, sample_masks)
 
             if hyp is not None and random.random() < hyp.get('dark_paste_in', 0):
                 sample_images, sample_masks = [], []
@@ -1996,7 +2005,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     # Transform label coordinates
     n = len(targets)
     if n:
-        use_segments = any(x.any() for x in segments)
+        use_segments = False#any(x.any() for x in segments)
         new = np.zeros((n, 4))
         if use_segments:  # warp segments
             segments = resample_segments(segments)  # upsample
@@ -2180,7 +2189,7 @@ def pastein(image, labels, sample_labels, sample_images, sample_masks):
                               
                     image[ymin:ymin+r_h, xmin:xmin+r_w] = temp_crop
 
-    return labels
+    return image, labels
 
 
 def dark_pastein(image, labels, sample_images, sample_masks):
