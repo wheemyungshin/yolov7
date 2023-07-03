@@ -25,6 +25,7 @@ from tqdm import tqdm
 import test  # import test.py to get mAP after each epoch
 from models.experimental import attempt_load
 from models.yolo import Model
+from models.common import Conv
 from utils.autoanchor import check_anchors
 from utils.datasets import create_dataloader
 from utils.general import labels_to_class_weights, increment_path, labels_to_image_weights, init_seeds, \
@@ -35,6 +36,7 @@ from utils.loss import ComputeLoss, ComputeLossOTA
 from utils.plots import plot_images, plot_labels, plot_results, plot_evolution
 from utils.torch_utils import ModelEMA, select_device, intersect_dicts, torch_distributed_zero_first, is_parallel
 from utils.wandb_logging.wandb_utils import WandbLogger, check_wandb_resume
+import collections
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +90,13 @@ def train(hyp, opt, device, tb_writer=None):
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
         model = Model(opt.cfg or ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
         exclude = ['anchor'] if not (opt.load_head_weight) and not opt.resume else []  # exclude keys
-        state_dict = ckpt['model'].float().state_dict()  # to FP32
+        if type(ckpt['model']) is Model:
+            state_dict = ckpt['model'].float().state_dict()  # to FP32
+        elif type(ckpt['model']) is collections.OrderedDict:
+            state_dict = ckpt['model']  # to FP32
+        else:
+            assert (type(ckpt['model']) is Model or type(ckpt['model']) is collections.OrderedDict), "Invalid model types to load"
+
         state_dict = intersect_dicts(state_dict, model.state_dict(), exclude=exclude)  # intersect
         model.load_state_dict(state_dict, strict=False)  # load
         logger.info('Transferred %g/%g items from %s' % (len(state_dict), len(model.state_dict()), weights))  # report
@@ -286,11 +294,21 @@ def train(hyp, opt, device, tb_writer=None):
                 check_anchors(dataset, model=model, thr=hyp['anchor_t'], imgsz=imgsz)
             model.half().float()  # pre-reduce anchor precision
 
+    if opt.qat:        
+        #model.fuse()
+
+        # The old 'fbgemm' is still available but 'x86' is the recommended default.
+        model.qconfig = torch.quantization.get_default_qat_qconfig('x86')
+        
+        torch.quantization.prepare_qat(model, inplace=True)
+        print('Qauntization-Aware-Training')
+
     # DDP mode
     if cuda and rank != -1:
         model = DDP(model, device_ids=[opt.local_rank], output_device=opt.local_rank,
                     # nn.MultiheadAttention incompatibility with DDP https://github.com/pytorch/pytorch/issues/26698
                     find_unused_parameters=True)
+
 
     # Model parameters
     hyp['box'] *= 3. / nl  # scale to layers
@@ -321,7 +339,9 @@ def train(hyp, opt, device, tb_writer=None):
                 f'Using {dataloader.num_workers} dataloader workers\n'
                 f'Logging results to {save_dir}\n'
                 f'Starting training for {epochs} epochs...')
-    torch.save(model, wdir / 'init.pt')
+    torch.save(model.float().state_dict(), wdir / 'init.pt')
+
+    
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         model.train()
 
@@ -403,7 +423,7 @@ def train(hyp, opt, device, tb_writer=None):
                     imgs = F.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
 
             # Forward
-            with amp.autocast(enabled=cuda):
+            if opt.qat:
                 pred = model(imgs)  # forward
                 
                 if 'loss_ota' not in hyp or hyp['loss_ota'] == 1:
@@ -414,7 +434,19 @@ def train(hyp, opt, device, tb_writer=None):
                     loss *= opt.world_size  # gradient averaged between devices in DDP mode
                 if opt.quad:
                     loss *= 4.
-  
+            else:
+                with amp.autocast(enabled=cuda):
+                    pred = model(imgs)  # forward
+                    
+                    if 'loss_ota' not in hyp or hyp['loss_ota'] == 1:
+                        loss, loss_items = compute_loss_ota(pred, targets.to(device), imgs)  # loss scaled by batch_size
+                    else:
+                        loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
+                    if rank != -1:
+                        loss *= opt.world_size  # gradient averaged between devices in DDP mode
+                    if opt.quad:
+                        loss *= 4.
+    
             # Backward
             scaler.scale(loss).backward()
 
@@ -444,6 +476,15 @@ def train(hyp, opt, device, tb_writer=None):
                 elif plots and ni == 10 and wandb_logger.wandb:
                     wandb_logger.log({"Mosaics": [wandb_logger.wandb.Image(str(x), caption=x.name) for x in
                                                   save_dir.glob('train*.jpg') if x.exists()]})
+
+            if opt.qat:
+                if epoch > 3:
+                    # Freeze quantizer parameters
+                    model.apply(torch.quantization.disable_observer)
+                if epoch > 2:
+                    # Freeze batch norm mean and variance estimates
+                    model.apply(torch.nn.intrinsic.qat.freeze_bn_stats)
+
 
             # end batch ------------------------------------------------------------------------------------------------
         # end epoch ----------------------------------------------------------------------------------------------------
@@ -501,7 +542,7 @@ def train(hyp, opt, device, tb_writer=None):
                 ckpt = {'epoch': epoch,
                         'best_fitness': best_fitness,
                         'training_results': results_file.read_text(),
-                        'model': deepcopy(model.module if is_parallel(model) else model).half(),
+                        'model': deepcopy(model.module if is_parallel(model) else model).half().float().state_dict(),
                         'ema': deepcopy(ema.ema).half(),
                         'updates': ema.updates,
                         'optimizer': optimizer.state_dict(),
@@ -612,6 +653,7 @@ if __name__ == '__main__':
     parser.add_argument('--close-mosaic', type=int, default=0, help='stop mosaic augmentation and distillation')
     parser.add_argument('--close-data-generation', type=int, default=300, help='stop mosaic augmentation and distillation')
     parser.add_argument('--load-head-weight', action='store_true', help='Load head weights as well, when using pretrained model')
+    parser.add_argument('--qat', action='store_true', help='Quantization-Aware-Training')
     opt = parser.parse_args()
 
     device = opt.device
