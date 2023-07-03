@@ -502,12 +502,21 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 for j, x_line in enumerate(x):
                     for id_index, v_id in enumerate(valid_idx):
                         if int(x_line[0]) == v_id:
-                            new_x.append(np.array([id_index, x_line[1], x_line[2], x_line[3], x_line[4]]))
+                            new_x.append(np.array([id_index, x_line[1].copy(), x_line[2].copy(), x_line[3].copy(), x_line[4].copy()]))
                             if len(seg) > j:
                                 new_seg.append(seg[j])
+                                
+                            else:
+                                new_seg.append(np.array([
+                                    [x_line[1]-x_line[3], x_line[2]-x_line[4]], 
+                                    [x_line[1]+x_line[3], x_line[2]-x_line[4]],  
+                                    [x_line[1]+x_line[3], x_line[2]+x_line[4]],
+                                    [x_line[1]-x_line[3], x_line[2]+x_line[4]]
+                                    ]))
                 
                 new_labels.append(np.array(new_x))
                 new_segments.append(np.array(new_seg))
+                    
             self.labels = new_labels
             self.segments = new_segments
             
@@ -847,7 +856,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     sample_masks += sample_masks_
                     if len(sample_labels) == 0:
                         break
-                labels = pastein(img, labels, sample_labels, sample_images, sample_masks)
+                img, labels = pastein(img, labels, sample_labels, sample_images, sample_masks)
 
             if hyp is not None and random.random() < hyp.get('dark_paste_in', 0):
                 sample_images, sample_masks = [], []
@@ -953,8 +962,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
                             semi_x = random.randint(50, 80)
                             semi_y = random.randint(80, 110)
-                            end_x = random.randint(144, 180)
-                            end_y = random.randint(160, 192)
+                            end_x = random.randint(112, 180)
+                            end_y = random.randint(128, 192)
                             seatbelt_img = np.zeros([192, 192, 4])
                             if random.random() < 0.5:
                                 seatbelt_img = cv2.line(seatbelt_img, [0, 0], [semi_x, semi_y], 
@@ -966,6 +975,16 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             seatbelt_img = cv2.line(seatbelt_img, [semi_x, semi_y], [end_x, end_y], 
                                     (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA)
                         seatbelt_img = random_wave(seatbelt_img)
+
+                        #obstacle
+                        if random.random() < hyp.get('obstacle', 0):
+                            obstacle_mask = np.zeros([seatbelt_img.shape[0], seatbelt_img.shape[1]])
+                            mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
+                            obstacle_thickness = int((mosaic_patch_size/8) + random.random()*(mosaic_patch_size/8))
+                            obstacle_mask = cv2.line(obstacle_mask, [random.randint(int(seatbelt_img.shape[1]/2), seatbelt_img.shape[1]), random.randint(0, int(seatbelt_img.shape[0]/2))], 
+                                    [random.randint(0, int(seatbelt_img.shape[1]/2)), random.randint(int(seatbelt_img.shape[0]/2), seatbelt_img.shape[0])], 
+                                    (1), obstacle_thickness, lineType=cv2.LINE_AA) 
+                            seatbelt_img[obstacle_mask==1, :] = 0
 
                         face_label = labels[0]
                         if int(face_label[4]) < img.shape[0]*0.8:
@@ -1061,7 +1080,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                 valid_idx+=1
                         else:
                             valid_idx+=1
-                    
+
                     for idx, ciga_label in enumerate(labels[is_valid_ciga]) :
                         min_ciga_size = 16
                         if min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2]) > min_ciga_size and random.random() < 0.5:
@@ -1448,8 +1467,8 @@ def load_mosaic(self, hyp, index):
                             thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
                             semi_x = random.randint(50, 80)
                             semi_y = random.randint(80, 110)
-                            end_x = random.randint(144, 180)
-                            end_y = random.randint(160, 192)
+                            end_x = random.randint(112, 180)
+                            end_y = random.randint(128, 192)
                             seatbelt_img = np.zeros([192, 192, 4])
                             if random.random() < 0.5:
                                 seatbelt_img = cv2.line(seatbelt_img, [0, 0], [semi_x, semi_y], 
@@ -1461,6 +1480,17 @@ def load_mosaic(self, hyp, index):
                             seatbelt_img = cv2.line(seatbelt_img, [semi_x, semi_y], [end_x, end_y], 
                                     (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA)
                         seatbelt_img = random_wave(seatbelt_img)
+
+                        #obstacle
+                        if random.random() < hyp.get('obstacle', 0):
+                            obstacle_mask = np.zeros([seatbelt_img.shape[0], seatbelt_img.shape[1]])
+                            mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
+                            obstacle_thickness = int((mosaic_patch_size/8) + random.random()*(mosaic_patch_size/8))
+                            obstacle_mask = cv2.line(obstacle_mask, [random.randint(int(seatbelt_img.shape[1]/2), seatbelt_img.shape[1]), random.randint(0, int(seatbelt_img.shape[0]/2))], 
+                                    [random.randint(0, int(seatbelt_img.shape[1]/2)), random.randint(int(seatbelt_img.shape[0]/2), seatbelt_img.shape[0])], 
+                                    (1), obstacle_thickness, lineType=cv2.LINE_AA) 
+                            seatbelt_img[obstacle_mask==1, :] = 0
+
 
                         face_label = labels[0]
                         if int(face_label[4]) < img.shape[0]*0.8:
@@ -1641,8 +1671,8 @@ def load_mosaic9(self, hyp, index):
                             thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
                             semi_x = random.randint(50, 80)
                             semi_y = random.randint(80, 110)
-                            end_x = random.randint(144, 180)
-                            end_y = random.randint(160, 192)
+                            end_x = random.randint(112, 180)
+                            end_y = random.randint(128, 192)
                             seatbelt_img = np.zeros([192, 192, 4])
                             if random.random() < 0.5:
                                 seatbelt_img = cv2.line(seatbelt_img, [0, 0], [semi_x, semi_y], 
@@ -1654,6 +1684,16 @@ def load_mosaic9(self, hyp, index):
                             seatbelt_img = cv2.line(seatbelt_img, [semi_x, semi_y], [end_x, end_y], 
                                     (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA)
                         seatbelt_img = random_wave(seatbelt_img)
+
+                        #obstacle
+                        if random.random() < hyp.get('obstacle', 0):
+                            obstacle_mask = np.zeros([seatbelt_img.shape[0], seatbelt_img.shape[1]])
+                            mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
+                            obstacle_thickness = int((mosaic_patch_size/8) + random.random()*(mosaic_patch_size/8))
+                            obstacle_mask = cv2.line(obstacle_mask, [random.randint(int(seatbelt_img.shape[1]/2), seatbelt_img.shape[1]), random.randint(0, int(seatbelt_img.shape[0]/2))], 
+                                    [random.randint(0, int(seatbelt_img.shape[1]/2)), random.randint(int(seatbelt_img.shape[0]/2), seatbelt_img.shape[0])], 
+                                    (1), obstacle_thickness, lineType=cv2.LINE_AA) 
+                            seatbelt_img[obstacle_mask==1, :] = 0
 
                         face_label = labels[0]
                         if int(face_label[4]) < img.shape[0]*0.8:
@@ -1996,7 +2036,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     # Transform label coordinates
     n = len(targets)
     if n:
-        use_segments = any(x.any() for x in segments)
+        use_segments = False#any(x.any() for x in segments)
         new = np.zeros((n, 4))
         if use_segments:  # warp segments
             segments = resample_segments(segments)  # upsample
@@ -2180,7 +2220,7 @@ def pastein(image, labels, sample_labels, sample_images, sample_masks):
                               
                     image[ymin:ymin+r_h, xmin:xmin+r_w] = temp_crop
 
-    return labels
+    return image, labels
 
 
 def dark_pastein(image, labels, sample_images, sample_masks):
