@@ -1209,7 +1209,7 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
                  Ghost, GhostCSPA, GhostCSPB, GhostCSPC,
                  SwinTransformerBlock, STCSPA, STCSPB, STCSPC,
                  SwinTransformer2Block, ST2CSPA, ST2CSPB, ST2CSPC,
-                 conv_bn_relu_maxpool, Shuffle_Block, DWConvblock]:
+                 conv_bn_relu_maxpool, Shuffle_Block, DWConvblock, Hswish, SELayer, mobilev3_bneck]:
             c1, c2 = ch[f], args[0]
             if c2 != no:  # if not output
                 c2 = make_divisible(c2 * gw, 8)
