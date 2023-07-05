@@ -955,6 +955,13 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             seatbelt_img = cv2.imread(os.path.join(hyp.get('fakeseatbelt3', [None, 0])[0], seatbelt_filename), cv2.IMREAD_UNCHANGED)                            
                             end_x = seatbelt_img.shape[1]
                             end_y = seatbelt_img.shape[0]
+                            if seatbelt_img.shape[0] > 256:
+                                if random.random() < hyp.get('obstacle', 0):
+                                    remove_top_y = random.randint(20, 60)
+                                    seatbelt_img[:int(remove_top_y), : , :] = 0
+                                if random.random() < hyp.get('obstacle', 0):
+                                    remove_bottom_y = random.randint(30, 100)
+                                    seatbelt_img[int(seatbelt_img.shape[0]-remove_bottom_y): , : , :] = 0
                         else:
                             color_element = random.randint(16, 100)
                             alpha_element = random.randint(50, 200)
@@ -1460,6 +1467,13 @@ def load_mosaic(self, hyp, index):
                             seatbelt_img = cv2.imread(os.path.join(hyp.get('fakeseatbelt3', [None, 0])[0], seatbelt_filename), cv2.IMREAD_UNCHANGED)                            
                             end_x = seatbelt_img.shape[1]
                             end_y = seatbelt_img.shape[0]
+                            if seatbelt_img.shape[0] > 256:
+                                if random.random() < hyp.get('obstacle', 0):
+                                    remove_top_y = random.randint(20, 60)
+                                    seatbelt_img[:int(remove_top_y), : , :] = 0
+                                if random.random() < hyp.get('obstacle', 0):
+                                    remove_bottom_y = random.randint(30, 100)
+                                    seatbelt_img[int(seatbelt_img.shape[0]-remove_bottom_y): , : , :] = 0
                         else:
                             color_element = random.randint(16, 100)
                             alpha_element = random.randint(50, 200)
@@ -1664,6 +1678,13 @@ def load_mosaic9(self, hyp, index):
                             seatbelt_img = cv2.imread(os.path.join(hyp.get('fakeseatbelt3', [None, 0])[0], seatbelt_filename), cv2.IMREAD_UNCHANGED)                            
                             end_x = seatbelt_img.shape[1]
                             end_y = seatbelt_img.shape[0]
+                            if seatbelt_img.shape[0] > 256:
+                                if random.random() < hyp.get('obstacle', 0):
+                                    remove_top_y = random.randint(20, 60)
+                                    seatbelt_img[:int(remove_top_y), : , :] = 0
+                                if random.random() < hyp.get('obstacle', 0):
+                                    remove_bottom_y = random.randint(30, 100)
+                                    seatbelt_img[int(seatbelt_img.shape[0]-remove_bottom_y): , : , :] = 0
                         else:
                             color_element = random.randint(16, 100)
                             alpha_element = random.randint(50, 200)
