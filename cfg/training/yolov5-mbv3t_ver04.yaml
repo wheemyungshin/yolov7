@@ -27,6 +27,7 @@ backbone:
    [-1, 1, mobilev3_bneck, [96, 576, 5, 1, 1, 1]],  # 11-p5/32
   ]
 
+
 # v5Lite-s head
 head:
   [[-1, 1, Conv, [256, 1, 1]],
