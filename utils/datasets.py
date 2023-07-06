@@ -1,4 +1,5 @@
 # Dataset utils and dataloaders
+
 import glob
 import logging
 import math
@@ -971,16 +972,23 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             end_x = random.randint(112, 180)
                             end_y = random.randint(128, 192)
                             seatbelt_img = np.zeros([192, 192, 4])
+                            seatbelt_mask = np.zeros([192, 192, 1])
                             if random.random() < 0.5:
-                                seatbelt_img = cv2.line(seatbelt_img, [0, 0], [semi_x, semi_y], 
-                                    (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA) 
+                                seatbelt_mask = cv2.line(seatbelt_mask, [0, 0], [semi_x, semi_y], 
+                                    1, thickness, lineType=cv2.LINE_AA) 
                             else:
-                                seatbelt_img = cv2.line(seatbelt_img, [random.randint(20, 45), random.randint(30, 70)], [semi_x, semi_y], 
-                                    (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA) 
+                                seatbelt_mask = cv2.line(seatbelt_mask, [random.randint(20, 45), random.randint(30, 70)], [semi_x, semi_y], 
+                                    1, thickness, lineType=cv2.LINE_AA) 
 
-                            seatbelt_img = cv2.line(seatbelt_img, [semi_x, semi_y], [end_x, end_y], 
-                                    (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA)
-                        seatbelt_img = random_wave(seatbelt_img)
+                            seatbelt_mask = cv2.line(seatbelt_mask, [semi_x, semi_y], [end_x, end_y], 
+                                    1 , thickness, lineType=cv2.LINE_AA)
+                        seatbelt_mask = random_wave(seatbelt_mask)
+                    
+                        seatbelt_img[seatbelt_mask][0] = color_element*b*3
+                        seatbelt_img[seatbelt_mask][1] = color_element*g*3
+                        seatbelt_img[seatbelt_mask][2] = color_element*r*3
+                        seatbelt_img[seatbelt_mask][3] = alpha_element
+
 
                         #obstacle
                         if random.random() < hyp.get('obstacle', 0):
@@ -1483,16 +1491,22 @@ def load_mosaic(self, hyp, index):
                             end_x = random.randint(112, 180)
                             end_y = random.randint(128, 192)
                             seatbelt_img = np.zeros([192, 192, 4])
+                            seatbelt_mask = np.zeros([192, 192, 1])
                             if random.random() < 0.5:
-                                seatbelt_img = cv2.line(seatbelt_img, [0, 0], [semi_x, semi_y], 
-                                    (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA) 
+                                seatbelt_mask = cv2.line(seatbelt_mask, [0, 0], [semi_x, semi_y], 
+                                    1, thickness, lineType=cv2.LINE_AA) 
                             else:
-                                seatbelt_img = cv2.line(seatbelt_img, [random.randint(20, 45), random.randint(30, 70)], [semi_x, semi_y], 
-                                    (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA) 
+                                seatbelt_mask = cv2.line(seatbelt_mask, [random.randint(20, 45), random.randint(30, 70)], [semi_x, semi_y], 
+                                    1, thickness, lineType=cv2.LINE_AA) 
 
-                            seatbelt_img = cv2.line(seatbelt_img, [semi_x, semi_y], [end_x, end_y], 
-                                    (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA)
-                        seatbelt_img = random_wave(seatbelt_img)
+                            seatbelt_mask = cv2.line(seatbelt_mask, [semi_x, semi_y], [end_x, end_y], 
+                                    1 , thickness, lineType=cv2.LINE_AA)
+                        seatbelt_mask = random_wave(seatbelt_mask)
+                    
+                        seatbelt_img[seatbelt_mask][0] = color_element*b*3
+                        seatbelt_img[seatbelt_mask][1] = color_element*g*3
+                        seatbelt_img[seatbelt_mask][2] = color_element*r*3
+                        seatbelt_img[seatbelt_mask][3] = alpha_element
 
                         #obstacle
                         if random.random() < hyp.get('obstacle', 0):
@@ -1694,16 +1708,22 @@ def load_mosaic9(self, hyp, index):
                             end_x = random.randint(112, 180)
                             end_y = random.randint(128, 192)
                             seatbelt_img = np.zeros([192, 192, 4])
+                            seatbelt_mask = np.zeros([192, 192, 1])
                             if random.random() < 0.5:
-                                seatbelt_img = cv2.line(seatbelt_img, [0, 0], [semi_x, semi_y], 
-                                    (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA) 
+                                seatbelt_mask = cv2.line(seatbelt_mask, [0, 0], [semi_x, semi_y], 
+                                    1, thickness, lineType=cv2.LINE_AA) 
                             else:
-                                seatbelt_img = cv2.line(seatbelt_img, [random.randint(20, 45), random.randint(30, 70)], [semi_x, semi_y], 
-                                    (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA) 
+                                seatbelt_mask = cv2.line(seatbelt_mask, [random.randint(20, 45), random.randint(30, 70)], [semi_x, semi_y], 
+                                    1, thickness, lineType=cv2.LINE_AA) 
 
-                            seatbelt_img = cv2.line(seatbelt_img, [semi_x, semi_y], [end_x, end_y], 
-                                    (color_element*b*3, color_element*g*3, color_element*r*3, alpha_element), thickness, lineType=cv2.LINE_AA)
-                        seatbelt_img = random_wave(seatbelt_img)
+                            seatbelt_mask = cv2.line(seatbelt_mask, [semi_x, semi_y], [end_x, end_y], 
+                                    1 , thickness, lineType=cv2.LINE_AA)
+                        seatbelt_mask = random_wave(seatbelt_mask)
+                    
+                        seatbelt_img[seatbelt_mask][0] = color_element*b*3
+                        seatbelt_img[seatbelt_mask][1] = color_element*g*3
+                        seatbelt_img[seatbelt_mask][2] = color_element*r*3
+                        seatbelt_img[seatbelt_mask][3] = alpha_element
 
                         #obstacle
                         if random.random() < hyp.get('obstacle', 0):
