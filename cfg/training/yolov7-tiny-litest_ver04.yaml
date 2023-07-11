@@ -1,0 +1,52 @@
+# parameters
+nc: 80  # number of classes
+depth_multiple: 1.0  # model depth multiple
+width_multiple: 1.0  # layer channel multiple
+
+# anchors
+anchors:
+  - [10,13, 16,30, 33,23]  # P3/8
+  - [30,61, 62,45, 59,119]  # P4/16
+  - [116,90, 156,198, 373,326]  # P5/32
+
+# yolov7-tiny backbone
+backbone:
+  # [from, number, module, args] c2, k=1, s=1, p=None, g=1, act=True
+  [[-1, 1, conv_bn_relu_maxpool, [ 32 ] ],  # 0-P1/2     
+   [-1, 1, Conv, [32, 3, 1, None, 1, nn.LeakyReLU(0.1)]],
+   [-1, 1, Conv, [64, 1, 1, None, 1, nn.LeakyReLU(0.1)]],  # 2 
+   [-1, 1, MP, []],  # 3
+   [-1, 1, Conv, [64, 3, 1, None, 1, nn.LeakyReLU(0.1)]],
+   [-1, 1, Conv, [128, 1, 1, None, 1, nn.LeakyReLU(0.1)]],  # 5   
+   [-1, 1, MP, []],  # 6
+   [-1, 1, Conv, [128, 3, 1, None, 1, nn.LeakyReLU(0.1)]],
+   [-1, 1, Conv, [256, 1, 1, None, 1, nn.LeakyReLU(0.1)]],  # 8   
+   [-1, 1, MP, []],  # 9
+   [-1, 1, Conv, [256, 3, 1, None, 1, nn.LeakyReLU(0.1)]],
+  ]
+
+# yolov7-tiny head
+head:
+  [[-1, 1, Conv, [256, 1, 1]], # 11
+   [-1, 1, nn.Upsample, [None, 2, 'nearest']],
+   [[-1, 8], 1, Concat, [1]],  # cat backbone P4
+   [ -1, 1, DWConvblock, [256, 3, 1] ], # 14
+
+   [-1, 1, Conv, [128, 1, 1]], # 15
+   [-1, 1, nn.Upsample, [None, 2, 'nearest']],
+   [[-1, 5], 1, Concat, [1]],  # cat backbone P3
+   [ -1, 1, DWConvblock, [128, 3, 1] ],  # 18 (P3/8-small)
+
+   [-1, 1, Conv, [128, 3, 2]],
+   [[-1, 15], 1, Concat, [1]],  # cat head P4
+   [ -1, 1, DWConvblock, [256, 3, 1] ], # 21 (P4/16-medium)
+
+   [-1, 1, Conv, [256, 3, 2]],
+   [[-1, 11], 1, Concat, [1]],  # cat head P5
+   [ -1, 1, DWConvblock, [512, 3, 1] ],  # 24 (P5/32-large)
+
+   [18, 1, MP, []], #25
+   [21, 1, MP, []], #26
+   [24, 1, MP, []], #27
+   [[25, 26, 27], 1, Detect, [nc, anchors]],  # Detect(P3, P4, P5)
+  ]
