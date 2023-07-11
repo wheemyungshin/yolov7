@@ -89,11 +89,11 @@ def train(hyp, opt, device, tb_writer=None):
             attempt_download(weights)  # download if not found locally
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
         if type(ckpt['model']) is Model:
-            model = Model(ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+            model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
             exclude = ['anchor'] if not (opt.load_head_weight) and not opt.resume else []  # exclude keys
             state_dict = ckpt['model'].float().state_dict()  # to FP32
         elif type(ckpt['model']) is collections.OrderedDict:
-            model = Model(opt.cfg or ckpt['model']['yaml'], ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+            model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
             exclude = ['anchor'] if not (opt.load_head_weight) and not opt.resume else []  # exclude keys
             state_dict = ckpt['model']  # to FP32
         else:
