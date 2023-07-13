@@ -53,7 +53,7 @@ def gaussian_illumination(img):
     # Generate a random Gaussian gradient mask for the illumination change
     rows, cols = img.shape[:2]
     kernel_size = np.random.randint((min(rows, cols)//3)*2, min(rows, cols))
-    kernel = cv2.getGaussianKernel(192, np.random.randint(40, 50))
+    kernel = cv2.getGaussianKernel(192, np.random.randint(32, 40))
     kernel = cv2.resize(kernel, dsize=(kernel_size, kernel_size), interpolation=cv2.INTER_CUBIC)
     mask = kernel @ kernel.T
 
@@ -66,7 +66,7 @@ def gaussian_illumination(img):
 
     # Scale and shift the values of the mask to control the range of the illumination change
     if random.random() < 0.5:
-        pad_mask = (pad_mask - pad_mask.min()) / (pad_mask.max() - pad_mask.min()) * np.random.randint(220, 250)
+        pad_mask = (pad_mask - pad_mask.min()) / (pad_mask.max() - pad_mask.min()) * np.random.randint(200, 240)
     else:
         pad_mask = (pad_mask - pad_mask.min()) / (pad_mask.max() - pad_mask.min()) * np.random.randint(0, 50)
 
@@ -1000,8 +1000,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                     remove_bottom_y = random.randint(30, 100)
                                     seatbelt_img[int(seatbelt_img.shape[0]-remove_bottom_y): , : , :] = 0
                         else:
-                            color_element = random.randint(16, 128)
-                            alpha_element = random.randint(40, 220)
+                            color_element = random.randint(16, 100)
+                            alpha_element = random.randint(50, 200)
                             mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
                             thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
                             semi_x = random.randint(50, 80)
@@ -1026,6 +1026,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             seatbelt_img[:, :, 1] = color_element*g*3
                             seatbelt_img[:, :, 2] = color_element*r*3
                             seatbelt_img[:, :, 3] = alpha_element
+                            seatbelt_img[: ,:, :3] = gaussian_illumination(seatbelt_img[: ,:, :3])
 
                             seatbelt_img = np.where(seatbelt_mask, seatbelt_img, [0, 0, 0, 0])
                         
@@ -1038,8 +1039,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                     [random.randint(0, int(seatbelt_img.shape[1]/2)), random.randint(int(seatbelt_img.shape[0]/2), seatbelt_img.shape[0])], 
                                     (1), obstacle_thickness, lineType=cv2.LINE_AA) 
                             seatbelt_img[obstacle_mask==1, :] = 0
-
-                        seatbelt_img[: ,:, :3] = gaussian_illumination(seatbelt_img[: ,:, :3])
 
                         face_label = labels[0]
                         if int(face_label[4]) < img.shape[0]*0.8:
@@ -1523,8 +1522,8 @@ def load_mosaic(self, hyp, index):
                                     remove_bottom_y = random.randint(30, 100)
                                     seatbelt_img[int(seatbelt_img.shape[0]-remove_bottom_y): , : , :] = 0
                         else:
-                            color_element = random.randint(16, 128)
-                            alpha_element = random.randint(40, 220)
+                            color_element = random.randint(16, 100)
+                            alpha_element = random.randint(50, 200)
                             mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
                             thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
                             semi_x = random.randint(50, 80)
@@ -1549,8 +1548,10 @@ def load_mosaic(self, hyp, index):
                             seatbelt_img[:, :, 1] = color_element*g*3
                             seatbelt_img[:, :, 2] = color_element*r*3
                             seatbelt_img[:, :, 3] = alpha_element
+                            seatbelt_img[: ,:, :3] = gaussian_illumination(seatbelt_img[: ,:, :3])
 
-                            seatbelt_img = np.where(seatbelt_mask, seatbelt_img, [0, 0, 0, 0])                        
+                            seatbelt_img = np.where(seatbelt_mask, seatbelt_img, [0, 0, 0, 0])
+                        
 
                         #obstacle
                         if random.random() < hyp.get('obstacle', 0):
@@ -1561,8 +1562,7 @@ def load_mosaic(self, hyp, index):
                                     [random.randint(0, int(seatbelt_img.shape[1]/2)), random.randint(int(seatbelt_img.shape[0]/2), seatbelt_img.shape[0])], 
                                     (1), obstacle_thickness, lineType=cv2.LINE_AA) 
                             seatbelt_img[obstacle_mask==1, :] = 0
-                            
-                        seatbelt_img[: ,:, :3] = gaussian_illumination(seatbelt_img[: ,:, :3])
+
 
                         face_label = labels[0]
                         if int(face_label[4]) < img.shape[0]*0.8:
@@ -1744,8 +1744,8 @@ def load_mosaic9(self, hyp, index):
                                     remove_bottom_y = random.randint(30, 100)
                                     seatbelt_img[int(seatbelt_img.shape[0]-remove_bottom_y): , : , :] = 0
                         else:
-                            color_element = random.randint(16, 128)
-                            alpha_element = random.randint(40, 220)
+                            color_element = random.randint(16, 100)
+                            alpha_element = random.randint(50, 200)
                             mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
                             thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
                             semi_x = random.randint(50, 80)
@@ -1770,8 +1770,10 @@ def load_mosaic9(self, hyp, index):
                             seatbelt_img[:, :, 1] = color_element*g*3
                             seatbelt_img[:, :, 2] = color_element*r*3
                             seatbelt_img[:, :, 3] = alpha_element
+                            seatbelt_img[: ,:, :3] = gaussian_illumination(seatbelt_img[: ,:, :3])
 
-                            seatbelt_img = np.where(seatbelt_mask, seatbelt_img, [0, 0, 0, 0])                        
+                            seatbelt_img = np.where(seatbelt_mask, seatbelt_img, [0, 0, 0, 0])
+                        
 
                         #obstacle
                         if random.random() < hyp.get('obstacle', 0):
@@ -1782,8 +1784,6 @@ def load_mosaic9(self, hyp, index):
                                     [random.randint(0, int(seatbelt_img.shape[1]/2)), random.randint(int(seatbelt_img.shape[0]/2), seatbelt_img.shape[0])], 
                                     (1), obstacle_thickness, lineType=cv2.LINE_AA) 
                             seatbelt_img[obstacle_mask==1, :] = 0
-                        
-                        seatbelt_img[: ,:, :3] = gaussian_illumination(seatbelt_img[: ,:, :3])
 
                         face_label = labels[0]
                         if int(face_label[4]) < img.shape[0]*0.8:
