@@ -88,13 +88,11 @@ def train(hyp, opt, device, tb_writer=None):
         with torch_distributed_zero_first(rank):
             attempt_download(weights)  # download if not found locally
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
+        model = Model(opt.cfg or ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+        exclude = ['anchor'] if not (opt.load_head_weight) and not opt.resume else []  # exclude keys
         if type(ckpt['model']) is Model:
-            model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
-            exclude = ['anchor'] if not (opt.load_head_weight) and not opt.resume else []  # exclude keys
             state_dict = ckpt['model'].float().state_dict()  # to FP32
         elif type(ckpt['model']) is collections.OrderedDict:
-            model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
-            exclude = ['anchor'] if not (opt.load_head_weight) and not opt.resume else []  # exclude keys
             state_dict = ckpt['model']  # to FP32
         else:
             assert (type(ckpt['model']) is Model or type(ckpt['model']) is collections.OrderedDict), "Invalid model types to load"
@@ -669,7 +667,6 @@ if __name__ == '__main__':
     #    check_requirements()
 
     # Resume
-    opt_cfg = opt.cfg
     batch_size = opt.batch_size
     wandb_run = check_wandb_resume(opt)
     if opt.resume and not wandb_run:  # resume an interrupted run
@@ -687,8 +684,6 @@ if __name__ == '__main__':
         opt.img_size.extend([opt.img_size[-1]] * (2 - len(opt.img_size)))  # extend to 2 sizes (train, test)
         opt.name = 'evolve' if opt.evolve else opt.name
         opt.save_dir = increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok | opt.evolve)  # increment run
-
-    opt.cfg = opt_cfg
 
     # DDP mode
     opt.batch_size = batch_size
