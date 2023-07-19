@@ -471,7 +471,7 @@ def train(hyp, opt, device, tb_writer=None):
                 pbar.set_description(s)
 
                 # Plot
-                if plots and ni < 10:
+                if plots and ni < 30:
                     f = save_dir / f'train_batch{ni}.jpg'  # filename
                     '''
                     print(masks)

@@ -127,7 +127,7 @@ def test(data,
             t0 += time_synchronized() - t
 
             # Compute loss
-            if compute_loss:
+            if compute_loss and not opt_seg:
                 loss += compute_loss([x.float() for x in train_out], targets)[1][:3]  # box, obj, cls
 
             # Run NMS
