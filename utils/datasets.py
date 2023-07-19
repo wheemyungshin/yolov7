@@ -2144,21 +2144,24 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     # Transform label coordinates
     n = len(targets)
     if n:
-        '''
-        use_segments = False#any(x.any() for x in segments)
-        new = np.zeros((n, 4))
-        if use_segments:  # warp segments
-            segments = resample_segments(segments)  # upsample
-            for i, segment in enumerate(segments):
-                xy = np.ones((len(segment), 3))
-                xy[:, :2] = segment
-                xy = xy @ M.T  # transform
-                xy = xy[:, :2] / xy[:, 2:3] if perspective else xy[:, :2]  # perspective rescale or affine
+        #use_segments = any(x.any() for x in segments)
+        new = np.zeros((n, 4)) 
+        new_seg = []
 
-                # clip
-                new[i] = segment2box(xy, width, height)
+        #if use_segments:  # warp segments
+        segments = resample_segments(segments)  # upsample
+        for i, segment in enumerate(segments):
+            #segmentation transform
+            xy_seg = np.ones((len(segment), 3))
+            xy_seg[:, :2] = segment
+            xy_seg = xy_seg @ M.T  # transform
+            xy_seg = xy_seg[:, :2] / xy_seg[:, 2:3] if perspective else xy_seg[:, :2]  # perspective rescale or affine
+            # clip
+            #new[i] = segment2box(xy, width, height)
+            new_seg.append(xy_seg)
 
-        else:  # warp boxes
+            #box transform
+            #else:  # warp boxes
             xy = np.ones((n * 4, 3))
             xy[:, :2] = targets[:, [1, 2, 3, 4, 1, 4, 3, 2]].reshape(n * 4, 2)  # x1y1, x2y2, x1y2, x2y1
             xy = xy @ M.T  # transform
@@ -2172,20 +2175,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             # clip
             new[:, [0, 2]] = new[:, [0, 2]].clip(0, width)
             new[:, [1, 3]] = new[:, [1, 3]].clip(0, height)
-        '''
-        new = np.zeros((n, 4)) 
-        new_seg = []
-        segments = resample_segments(segments)  # upsample
-        for i, segment in enumerate(segments):
-            xy = np.ones((len(segment), 3))
-            xy[:, :2] = segment
-            xy = xy @ M.T  # transform
-            xy = xy[:, :2] / xy[:, 2:3] if perspective else xy[:, :2]  # perspective rescale or affine
-
-            # clip
-            new[i] = segment2box(xy, width, height)
-            new_seg.append(xy)
-
+            
         # filter candidates
         i = box_candidates(box1=targets[:, 1:5].T * s, box2=new.T, area_thr=0.01)# if use_segments else 0.10)
         targets = targets[i]

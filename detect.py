@@ -156,9 +156,10 @@ def detect(save_img=False):
                         s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
                     # Mask plotting ----------------------------------------------------------------------------------------
-                    mcolors = [colors[int(cls)] for cls in det[:, 5]]
-                    im_masks = plot_masks(img[i], masks, mcolors)  # image with masks shape(imh,imw,3)
-                    im0 = scale_masks(img.shape[2:], im_masks, im0.shape)  # scale to original h, w
+                    if opt.seg:
+                        mcolors = [colors[int(cls)] for cls in det[:, 5]]
+                        im_masks = plot_masks(img[i], masks, mcolors)  # image with masks shape(imh,imw,3)
+                        im0 = scale_masks(img.shape[2:], im_masks, im0.shape)  # scale to original h, w
                     # Mask plotting ----------------------------------------------------------------------------------------
                     
                     # Write results
