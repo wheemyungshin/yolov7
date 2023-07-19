@@ -545,10 +545,10 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                 
                             else:
                                 new_seg.append(np.array([
-                                    [x_line[1]-x_line[3], x_line[2]-x_line[4]], 
-                                    [x_line[1]+x_line[3], x_line[2]-x_line[4]],  
-                                    [x_line[1]+x_line[3], x_line[2]+x_line[4]],
-                                    [x_line[1]-x_line[3], x_line[2]+x_line[4]]
+                                    [x_line[1]-x_line[3]/2, x_line[2]-x_line[4]/2], 
+                                    [x_line[1]+x_line[3]/2, x_line[2]-x_line[4]/2],  
+                                    [x_line[1]+x_line[3]/2, x_line[2]+x_line[4]/2],
+                                    [x_line[1]-x_line[3]/2, x_line[2]+x_line[4]/2]
                                     ]))
                 
                 new_labels.append(np.array(new_x))
@@ -618,7 +618,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     shapes[i] = [1, 1 / mini]
 
             self.batch_shapes = np.ceil(np.array(shapes) * img_size / stride + pad).astype(np.int) * stride
-
+        
         # Cache images into memory for faster training (WARNING: large datasets may exceed system RAM)
         self.imgs = [None] * n
         if cache_images:
@@ -665,6 +665,13 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             classes = np.array([x[0] for x in l], dtype=np.float32)
                             segments = [np.array(x[1:], dtype=np.float32).reshape(-1, 2) for x in l]  # (cls, xy1...)
                             l = np.concatenate((classes.reshape(-1, 1), segments2boxes(segments)), 1)  # (cls, xywh)
+                        else:
+                            segments = [np.array([
+                                    [float(x_line[1])-float(x_line[3])/2, float(x_line[2])-float(x_line[4])/2], 
+                                    [float(x_line[1])+float(x_line[3])/2, float(x_line[2])-float(x_line[4])/2],  
+                                    [float(x_line[1])+float(x_line[3])/2, float(x_line[2])+float(x_line[4])/2],
+                                    [float(x_line[1])-float(x_line[3])/2, float(x_line[2])+float(x_line[4])/2]
+                                    ]) for x_line in l]
                         l = np.array(l, dtype=np.float32)
                     if len(l):
                         assert l.shape[1] == 5, 'labels require 5 columns each'
@@ -767,6 +774,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             segments = self.segments[index].copy()
 
             labels = self.labels[index].copy()
+            
             if labels.size:  # normalized xywh to pixel xyxy format
                 labels[:, 1:] = xywhn2xyxy(labels[:, 1:], ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1])
                 if self.pose_data is not None:
@@ -866,7 +874,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     img[ciga_img_position_y:ciga_img_position_y+ciga_img.shape[0], ciga_img_position_x:ciga_img_position_x+ciga_img.shape[1]] = blended_img
 
                     labels = np.append(labels, [[hyp.get('render_ciga', None)[1], ciga_img_position_x, ciga_img_position_y, ciga_img_position_x+ciga_img.shape[1], ciga_img_position_y+ciga_img.shape[0]]], axis=0)
-                    segments = np.append(segments, [[hyp.get('render_ciga', None)[1], ciga_img_position_x, ciga_img_position_y, ciga_img_position_x+ciga_img.shape[1], ciga_img_position_y+ciga_img.shape[0]]], axis=0)
+                    #segments = np.append(segments, [[hyp.get('render_ciga', None)[1], ciga_img_position_x, ciga_img_position_y, ciga_img_position_x+ciga_img.shape[1], ciga_img_position_y+ciga_img.shape[0]]], axis=0)
 
         if self.augment:
             # Augment imagespace
@@ -1310,7 +1318,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                 img[crop_y1:crop_y2,crop_x1:crop_x2, 2] = (1-random_mask)*img[crop_y1:crop_y2,crop_x1:crop_x2, 2] + random_mask*burn_crop[:,:,2]
                             labels[idx][0] = 0
 
-
         nL = len(labels)  # number of labels
         if nL:
             labels[:, 1:5] = xyxy2xywh(labels[:, 1:5])  # convert xyxy to xywh
@@ -1374,6 +1381,9 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         img, label, path, shapes, segments = zip(*batch)  # transposed
         for i, l in enumerate(label):
             l[:, 0] = i  # add target image index for build_targets()
+        
+            #print(l.shape)
+        #print(len(label))
                    
         return torch.stack(img, 0), torch.cat(label, 0), path, shapes, torch.cat(segments, 0)
 
@@ -1505,11 +1515,15 @@ def load_mosaic(self, hyp, index):
 
         # Labels
         labels, segments = self.labels[index].copy(), self.segments[index].copy()
+
         if self.pose_data is not None:
             poses = self.pose_data[index].copy()
         if labels.size:
+            #print("SEGMENTS: ", segments)
+
             labels[:, 1:] = xywhn2xyxy(labels[:, 1:], w, h, padw, padh)  # normalized xywh to pixel xyxy format
             segments = [xyn2xy(x, w, h, padw, padh) for x in segments]
+    
             if self.pose_data is not None:
                 poses = [pose_xyn2xy(x, w, h, padw, padh) if x.any() is not None else x for x in poses]
 
@@ -2211,7 +2225,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
         #i = valid_pose_box(targets, new_poses, min_points=3, upper_only=True)
         #targets = targets[i]
         poses = new_poses
-
+    
     return img, targets, segments, poses
 
 def valid_pose_box(box, pose, min_points=1, upper_only=False):
