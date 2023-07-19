@@ -103,7 +103,11 @@ def detect(save_img=False):
 
         # Inference
         t1 = time_synchronized()
-        pred = model(img, augment=opt.augment)[0]
+        if opt.seg:
+            pred, out = model(img, augment=opt.augment)
+            proto = out[1]
+        else:
+            pred = model(img, augment=opt.augment)[0]
         t2 = time_synchronized()
 
         # Apply NMS
@@ -113,6 +117,8 @@ def detect(save_img=False):
         # Apply Classifier
         if classify:
             pred = apply_classifier(pred, modelc, img, im0s)
+
+        print(pred.shape)
 
         # Process detections
         for i, det in enumerate(pred):  # detections per image
@@ -268,6 +274,7 @@ if __name__ == '__main__':
     parser.add_argument('--save-json', action='store_true', help='save a cocoapi-compatible JSON results file')
     parser.add_argument('--frame-ratio', default=1, type=int, help='save frame ratio')
     parser.add_argument('--save-frame', action='store_true', help='save each frame of video results')
+    parser.add_argument('--seg', action='store_true', help='Segmentation-Training')
     opt = parser.parse_args()
     print(opt)
     #check_requirements(exclude=('pycocotools', 'thop'))
