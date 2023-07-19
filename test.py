@@ -12,7 +12,7 @@ from tqdm import tqdm
 from models.experimental import attempt_load
 from utils.datasets import create_dataloader
 from utils.general import coco80_to_coco91_class, check_dataset, check_file, check_img_size, check_requirements, \
-    box_iou, non_max_suppression, scale_coords, xyxy2xywh, xywh2xyxy, set_logging, increment_path, colorstr
+    box_iou, non_max_suppression, scale_coords, xyxy2xywh, xywh2xyxy, set_logging, increment_path, colorstr, non_max_suppression_seg
 from utils.metrics import ap_per_class, ConfusionMatrix
 from utils.plots import plot_images, output_to_target, plot_study_txt
 from utils.torch_utils import select_device, time_synchronized, TracedModel
@@ -121,11 +121,8 @@ def test(data,
 
         with torch.no_grad():
             # Run model
-            t = time_synchronized()
+            t = time_synchronized()            
             out, train_out = model(img, augment=augment)  # inference and training outputs
-            print(type(out))
-            print(len(out))
-            print(out.shape)
             t0 += time_synchronized() - t
 
             # Compute loss
@@ -136,13 +133,15 @@ def test(data,
             targets[:, 2:] *= torch.Tensor([width, height, width, height]).to(device)  # to pixels
             lb = [targets[targets[:, 0] == i, 1:] for i in range(nb)] if save_hybrid else []  # for autolabelling
             t = time_synchronized()
-            out = non_max_suppression(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb, multi_label=True)
+            if opt.seg:
+                out = non_max_suppression_seg(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb, multi_label=True, nm=32)
+            else:
+                out = non_max_suppression(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb, multi_label=True)
             t1 += time_synchronized() - t
 
         #print(out)#[torch.size([bboxnum, 6])*32]
         # Statistics per image
         for si, pred in enumerate(out):
-            print(pred.shape)
             labels = targets[targets[:, 0] == si, 1:]            
             #print(labels) # [[  cls,  x,  y,  w,  h], ... ]
             nl = len(labels)
@@ -266,10 +265,16 @@ def test(data,
 
         # Plot images
         if plots and batch_i < 3:
-            f = save_dir / f'test_batch{batch_i}_labels.jpg'  # labels
-            Thread(target=plot_images, args=(img, targets, paths, f, names), daemon=True).start()
-            f = save_dir / f'test_batch{batch_i}_pred.jpg'  # predictions
-            Thread(target=plot_images, args=(img, output_to_target(out), paths, f, names), daemon=True).start()
+            if opt.seg:
+                f = save_dir / f'test_batch{batch_i}_labels.jpg'  # labels
+                Thread(target=plot_images, args=(img, targets, paths, f, masks, names), daemon=True).start()
+                f = save_dir / f'test_batch{batch_i}_pred.jpg'  # predictions
+                Thread(target=plot_images, args=(img, output_to_target(out), paths, f, masks, names), daemon=True).start()
+            else:
+                f = save_dir / f'test_batch{batch_i}_labels.jpg'  # labels
+                Thread(target=plot_images, args=(img, targets, paths, f, None, names), daemon=True).start()
+                f = save_dir / f'test_batch{batch_i}_pred.jpg'  # predictions
+                Thread(target=plot_images, args=(img, output_to_target(out), paths, f, None, names), daemon=True).start()
 
     # Compute statistics
     if opt_size_devision:
@@ -388,6 +393,7 @@ if __name__ == '__main__':
     parser.add_argument('--person-only', action='store_true', help='assume maximum recall as 1.0 in AP calculation')
     parser.add_argument('--xyxy', action='store_true', help='the box label type is xyxy not xywh')
     parser.add_argument('--size-devision', action='store_true', help='show mAP for small, medium and large objects, respectively')
+    parser.add_argument('--seg', action='store_true', help='Segmentation-Training')
     opt = parser.parse_args()
     opt.save_json |= opt.data.endswith('coco.yaml')
     opt.data = check_file(opt.data)  # check file
