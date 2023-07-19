@@ -43,7 +43,8 @@ def test(data,
          is_coco=False,
          v5_metric=False,
          person_only=False,
-         opt_size_devision=False):
+         opt_size_devision=False,
+         opt_seg=False):
     # Initialize/load model and set device
     training = model is not None
     if training:  # called by train.py
@@ -133,7 +134,7 @@ def test(data,
             targets[:, 2:] *= torch.Tensor([width, height, width, height]).to(device)  # to pixels
             lb = [targets[targets[:, 0] == i, 1:] for i in range(nb)] if save_hybrid else []  # for autolabelling
             t = time_synchronized()
-            if opt.seg:
+            if opt_seg:
                 out = non_max_suppression_seg(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb, multi_label=True, nm=32)
             else:
                 out = non_max_suppression(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb, multi_label=True)
@@ -265,7 +266,7 @@ def test(data,
 
         # Plot images
         if plots and batch_i < 3:
-            if opt.seg:
+            if opt_seg:
                 f = save_dir / f'test_batch{batch_i}_labels.jpg'  # labels
                 Thread(target=plot_images, args=(img, targets, paths, f, masks, names), daemon=True).start()
                 f = save_dir / f'test_batch{batch_i}_pred.jpg'  # predictions
@@ -417,7 +418,8 @@ if __name__ == '__main__':
              trace=not opt.no_trace,
              v5_metric=opt.v5_metric,
              person_only=opt.person_only,
-             opt_size_devision=opt.size_devision
+             opt_size_devision=opt.size_devision,
+             opt_seg=opt.seg
              )
 
     elif opt.task == 'speed':  # speed benchmarks
