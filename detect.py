@@ -10,8 +10,8 @@ from numpy import random
 from models.experimental import attempt_load
 from utils.datasets import LoadStreams, LoadImages
 from utils.general import check_img_size, check_requirements, check_imshow, non_max_suppression, apply_classifier, \
-    scale_coords, xyxy2xywh, strip_optimizer, set_logging, increment_path
-from utils.plots import plot_one_box
+    scale_coords, xyxy2xywh, strip_optimizer, set_logging, increment_path, non_max_suppression_seg, process_mask, scale_masks
+from utils.plots import plot_one_box, plot_masks
 from utils.torch_utils import select_device, load_classifier, time_synchronized, TracedModel
 
 import json
@@ -105,20 +105,22 @@ def detect(save_img=False):
         t1 = time_synchronized()
         if opt.seg:
             pred, out = model(img, augment=opt.augment)
+            print(len(pred))
+            print(pred.shape)
             proto = out[1]
+            print(type(proto))
+            print(proto.shape)
         else:
             pred = model(img, augment=opt.augment)[0]
         t2 = time_synchronized()
 
         # Apply NMS
-        pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
+        pred = non_max_suppression_seg(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms, nm=32)
         t3 = time_synchronized()
 
         # Apply Classifier
         if classify:
             pred = apply_classifier(pred, modelc, img, im0s)
-
-        print(pred.shape)
 
         # Process detections
         for i, det in enumerate(pred):  # detections per image
@@ -141,17 +143,26 @@ def detect(save_img=False):
                 gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
                 gn_to = torch.tensor(img.shape)[[3, 2, 3, 2]] 
                 if len(det):
+                    if opt.seg:
+                        masks = process_mask(proto[i], det[:, 6:], det[:, :4], img.shape[2:], upsample=True)
+
                     scores = det[:, 4]
                     # Rescale boxes from img_size to im0 size
                     det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape)#.round()
 
                     # Print results
-                    for c in det[:, -1].unique():
-                        n = (det[:, -1] == c).sum()  # detections per class
+                    for c in det[:, 5].unique():
+                        n = (det[:, 5] == c).sum()  # detections per class
                         s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
+                    # Mask plotting ----------------------------------------------------------------------------------------
+                    mcolors = [colors[int(cls)] for cls in det[:, 5]]
+                    im_masks = plot_masks(img[i], masks, mcolors)  # image with masks shape(imh,imw,3)
+                    im0 = scale_masks(img.shape[2:], im_masks, im0.shape)  # scale to original h, w
+                    # Mask plotting ----------------------------------------------------------------------------------------
+                    
                     # Write results
-                    for *xyxy, conf, cls in reversed(det):
+                    for *xyxy, conf, cls in reversed(det[:, :6]):
                         if save_txt:  # Write to file
                             xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
                             line = (cls, *xywh, conf) if opt.save_conf else (cls, *xywh)  # label format
