@@ -112,7 +112,7 @@ def test(data,
     else:
         size_stats = None
     stats = []
-    for batch_i, (img, targets, paths, shapes) in enumerate(tqdm(dataloader, desc=s)):
+    for batch_i, (img, targets, paths, shapes, masks) in enumerate(tqdm(dataloader, desc=s)):
         img = img.to(device, non_blocking=True)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
@@ -123,6 +123,9 @@ def test(data,
             # Run model
             t = time_synchronized()
             out, train_out = model(img, augment=augment)  # inference and training outputs
+            print(type(out))
+            print(len(out))
+            print(out.shape)
             t0 += time_synchronized() - t
 
             # Compute loss
@@ -139,6 +142,7 @@ def test(data,
         #print(out)#[torch.size([bboxnum, 6])*32]
         # Statistics per image
         for si, pred in enumerate(out):
+            print(pred.shape)
             labels = targets[targets[:, 0] == si, 1:]            
             #print(labels) # [[  cls,  x,  y,  w,  h], ... ]
             nl = len(labels)

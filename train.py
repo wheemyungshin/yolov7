@@ -32,7 +32,7 @@ from utils.general import labels_to_class_weights, increment_path, labels_to_ima
     fitness, strip_optimizer, get_latest_run, check_dataset, check_file, check_git_status, check_img_size, \
     check_requirements, print_mutation, set_logging, one_cycle, colorstr
 from utils.google_utils import attempt_download
-from utils.loss import ComputeLoss, ComputeLossOTA
+from utils.loss import ComputeLoss, ComputeLossOTA, ComputeLossSegment
 from utils.plots import plot_images, plot_labels, plot_results, plot_evolution
 from utils.torch_utils import ModelEMA, select_device, intersect_dicts, torch_distributed_zero_first, is_parallel
 from utils.wandb_logging.wandb_utils import WandbLogger, check_wandb_resume
@@ -88,13 +88,11 @@ def train(hyp, opt, device, tb_writer=None):
         with torch_distributed_zero_first(rank):
             attempt_download(weights)  # download if not found locally
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
+        model = Model(opt.cfg or ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+        exclude = ['anchor'] if not (opt.load_head_weight) and not opt.resume else []  # exclude keys
         if type(ckpt['model']) is Model:
-            model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
-            exclude = ['anchor'] if not (opt.load_head_weight) and not opt.resume else []  # exclude keys
             state_dict = ckpt['model'].float().state_dict()  # to FP32
         elif type(ckpt['model']) is collections.OrderedDict:
-            model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
-            exclude = ['anchor'] if not (opt.load_head_weight) and not opt.resume else []  # exclude keys
             state_dict = ckpt['model']  # to FP32
         else:
             assert (type(ckpt['model']) is Model or type(ckpt['model']) is collections.OrderedDict), "Invalid model types to load"
@@ -337,6 +335,7 @@ def train(hyp, opt, device, tb_writer=None):
     scaler = amp.GradScaler(enabled=cuda)
     compute_loss_ota = ComputeLossOTA(model)  # init loss class
     compute_loss = ComputeLoss(model)  # init loss class
+    compute_loss_seg = ComputeLossSegment(model)  # init loss class
     logger.info(f'Image sizes {imgsz} train, {imgsz_test} test\n'
                 f'Using {dataloader.num_workers} dataloader workers\n'
                 f'Logging results to {save_dir}\n'
@@ -396,7 +395,7 @@ def train(hyp, opt, device, tb_writer=None):
         if rank in [-1, 0]:
             pbar = tqdm(pbar, total=nb)  # progress bar
         optimizer.zero_grad()
-        for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
+        for i, (imgs, targets, paths, _, masks) in pbar:  # batch -------------------------------------------------------------
             ni = i + nb * epoch  # number integrated batches (since train start)
             imgs = imgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
             #print(imgs.shape)
@@ -427,8 +426,9 @@ def train(hyp, opt, device, tb_writer=None):
             # Forward
             if opt.qat:
                 pred = model(imgs)  # forward
-                
-                if 'loss_ota' not in hyp or hyp['loss_ota'] == 1:
+                if opt.seg:
+                    loss, loss_items = compute_loss_seg(pred, targets.to(device), masks=masks.to(device).float())  # loss scaled by batch_size
+                elif 'loss_ota' not in hyp or hyp['loss_ota'] == 1:
                     loss, loss_items = compute_loss_ota(pred, targets.to(device), imgs)  # loss scaled by batch_size
                 else:
                     loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
@@ -439,8 +439,9 @@ def train(hyp, opt, device, tb_writer=None):
             else:
                 with amp.autocast(enabled=cuda):
                     pred = model(imgs)  # forward
-                    
-                    if 'loss_ota' not in hyp or hyp['loss_ota'] == 1:
+                    if opt.seg:
+                        loss, loss_items = compute_loss_seg(pred, targets.to(device), masks=masks.to(device).float())  # loss scaled by batch_size                    
+                    elif 'loss_ota' not in hyp or hyp['loss_ota'] == 1:
                         loss, loss_items = compute_loss_ota(pred, targets.to(device), imgs)  # loss scaled by batch_size
                     else:
                         loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
@@ -471,7 +472,14 @@ def train(hyp, opt, device, tb_writer=None):
                 # Plot
                 if plots and ni < 10:
                     f = save_dir / f'train_batch{ni}.jpg'  # filename
-                    Thread(target=plot_images, args=(imgs, targets, paths, f), daemon=True).start()
+                    '''
+                    print(masks)
+                    print(masks.shape)
+                    print(torch.unique(masks))
+                    for mask_idx, mask in enumerate(masks):
+                        print(mask_idx, " : ", torch.unique(mask))
+                    '''
+                    Thread(target=plot_images, args=(imgs, targets, paths, f, masks), daemon=True).start()
                     # if tb_writer:
                     #     tb_writer.add_image(f, result, dataformats='HWC', global_step=epoch)
                     #     tb_writer.add_graph(torch.jit.trace(model, imgs, strict=False), [])  # add model graph
@@ -486,7 +494,6 @@ def train(hyp, opt, device, tb_writer=None):
                 if epoch > 2:
                     # Freeze batch norm mean and variance estimates
                     model.apply(torch.nn.intrinsic.qat.freeze_bn_stats)
-
 
             # end batch ------------------------------------------------------------------------------------------------
         # end epoch ----------------------------------------------------------------------------------------------------
@@ -656,6 +663,7 @@ if __name__ == '__main__':
     parser.add_argument('--close-data-generation', type=int, default=300, help='stop mosaic augmentation and distillation')
     parser.add_argument('--load-head-weight', action='store_true', help='Load head weights as well, when using pretrained model')
     parser.add_argument('--qat', action='store_true', help='Quantization-Aware-Training')
+    parser.add_argument('--seg', action='store_true', help='Segmentation-Training')
     opt = parser.parse_args()
 
     device = opt.device
@@ -669,7 +677,6 @@ if __name__ == '__main__':
     #    check_requirements()
 
     # Resume
-    opt_cfg = opt.cfg
     batch_size = opt.batch_size
     wandb_run = check_wandb_resume(opt)
     if opt.resume and not wandb_run:  # resume an interrupted run
@@ -687,8 +694,6 @@ if __name__ == '__main__':
         opt.img_size.extend([opt.img_size[-1]] * (2 - len(opt.img_size)))  # extend to 2 sizes (train, test)
         opt.name = 'evolve' if opt.evolve else opt.name
         opt.save_dir = increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok | opt.evolve)  # increment run
-
-    opt.cfg = opt_cfg
 
     # DDP mode
     opt.batch_size = batch_size
