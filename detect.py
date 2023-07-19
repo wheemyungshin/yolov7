@@ -17,6 +17,8 @@ from utils.torch_utils import select_device, load_classifier, time_synchronized,
 import json
 import os
 
+import numpy as np
+
 
 def detect(save_img=False):
     bbox_num = 0
@@ -160,6 +162,19 @@ def detect(save_img=False):
                         mcolors = [colors[int(cls)] for cls in det[:, 5]]
                         im_masks = plot_masks(img[i], masks, mcolors)  # image with masks shape(imh,imw,3)
                         im0 = scale_masks(img.shape[2:], im_masks, im0.shape)  # scale to original h, w
+                    
+                        '''
+                        image_masks = masks.detach().cpu().numpy()#[label_indexing]
+                        print(image_masks.shape)
+                        print(im0.shape)
+                        vis_mask = im0.copy()
+                        for image_mask_idx, image_mask in enumerate(image_masks):
+                            image_mask_ = cv2.resize(image_mask, (im0.shape[1], im0.shape[0]))
+                            print(mcolors)
+                            vis_mask[image_mask_==1, :] = np.array(mcolors[image_mask_idx])
+                        alpha = 0.4
+                        im0 = cv2.addWeighted(im0, alpha, vis_mask, 1 - alpha, 0)
+                        '''
                     # Mask plotting ----------------------------------------------------------------------------------------
                     
                     # Write results
