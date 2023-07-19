@@ -330,7 +330,7 @@ class Segment(Detect):
     def forward(self, x):
         p = self.proto(x[0])
         x = self.detect(self, x)
-        return (x, p) if self.training else (x[0], p) if self.export else (x[0], (x[1], p))
+        return (x, p) if self.training else (x[0], p) #if self.export else (x[0], (x[1], p))
 
 class ISegment(IDetect):
     # YOLOR Segment head for segmentation models
@@ -910,6 +910,7 @@ class Model(nn.Module):
         y, dt = [], []  # outputs
         if get_feature:
             features = []
+
         for m in self.model:
             if m.f != -1:  # if not from previous layer
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
@@ -931,9 +932,8 @@ class Model(nn.Module):
                     m(x.copy() if c else x)
                 dt.append((time_synchronized() - t) * 100)
                 print('%10.1f%10.0f%10.1fms %-40s' % (o, m.np, dt[-1], m.type))
-
             x = m(x)  # run
-            
+
             y.append(x if m.i in self.save else None)  # save output
             if m.i in self.model[-1].f and get_feature and len(features) < 3:#distill features after the last repconv
                 features.append(x)
@@ -1019,7 +1019,7 @@ class Model(nn.Module):
                 m.conv = fuse_conv_and_bn(m.conv, m.bn)  # update conv
                 delattr(m, 'bn')  # remove batchnorm
                 m.forward = m.fuseforward  # update forward
-            elif isinstance(m, (IDetect, IAuxDetect)):
+            elif isinstance(m, (IDetect, IAuxDetect)) and not isinstance(m, ISegment):
                 m.fuse()
                 m.forward = m.fuseforward
             elif type(m) is Shuffle_Block:
