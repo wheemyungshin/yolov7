@@ -1,17 +1,17 @@
-# parameters
+# YOLOv7
+
+# Parameters
 nc: 80  # number of classes
 depth_multiple: 1.0  # model depth multiple
 width_multiple: 1.0  # layer channel multiple
-pooler_scale: 0.25
-
-# anchors
 anchors:
   - [12,16, 19,36, 40,28]  # P3/8
   - [36,75, 76,55, 72,146]  # P4/16
   - [142,110, 192,243, 459,401]  # P5/32
 
-# yolov7 backbone
+# YOLOv7 backbone
 backbone:
+  # [from, number, module, args]
   [[-1, 1, Conv, [32, 3, 1]],  # 0
   
    [-1, 1, Conv, [64, 3, 2]],  # 1-P1/2      
@@ -132,36 +132,9 @@ head:
    [[-1, -2, -3, -4, -5, -6], 1, Concat, [1]],
    [-1, 1, Conv, [512, 1, 1]], # 101
    
-   [75, 1, Conv, [256, 3, 1] ],
-   [88, 1, Conv, [512, 3, 1] ],
+   [75, 1, Conv, [256, 3, 1]],
+   [88, 1, Conv, [512, 3, 1]],
    [101, 1, Conv, [1024, 3, 1]],
-   
-   [[102, 103, 104], 1, Merge, [[256, 512, 1024]]],  # 105
-   
-   [75, 1, Conv, [64, 1, 1] ],
-   [-1, 1, nn.Upsample, [None, 2, 'nearest'] ],
-   [11, 1, Conv, [64, 1, 1] ], # route backbone P2
-   [[-1, -2], 1, Concat, [1] ],
-   [-1, 2, BottleneckCSPB, [64] ], 
-   [-1, 1, Conv, [64, 1, 1] ], # 111
 
-   [[75, 88, 101], 1, Refine, [128, 3, 1]],
-   [-1, 1, Conv, [128, 3, 1]],
-   [-1, 1, nn.Upsample, [None, 2, 'bilinear']],
-   [-1, 1, Conv, [128, 3, 1]],
-   [111, 1, Conv, [128, 3, 1]],
-   [[-1, -2], 1, Shortcut, [1]],
-   [-1, 1, Conv, [128, 3, 1]],
-   [-1, 1, nn.Conv2d, [4, 1]],  # 119
-  
-   [[75, 63, 51], 1, Refine, [128, 3, 1]],
-   [-1, 1, Conv, [128, 3, 1]],
-   [-1, 1, nn.Upsample, [None, 2, 'bilinear']],
-   [-1, 1, Conv, [128, 3, 1]],
-   [111, 1, Conv, [128, 3, 1]],
-   [[-1, -2], 1, Shortcut, [1]],
-   [-1, 1, Conv, [128, 3, 1]],
-   [-1, 1, nn.Conv2d, [1, 1]],  # 127
-   
-   [[105, 119, 127], 1, MT, [nc, anchors, 980]],   # Detect(P3, P4, P5)
+   [[102, 103, 104], 1, ISegment, [nc, anchors]],  # Detect(P3, P4, P5)
   ]
