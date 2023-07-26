@@ -43,12 +43,8 @@ def test(data,
          is_coco=False,
          v5_metric=False,
          person_only=False,
-<<<<<<< HEAD
-         opt_size_division=False):
-=======
-         opt_size_devision=False,
+         opt_size_division=False,
          opt_seg=False):
->>>>>>> 4f5d93f4ed991febc0d98338d932466986fa77a8
     # Initialize/load model and set device
     training = model is not None
     if training:  # called by train.py
@@ -422,12 +418,8 @@ if __name__ == '__main__':
              trace=not opt.no_trace,
              v5_metric=opt.v5_metric,
              person_only=opt.person_only,
-<<<<<<< HEAD
              opt_size_division=opt.size_division
-=======
-             opt_size_devision=opt.size_devision,
              opt_seg=opt.seg
->>>>>>> 4f5d93f4ed991febc0d98338d932466986fa77a8
              )
 
     elif opt.task == 'speed':  # speed benchmarks
