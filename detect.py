@@ -10,12 +10,14 @@ from numpy import random
 from models.experimental import attempt_load
 from utils.datasets import LoadStreams, LoadImages
 from utils.general import check_img_size, check_requirements, check_imshow, non_max_suppression, apply_classifier, \
-    scale_coords, xyxy2xywh, strip_optimizer, set_logging, increment_path
-from utils.plots import plot_one_box
+    scale_coords, xyxy2xywh, strip_optimizer, set_logging, increment_path, non_max_suppression_seg, process_mask, scale_masks, process_semantic_mask
+from utils.plots import plot_one_box, plot_masks
 from utils.torch_utils import select_device, load_classifier, time_synchronized, TracedModel
 
 import json
 import os
+
+import numpy as np
 
 
 def detect(save_img=False):
@@ -103,11 +105,19 @@ def detect(save_img=False):
 
         # Inference
         t1 = time_synchronized()
-        pred = model(img, augment=opt.augment)[0]
+        if opt.seg:
+            pred, out = model(img, augment=opt.augment)
+            print(len(pred))
+            print(pred.shape)
+            proto = out[1]
+            print(type(proto))
+            print(proto.shape)
+        else:
+            pred = model(img, augment=opt.augment)[0]
         t2 = time_synchronized()
 
-        # Apply NMS
         pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
+        #pred = non_max_suppression_seg(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms, nm=len(names))#, nm=32)
         t3 = time_synchronized()
 
         # Apply Classifier
@@ -135,17 +145,37 @@ def detect(save_img=False):
                 gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
                 gn_to = torch.tensor(img.shape)[[3, 2, 3, 2]] 
                 if len(det):
+                    if opt.seg:
+                        #masks = process_mask(proto[i], det[:, 6:], det[:, :4], img.shape[2:], upsample=True)
+                        masks = process_semantic_mask(proto[i], det[:, 6:], det[:, :6], img.shape[2:], nc=len(names), upsample=True)
+
                     scores = det[:, 4]
                     # Rescale boxes from img_size to im0 size
                     det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape)#.round()
 
                     # Print results
-                    for c in det[:, -1].unique():
-                        n = (det[:, -1] == c).sum()  # detections per class
+                    for c in det[:, 5].unique():
+                        n = (det[:, 5] == c).sum()  # detections per class
                         s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
+                    # Mask plotting ----------------------------------------------------------------------------------------
+                    if opt.seg:
+                        #mcolors = [colors[int(cls)] for cls in det[:, 5]]
+                        #im_masks = plot_masks(img[i], masks, mcolors)  # image with masks shape(imh,imw,3)
+                        #im0 = scale_masks(img.shape[2:], im_masks, im0.shape)  # scale to original h, w
+                    
+                        #for semantic masks
+                        image_masks = masks.detach().cpu().numpy()#[label_indexing]
+                        vis_mask = im0.copy()
+                        for image_mask_idx, image_mask in enumerate(image_masks):
+                            image_mask_ = cv2.resize(image_mask, (im0.shape[1], im0.shape[0]))
+                            vis_mask[image_mask_==1, :] = np.array(colors[image_mask_idx])
+                        alpha = 0.5
+                        im0 = cv2.addWeighted(im0, alpha, vis_mask, 1 - alpha, 0)
+                    # Mask plotting ----------------------------------------------------------------------------------------
+                    
                     # Write results
-                    for *xyxy, conf, cls in reversed(det):
+                    for *xyxy, conf, cls in reversed(det[:, :6]):
                         if save_txt:  # Write to file
                             xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
                             line = (cls, *xywh, conf) if opt.save_conf else (cls, *xywh)  # label format
@@ -268,6 +298,7 @@ if __name__ == '__main__':
     parser.add_argument('--save-json', action='store_true', help='save a cocoapi-compatible JSON results file')
     parser.add_argument('--frame-ratio', default=1, type=int, help='save frame ratio')
     parser.add_argument('--save-frame', action='store_true', help='save each frame of video results')
+    parser.add_argument('--seg', action='store_true', help='Segmentation-Training')
     opt = parser.parse_args()
     print(opt)
     #check_requirements(exclude=('pycocotools', 'thop'))
