@@ -7,6 +7,16 @@ import torch.nn.functional as F
 from utils.general import bbox_iou, bbox_alpha_iou, box_iou, box_giou, box_diou, box_ciou, xywh2xyxy, crop
 from utils.torch_utils import is_parallel
 
+import cv2
+import matplotlib
+import numpy as np
+
+def color_list():
+    # Return first 10 plt colors as (r,g,b) https://stackoverflow.com/questions/51350872/python-from-color-name-to-rgb
+    def hex2rgb(h):
+        return tuple(int(h[1 + i:1 + i + 2], 16) for i in (0, 2, 4))
+
+    return [hex2rgb(h) for h in matplotlib.colors.TABLEAU_COLORS.values()]  # or BASE_ (8), CSS4_ (148), XKCD_ (949)
 
 def smooth_BCE(eps=0.1):  # https://github.com/ultralytics/yolov3/issues/238#issuecomment-598028441
     # return positive, negative label smoothing BCE targets
@@ -1708,6 +1718,7 @@ class ComputeLossSegment:
         # Define criteria
         BCEcls = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([h['cls_pw']], device=device))
         BCEobj = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([h['obj_pw']], device=device))
+        CEseg = nn.CrossEntropyLoss()
 
         # Class label smoothing https://arxiv.org/pdf/1902.04103.pdf eqn 3
         self.cp, self.cn = smooth_BCE(eps=h.get('label_smoothing', 0.0))  # positive, negative BCE targets
@@ -1727,9 +1738,11 @@ class ComputeLossSegment:
         self.nm = m.nm  # number of masks
         self.anchors = m.anchors
         self.device = device
+        self.CEseg = CEseg
 
     def __call__(self, preds, targets, masks):  # predictions, targets, model
         p, proto = preds
+
         bs, nm, mask_h, mask_w = proto.shape  # batch size, number of masks, mask height, mask width
         lcls = torch.zeros(1, device=self.device)
         lbox = torch.zeros(1, device=self.device)
@@ -1737,13 +1750,26 @@ class ComputeLossSegment:
         lseg = torch.zeros(1, device=self.device)
         tcls, tbox, indices, anchors, tidxs, xywhn = self.build_targets(p, targets)  # targets
 
+        '''
+        print("targets: ", targets.shape)
+        for p_idx, p_ in enumerate(p):
+            print("P:", str(p_idx), p_.shape)
+        for index_idx, index_ in enumerate(indices):
+            print("indices: ", str(index_idx), len(index_[0]))
+            print("indices: ", str(index_idx), len(index_[1]))
+            print("indices: ", str(index_idx), len(index_[2]))
+            print("indices: ", str(index_idx), len(index_[3]))
+        '''
+
         # Losses
         for i, pi in enumerate(p):  # layer index, layer predictions
             b, a, gj, gi = indices[i]  # image, anchor, gridy, gridx
             tobj = torch.zeros(pi.shape[:4], dtype=pi.dtype, device=self.device)  # target obj
             n = b.shape[0]  # number of targets
+
             if n:
-                pxy, pwh, _, pcls, pmask = pi[b, a, gj, gi].split((2, 2, 1, self.nc, nm), 1)  # subset of predictions
+                #pxy, pwh, _, pcls, pmask = pi[b, a, gj, gi].split((2, 2, 1, self.nc, nm), 1)  # subset of predictions
+                pxy, pwh, _, pcls = pi[b, a, gj, gi].split((2, 2, 1, self.nc), 1)
 
                 # Box regression
                 pxy = pxy.sigmoid() * 2 - 0.5
@@ -1772,13 +1798,49 @@ class ComputeLossSegment:
                     masks = F.interpolate(masks[None], (mask_h, mask_w), mode="bilinear", align_corners=False)[0]
                 marea = xywhn[i][:, 2:].prod(1)  # mask width, height normalized
                 mxyxy = xywh2xyxy(xywhn[i] * torch.tensor([mask_w, mask_h, mask_w, mask_h], device=self.device))
+                '''
                 for bi in b.unique():
                     j = b == bi  # matching index
                     if self.overlap:
                         mask_gti = torch.where(masks[bi][None] == tidxs[i][j].view(-1, 1, 1), 1.0, 0.0)
                     else:
                         mask_gti = masks[tidxs[i]][j]
+
+                    print("t: ", t)
+                    print("t: ", t.shape)
+                    print("gt_mask: ", mask_gti.shape)
+                    print("pred_mask: ", pmask[j].shape)
+                    exit()
                     lseg += self.single_mask_loss(mask_gti, pmask[j], proto[bi], mxyxy[j], marea[j])
+                '''
+
+                '''
+                semantic_pmask = torch.zeros((self.nc, pmask.shape[1]), dtype=masks.dtype, device=self.device)
+                for mask_idx, mask in enumerate(pmask):
+                    print("pcls: ", torch.sigmoid(pcls[mask_idx]))
+                    print(mask)
+                    mask_cls = int(torch.argmax(torch.sigmoid(pcls[mask_idx])))
+                    semantic_pmask[mask_cls] = mask
+                pmask = semantic_pmask
+                '''
+
+                for bi in b.unique():
+                    j = b == bi  # matching index
+
+                    mask_gti = masks[tidxs[i]][j]
+                    '''
+                    print("t: ", t[j].shape)
+                    print("mask_gti: ", torch.max(mask_gti))
+                    print("mask_gti: ", mask_gti.shape)
+                    print("pmask: ", pmask[j].shape)
+                    print("proto: ", proto[bi].shape)
+                    print("mxyxy: ", mxyxy[j].shape)
+                    print("marea: ", marea[j].shape)
+                    '''
+                    #lseg += self.single_mask_loss(mask_gti, pmask[j], proto[bi], mxyxy[j], marea[j])
+                    if len(t[j]) > 0:
+                        #lseg += self.semantic_mask_loss(mask_gti, pmask[j], proto[bi], mxyxy[j], marea[j], t[j])
+                        lseg += self.semantic_mask_loss(mask_gti, proto[bi], mxyxy[j], marea[j], t[j])
 
             obji = self.BCEobj(pi[..., 4], tobj)
             lobj += obji * self.balance[i]  # obj loss
@@ -1795,10 +1857,78 @@ class ComputeLossSegment:
         loss = lbox + lobj + lcls + lseg
         return loss * bs, torch.cat((lbox, lobj, lcls, lseg)).detach()
 
+    def semantic_mask_loss(self, gt_mask, proto, xyxy, area, tcls):
+        # Mask loss for one image
+        #pred_mask = (pred @ proto.view(self.nm, -1)).view(-1, *proto.shape[1:])  # (n,32) @ (32,80,80) -> (n,80,80)
+        semantic_pred_mask = proto # (nc,80,80)
+
+        cls_idx_list = torch.argmax(tcls, axis=-1)
+        semantic_gt_mask = torch.zeros((semantic_pred_mask.shape[1], semantic_pred_mask.shape[2]), dtype=torch.long, device=self.device)
+        #semantic_pred_mask = torch.zeros((self.nc, pred_mask.shape[1], pred_mask.shape[2]), dtype=pred_mask.dtype, device=self.device)
+        '''
+        for cls_idx_i, cls_idx in enumerate(cls_idx_list):
+            semantic_gt_mask[cls_idx][gt_mask[cls_idx_i]!=0] = 1
+            semantic_pred_mask[cls_idx] += (pred_mask[cls_idx_i] / len(cls_idx_list))
+        '''
+
+        for cls_idx in torch.unique(cls_idx_list):
+            cls_j = cls_idx_list == cls_idx
+            semantic_gt_mask[(gt_mask[cls_j]!=0).sum(dim=0).bool()] = cls_idx
+            #semantic_pred_mask[cls_idx] = pred_mask[cls_j].mean(dim=0)
+                
+        '''
+        print("semantic_gt_mask: ", semantic_gt_mask.shape)
+        print("semantic_gt_mask: ", torch.max(semantic_gt_mask))
+        print("semantic_gt_mask: ", torch.min(semantic_gt_mask))
+        print("semantic_gt_mask: ", torch.sum(semantic_gt_mask))
+        print("semantic_gt_mask: ", torch.mean(semantic_gt_mask))
+
+        print("semantic_pred_mask: ", semantic_pred_mask.shape)
+        print("semantic_pred_mask: ", torch.max(semantic_pred_mask))
+        print("semantic_pred_mask: ", torch.min(semantic_pred_mask))
+        print("semantic_pred_mask: ", torch.sum(semantic_pred_mask))
+        print("semantic_pred_mask: ", torch.mean(semantic_pred_mask))
+        '''
+        semantic_pred_mask = torch.unsqueeze(semantic_pred_mask, 0)
+        semantic_gt_mask = torch.unsqueeze(semantic_gt_mask, 0)
+
+        loss = self.CEseg(semantic_pred_mask, semantic_gt_mask)
+        #print("Loss:", loss.shape)
+        
+        '''
+        print(semantic_gt_mask.shape)
+        colors = color_list()
+        vis_np = np.zeros((semantic_gt_mask.shape[1], semantic_gt_mask.shape[2], 3))
+        for gt_mask_idx, gt_mask_ in enumerate(semantic_gt_mask):
+            gt_mask_np = gt_mask_.detach().cpu().numpy()
+            color = colors[gt_mask_idx % len(colors)]
+            vis_np[gt_mask_np!=0] = color
+        cv2.imwrite('test_vis_semantic_loss/'+str(len(cls_idx_list))+'.jpg', vis_np)
+        '''        
+        return loss.mean()
+        '''
+
+        sum_loss = torch.zeros(1, dtype=loss.dtype, device=self.device)
+        for cls_idx_i, cls_idx in enumerate(cls_idx_list):
+            sum_loss += (crop(torch.unsqueeze(loss[cls_idx], 0), torch.unsqueeze(xyxy[cls_idx_i], 0)).mean() / area[cls_idx_i])
+        return sum_loss / len(cls_idx_list)
+        '''
+        
     def single_mask_loss(self, gt_mask, pred, proto, xyxy, area):
         # Mask loss for one image
         pred_mask = (pred @ proto.view(self.nm, -1)).view(-1, *proto.shape[1:])  # (n,32) @ (32,80,80) -> (n,80,80)
         loss = F.binary_cross_entropy_with_logits(pred_mask, gt_mask, reduction="none")
+        '''
+        print(gt_mask.shape)
+        colors = color_list()
+        vis_np = np.zeros((gt_mask.shape[1], gt_mask.shape[2], 3))
+        for gt_mask_idx, gt_mask_ in enumerate(gt_mask):
+            gt_mask_np = gt_mask_.detach().cpu().numpy()
+            color = colors[gt_mask_idx % len(colors)]
+            vis_np[gt_mask_np!=0] = color
+        cv2.imwrite('test_vis_mask_loss/'+str(gt_mask.shape[0])+'.jpg', vis_np)
+        '''
+
         return (crop(loss, xyxy).mean(dim=(1, 2)) / area).mean()
 
     def build_targets(self, p, targets):

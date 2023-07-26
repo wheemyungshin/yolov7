@@ -134,10 +134,10 @@ def test(data,
             targets[:, 2:] *= torch.Tensor([width, height, width, height]).to(device)  # to pixels
             lb = [targets[targets[:, 0] == i, 1:] for i in range(nb)] if save_hybrid else []  # for autolabelling
             t = time_synchronized()
-            if opt_seg:
-                out = non_max_suppression_seg(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb, multi_label=True, nm=32)
-            else:
-                out = non_max_suppression(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb, multi_label=True)
+            #if opt_seg:
+            #    out = non_max_suppression_seg(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb, multi_label=True, nm=32)
+            #else:
+            out = non_max_suppression(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb, multi_label=True)
             t1 += time_synchronized() - t
 
         #print(out)#[torch.size([bboxnum, 6])*32]
