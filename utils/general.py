@@ -910,6 +910,20 @@ def non_max_suppression_seg(
             LOGGER.warning(f'WARNING: NMS time limit {time_limit:.3f}s exceeded')
             break  # time limit exceeded
 
+    #for semantic segmentation
+    '''
+    new_output = []
+    for o in output:
+        masks = o[:, 6:]
+        cls_idx_list = o[:, 5]
+        semantic_masks = torch.zeros((masks.shape[0], nc), dtype=masks.dtype, device=masks.get_device())        
+        for cls_idx in torch.unique(cls_idx_list):
+            cls_j = cls_idx_list == cls_idx
+            semantic_masks[cls_j, int(cls_idx)] = masks[cls_j].mean(dim=1)        
+        new_output.append(torch.cat((o[:, :6], semantic_masks), 1))
+    output = new_output
+    '''
+
     return output
 
 
@@ -1057,6 +1071,9 @@ def process_mask(protos, masks_in, bboxes, shape, upsample=False):
 
     return: h, w, n
     """
+    print("protos: ", protos.shape)
+    print("masks_in: ", masks_in.shape)
+    print("bboxes: ", bboxes.shape)
 
     c, mh, mw = protos.shape  # CHW
     ih, iw = shape
@@ -1072,6 +1089,75 @@ def process_mask(protos, masks_in, bboxes, shape, upsample=False):
     if upsample:
         masks = F.interpolate(masks[None], shape, mode='bilinear', align_corners=False)[0]  # CHW
     return masks.gt_(0.5)
+
+
+def process_semantic_mask(protos, masks_in, bboxes, shape, nc, upsample=False):
+    """
+    Crop before upsample.
+    proto_out: [mask_dim, mask_h, mask_w]
+    out_masks: [n, mask_dim], n is number of masks after nms
+    bboxes: [n, 4], n is number of masks after nms
+    shape:input_image_size, (h, w)
+
+    return: h, w, n
+    """
+    c, mh, mw = protos.shape  # CHW
+    ih, iw = shape
+    semantic_masks = protos.float()  # CHW
+
+    #print("Bef: ", semantic_masks.shape)
+    #print("Bef: ", torch.min(semantic_masks))
+    #print("Bef: ", torch.max(semantic_masks))
+    #print("Bef: ", torch.mean(semantic_masks))
+    semantic_masks = semantic_masks.sigmoid()
+    print("Aft: ", torch.max(semantic_masks))
+
+    downsampled_bboxes = bboxes[:, :4].clone()
+    downsampled_bboxes[:, 0] *= mw / iw
+    downsampled_bboxes[:, 2] *= mw / iw
+    downsampled_bboxes[:, 3] *= mh / ih
+    downsampled_bboxes[:, 1] *= mh / ih
+
+    if upsample:
+        semantic_masks = F.interpolate(semantic_masks[None], shape, mode='bilinear', align_corners=False)[0]  # CHW
+    return semantic_masks.gt_(0.5)
+'''
+def process_semantic_mask(protos, masks_in, bboxes, shape, nc, upsample=False):
+    """
+    Crop before upsample.
+    proto_out: [mask_dim, mask_h, mask_w]
+    out_masks: [n, mask_dim], n is number of masks after nms
+    bboxes: [n, 4], n is number of masks after nms
+    shape:input_image_size, (h, w)
+
+    return: h, w, n
+    """
+    c, mh, mw = protos.shape  # CHW
+    ih, iw = shape
+    masks = (masks_in @ protos.float().view(c, -1)).view(-1, mh, mw)  # CHW
+    semantic_masks = torch.zeros((nc, mh, mw), dtype=masks_in.dtype, device=masks_in.get_device())
+
+    cls_idx_list = bboxes[:, 5].clone()
+    for cls_idx in torch.unique(cls_idx_list):
+        cls_j = cls_idx_list == cls_idx
+        semantic_masks[int(cls_idx)] = masks[cls_j].mean(dim=0)
+
+    semantic_masks = semantic_masks.sigmoid()
+
+    downsampled_bboxes = bboxes[:, :4].clone()
+    downsampled_bboxes[:, 0] *= mw / iw
+    downsampled_bboxes[:, 2] *= mw / iw
+    downsampled_bboxes[:, 3] *= mh / ih
+    downsampled_bboxes[:, 1] *= mh / ih
+
+    semantic_mask_crops = torch.zeros((nc, mh, mw), dtype=masks_in.dtype, device=masks_in.get_device())
+    for cls_idx_i, cls_idx in enumerate(cls_idx_list):
+        semantic_mask_crops[int(cls_idx)][semantic_mask_crops[int(cls_idx)]==0] += crop(torch.unsqueeze(semantic_masks[int(cls_idx)], 0), torch.unsqueeze(downsampled_bboxes[cls_idx_i], 0))[0][semantic_mask_crops[int(cls_idx)]==0]
+    #semantic_masks = crop(semantic_masks, downsampled_bboxes)  # CHW
+    if upsample:
+        semantic_mask_crops = F.interpolate(semantic_mask_crops[None], shape, mode='bilinear', align_corners=False)[0]  # CHW
+    return semantic_mask_crops.gt_(0.5)
+'''
 
 
 def scale_masks(img1_shape, masks, img0_shape, ratio_pad=None):

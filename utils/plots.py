@@ -154,22 +154,7 @@ def plot_images(images, targets, paths=None, fname='images.jpg', masks=None, nam
         if scale_factor < 1:
             img = cv2.resize(img, (w, h))
 
-        if masks is not None and len(targets) > 0:
-            image_masks = masks[label_indexing]
-            mask = np.zeros((img.shape[0], img.shape[1]))
-            for image_mask in image_masks:
-                image_mask_ = cv2.resize(image_mask, (img.shape[1], img.shape[0]))
-                mask += image_mask_
-            vis_mask = img.copy()
-            vis_mask[mask!=0, 2] = 255
-
-            tile_img = img
-            alpha = 0.4
-            tile_img = cv2.addWeighted(tile_img, alpha, vis_mask, 1 - alpha, 0)
-        else:
-            tile_img = img
-
-        mosaic[block_y:block_y + h, block_x:block_x + w, :] = tile_img
+        tile_img = img
         if len(targets) > 0:
             image_targets = targets[label_indexing]
             boxes = xywh2xyxy(image_targets[:, 2:6]).T
@@ -177,6 +162,21 @@ def plot_images(images, targets, paths=None, fname='images.jpg', masks=None, nam
             labels = image_targets.shape[1] == 6  # labels if no conf column
             conf = None if labels else image_targets[:, 6]  # check for confidence presence (label vs pred)
 
+            if masks is not None:
+                image_masks = masks[label_indexing]
+                vis_mask = img.copy()
+                for j, image_mask in enumerate(image_masks):
+                    image_mask_ = cv2.resize(image_mask, (img.shape[1], img.shape[0]))
+                    cls = int(classes[j])
+                    color = colors[cls % len(colors)]
+                    vis_mask[image_mask_!=0, :] = color
+
+                alpha = 0.4
+                tile_img = cv2.addWeighted(tile_img, alpha, vis_mask, 1 - alpha, 0)
+
+        mosaic[block_y:block_y + h, block_x:block_x + w, :] = tile_img
+
+        if len(targets) > 0:
             if boxes.shape[1]:
                 if boxes.max() <= 1.01:  # if normalized with tolerance 0.01
                     boxes[[0, 2]] *= w  # scale to pixels

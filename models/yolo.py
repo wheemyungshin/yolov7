@@ -320,9 +320,9 @@ class Segment(Detect):
     # YOLOv5 Segment head for segmentation models
     def __init__(self, nc=80, anchors=(), ch=()):
         super().__init__(nc, anchors, ch)
-        self.nm = 32  # number of masks
+        self.nm = nc#32  # number of masks
         self.npr = 256  # number of protos
-        self.no = 5 + nc + self.nm  # number of outputs per anchor
+        self.no = 5 + nc# + self.nm  # number of outputs per anchor
         self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.na, 1) for x in ch)  # output conv
         self.proto = Proto(ch[0], self.npr, self.nm)  # protos
         self.detect = Detect.forward
@@ -336,9 +336,9 @@ class ISegment(IDetect):
     # YOLOR Segment head for segmentation models
     def __init__(self, nc=80, anchors=(), ch=()):
         super().__init__(nc, anchors, ch)
-        self.nm = 32  # number of masks
+        self.nm = nc#32  # number of masks
         self.npr = 256  # number of protos
-        self.no = 5 + nc + self.nm  # number of outputs per anchor
+        self.no = 5 + nc# + self.nm  # number of outputs per anchor
         self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.na, 1) for x in ch)  # output conv
         self.im = nn.ModuleList(ImplicitM(self.no * self.na) for _ in ch)
         self.proto = Proto(ch[0], self.npr, self.nm)  # protos
