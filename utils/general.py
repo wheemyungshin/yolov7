@@ -1103,14 +1103,7 @@ def process_semantic_mask(protos, masks_in, bboxes, shape, nc, upsample=False):
     """
     c, mh, mw = protos.shape  # CHW
     ih, iw = shape
-    semantic_masks = protos.float()  # CHW
-
-    #print("Bef: ", semantic_masks.shape)
-    #print("Bef: ", torch.min(semantic_masks))
-    #print("Bef: ", torch.max(semantic_masks))
-    #print("Bef: ", torch.mean(semantic_masks))
-    semantic_masks = semantic_masks.sigmoid()
-    print("Aft: ", torch.max(semantic_masks))
+    semantic_masks = F.softmax(protos.float(), dim=0)  # CHW
 
     downsampled_bboxes = bboxes[:, :4].clone()
     downsampled_bboxes[:, 0] *= mw / iw
@@ -1119,8 +1112,15 @@ def process_semantic_mask(protos, masks_in, bboxes, shape, nc, upsample=False):
     downsampled_bboxes[:, 1] *= mh / ih
 
     if upsample:
-        semantic_masks = F.interpolate(semantic_masks[None], shape, mode='bilinear', align_corners=False)[0]  # CHW
-    return semantic_masks.gt_(0.5)
+        semantic_masks = F.interpolate(semantic_masks[None], shape, mode='bilinear', align_corners=False)[0] # CHW
+
+    output = semantic_masks.argmax(axis=0)
+    #output[semantic_masks.lt(0.5).all(dim=0)] = -1
+    #print("1: ", semantic_masks)
+    #print("1: ", torch.max(semantic_masks))
+    #print("1: ", torch.min(semantic_masks))
+    #print("1: ", torch.mean(semantic_masks))
+    return output
 '''
 def process_semantic_mask(protos, masks_in, bboxes, shape, nc, upsample=False):
     """

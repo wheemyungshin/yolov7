@@ -418,7 +418,7 @@ if __name__ == '__main__':
              trace=not opt.no_trace,
              v5_metric=opt.v5_metric,
              person_only=opt.person_only,
-             opt_size_division=opt.size_division
+             opt_size_division=opt.size_division,
              opt_seg=opt.seg
              )
 

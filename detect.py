@@ -149,6 +149,7 @@ def detect(save_img=False):
                         #masks = process_mask(proto[i], det[:, 6:], det[:, :4], img.shape[2:], upsample=True)
                         masks = process_semantic_mask(proto[i], det[:, 6:], det[:, :6], img.shape[2:], nc=len(names), upsample=True)
 
+                    print(masks.shape)
                     scores = det[:, 4]
                     # Rescale boxes from img_size to im0 size
                     det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape)#.round()
@@ -165,11 +166,12 @@ def detect(save_img=False):
                         #im0 = scale_masks(img.shape[2:], im_masks, im0.shape)  # scale to original h, w
                     
                         #for semantic masks
-                        image_masks = masks.detach().cpu().numpy()#[label_indexing]
+                        print(masks)
+                        image_masks = masks.detach().cpu().numpy().astype(float)#[label_indexing]
+                        image_masks = cv2.resize(image_masks, (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
                         vis_mask = im0.copy()
-                        for image_mask_idx, image_mask in enumerate(image_masks):
-                            image_mask_ = cv2.resize(image_mask, (im0.shape[1], im0.shape[0]))
-                            vis_mask[image_mask_==1, :] = np.array(colors[image_mask_idx])
+                        for image_mask_idx in range(len(names)):
+                            vis_mask[image_masks==image_mask_idx+1] = np.array(colors[image_mask_idx])
                         alpha = 0.5
                         im0 = cv2.addWeighted(im0, alpha, vis_mask, 1 - alpha, 0)
                     # Mask plotting ----------------------------------------------------------------------------------------
