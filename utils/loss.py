@@ -1750,17 +1750,6 @@ class ComputeLossSegment:
         lseg = torch.zeros(1, device=self.device)
         tcls, tbox, indices, anchors, tidxs, xywhn = self.build_targets(p, targets)  # targets
 
-        '''
-        print("targets: ", targets.shape)
-        for p_idx, p_ in enumerate(p):
-            print("P:", str(p_idx), p_.shape)
-        for index_idx, index_ in enumerate(indices):
-            print("indices: ", str(index_idx), len(index_[0]))
-            print("indices: ", str(index_idx), len(index_[1]))
-            print("indices: ", str(index_idx), len(index_[2]))
-            print("indices: ", str(index_idx), len(index_[3]))
-        '''
-
         # Losses
         for i, pi in enumerate(p):  # layer index, layer predictions
             b, a, gj, gi = indices[i]  # image, anchor, gridy, gridx
@@ -1798,46 +1787,11 @@ class ComputeLossSegment:
                     masks = F.interpolate(masks[None], (mask_h, mask_w), mode="bilinear", align_corners=False)[0]
                 marea = xywhn[i][:, 2:].prod(1)  # mask width, height normalized
                 mxyxy = xywh2xyxy(xywhn[i] * torch.tensor([mask_w, mask_h, mask_w, mask_h], device=self.device))
-                '''
-                for bi in b.unique():
-                    j = b == bi  # matching index
-                    if self.overlap:
-                        mask_gti = torch.where(masks[bi][None] == tidxs[i][j].view(-1, 1, 1), 1.0, 0.0)
-                    else:
-                        mask_gti = masks[tidxs[i]][j]
-
-                    print("t: ", t)
-                    print("t: ", t.shape)
-                    print("gt_mask: ", mask_gti.shape)
-                    print("pred_mask: ", pmask[j].shape)
-                    exit()
-                    lseg += self.single_mask_loss(mask_gti, pmask[j], proto[bi], mxyxy[j], marea[j])
-                '''
-
-                '''
-                semantic_pmask = torch.zeros((self.nc, pmask.shape[1]), dtype=masks.dtype, device=self.device)
-                for mask_idx, mask in enumerate(pmask):
-                    print("pcls: ", torch.sigmoid(pcls[mask_idx]))
-                    print(mask)
-                    mask_cls = int(torch.argmax(torch.sigmoid(pcls[mask_idx])))
-                    semantic_pmask[mask_cls] = mask
-                pmask = semantic_pmask
-                '''
 
                 for bi in b.unique():
                     j = b == bi  # matching index
 
                     mask_gti = masks[tidxs[i]][j]
-                    '''
-                    print("t: ", t[j].shape)
-                    print("mask_gti: ", torch.max(mask_gti))
-                    print("mask_gti: ", mask_gti.shape)
-                    print("pmask: ", pmask[j].shape)
-                    print("proto: ", proto[bi].shape)
-                    print("mxyxy: ", mxyxy[j].shape)
-                    print("marea: ", marea[j].shape)
-                    '''
-                    #lseg += self.single_mask_loss(mask_gti, pmask[j], proto[bi], mxyxy[j], marea[j])
                     if len(t[j]) > 0:
                         #lseg += self.semantic_mask_loss(mask_gti, pmask[j], proto[bi], mxyxy[j], marea[j], t[j])
                         lseg += self.semantic_mask_loss(mask_gti, proto[bi], mxyxy[j], marea[j], t[j])
@@ -1860,7 +1814,7 @@ class ComputeLossSegment:
     def semantic_mask_loss(self, gt_mask, proto, xyxy, area, tcls):
         # Mask loss for one image
         #pred_mask = (pred @ proto.view(self.nm, -1)).view(-1, *proto.shape[1:])  # (n,32) @ (32,80,80) -> (n,80,80)
-        semantic_pred_mask = proto # (nc,80,80)
+        semantic_pred_mask = proto # (nc+1,80,80)
 
         cls_idx_list = torch.argmax(tcls, axis=-1)
         semantic_gt_mask = torch.zeros((semantic_pred_mask.shape[1], semantic_pred_mask.shape[2]), dtype=torch.long, device=self.device)
@@ -1873,7 +1827,7 @@ class ComputeLossSegment:
 
         for cls_idx in torch.unique(cls_idx_list):
             cls_j = cls_idx_list == cls_idx
-            semantic_gt_mask[(gt_mask[cls_j]!=0).sum(dim=0).bool()] = cls_idx
+            semantic_gt_mask[(gt_mask[cls_j]!=0).sum(dim=0).bool()] = cls_idx + 1
             #semantic_pred_mask[cls_idx] = pred_mask[cls_j].mean(dim=0)
                 
         '''
