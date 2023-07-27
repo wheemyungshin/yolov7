@@ -746,7 +746,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 r = np.random.beta(8.0, 8.0)  # mixup ratio, alpha=beta=8.0
                 img = (img * r + img2 * (1 - r)).astype(np.uint8)
                 labels = np.concatenate((labels, labels2), 0)
-                segments = np.concatenate((segments, segments2), 0)
+                segments = segments + segments2#np.concatenate((segments, segments2), 0)
                 poses = np.concatenate((poses, poses2), 0)
 
             if hyp is not None and random.random() < hyp.get('face_cut_out', 0):
