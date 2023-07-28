@@ -1778,6 +1778,7 @@ class ComputeLossSegment:
                         mask_gti = torch.where(masks[bi][None] == tidxs[i][j].view(-1, 1, 1), 1.0, 0.0)
                     else:
                         mask_gti = masks[tidxs[i]][j]
+
                     lseg += self.single_mask_loss(mask_gti, pmask[j], proto[bi], mxyxy[j], marea[j])
 
             obji = self.BCEobj(pi[..., 4], tobj)
