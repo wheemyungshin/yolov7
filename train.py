@@ -267,7 +267,7 @@ def train(hyp, opt, device, tb_writer=None):
                                             hyp=hyp, augment=True, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                             world_size=opt.world_size, workers=opt.workers,
                                             image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), 
-                                            valid_idx=valid_idx, pose_data=pose_data)
+                                            valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg)
     mlc = np.concatenate(dataset.labels, 0)[:, 0].max()  # max label class
     nb = len(dataloader)  # number of batches
     assert mlc < nc, 'Label class %g exceeds nc=%g in %s. Possible class labels are 0-%g' % (mlc, nc, opt.data, nc - 1)
@@ -277,7 +277,7 @@ def train(hyp, opt, device, tb_writer=None):
         testloader = create_dataloader(test_path, imgsz_test, batch_size * 2, gs, opt,  # testloader
                                        hyp=hyp, cache=opt.cache_images and not opt.notest, rect=True, rank=-1,
                                        world_size=opt.world_size, workers=opt.workers,
-                                       pad=0.5, prefix=colorstr('val: '), valid_idx=valid_idx)[0]
+                                       pad=0.5, prefix=colorstr('val: '), valid_idx=valid_idx, load_seg=opt.seg)[0]
 
         if not opt.resume:
             labels = np.concatenate(dataset.labels, 0)
@@ -370,7 +370,7 @@ def train(hyp, opt, device, tb_writer=None):
             dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, opt,
                                                     hyp=hyp, augment=False, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                                     world_size=opt.world_size, workers=opt.workers,
-                                                    image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data)
+                                                    image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg)
             
             print("STOP DISTILLATION!")
             is_distill = False
@@ -386,7 +386,7 @@ def train(hyp, opt, device, tb_writer=None):
             dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, opt,
                                                     hyp=hyp, augment=False, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                                     world_size=opt.world_size, workers=opt.workers,
-                                                    image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data)
+                                                    image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg)
 
         mloss = torch.zeros(4, device=device)  # mean losses
         if rank != -1:
@@ -473,13 +473,6 @@ def train(hyp, opt, device, tb_writer=None):
                 # Plot
                 if plots and ni < 30:
                     f = save_dir / f'train_batch{ni}.jpg'  # filename
-                    '''
-                    print(masks)
-                    print(masks.shape)
-                    print(torch.unique(masks))
-                    for mask_idx, mask in enumerate(masks):
-                        print(mask_idx, " : ", torch.unique(mask))
-                    '''
                     Thread(target=plot_images, args=(imgs, targets, paths, f, masks), daemon=True).start()
                     # if tb_writer:
                     #     tb_writer.add_image(f, result, dataformats='HWC', global_step=epoch)
