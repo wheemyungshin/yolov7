@@ -127,7 +127,7 @@ def random_wave(img):
     return warped_img
 
 def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=False, cache=False, pad=0.0, rect=False, ratio_maintain=True,
-                      rank=-1, world_size=1, workers=8, image_weights=False, quad=False, prefix='', valid_idx=None, pose_data=None):
+                      rank=-1, world_size=1, workers=8, image_weights=False, quad=False, prefix='', valid_idx=None, pose_data=None, load_seg=False):
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache
     with torch_distributed_zero_first(rank):
         dataset = LoadImagesAndLabels(path, imgsz, batch_size,
@@ -142,7 +142,8 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
                                       image_weights=image_weights,
                                       prefix=prefix,
                                       valid_idx=valid_idx,
-                                      pose_data=pose_data)
+                                      pose_data=pose_data,
+                                      load_seg=load_seg)
 
     batch_size = min(batch_size, len(dataset))
     nw = min([os.cpu_count() // world_size, batch_size if batch_size > 1 else 0, workers])  # number of workers
@@ -418,10 +419,14 @@ def img2label_paths(img_paths):
     sa, sb = os.sep + 'images' + os.sep, os.sep + 'labels' + os.sep  # /images/, /labels/ substrings
     return ['txt'.join(x.replace(sa, sb, 1).rsplit(x.split('.')[-1], 1)) for x in img_paths]
 
+def img2seg_paths(img_paths):
+    # Define label paths as a function of image paths
+    sa, sb = os.sep + 'images' + os.sep, os.sep + 'segments' + os.sep  # /images/, /labels/ substrings
+    return ['txt'.join(x.replace(sa, sb, 1).rsplit(x.split('.')[-1], 1)) for x in img_paths]
 
 class LoadImagesAndLabels(Dataset):  # for training/testing
     def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, ratio_maintain=True, image_weights=False,
-                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix='',valid_idx=None, pose_data=None):
+                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix='',valid_idx=None, pose_data=None, load_seg=False):
         self.img_size = img_size
         self.augment = augment
         self.hyp = hyp
@@ -503,7 +508,10 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             raise Exception(f'{prefix}Error loading data from {path}: {e}\nSee {help_url}')
 
         # Check cache
-        self.label_files = img2label_paths(self.img_files)  # labels
+        if load_seg:
+            self.label_files = img2seg_paths(self.img_files)  # labels
+        else:
+            self.label_files = img2label_paths(self.img_files)  # labels
         cache_path = (p if p.is_file() else Path(self.label_files[0]).parent).with_suffix('.cache')  # cached labels
         if cache_path.is_file():
             cache, exists = torch.load(cache_path), True  # load
@@ -526,7 +534,10 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         self.labels = list(labels)
         self.shapes = np.array(shapes, dtype=np.float64)
         self.img_files = list(cache.keys())  # update
-        self.label_files = img2label_paths(cache.keys())  # update
+        if load_seg:
+            self.label_files = img2seg_paths(cache.keys())
+        else:
+            self.label_files = img2label_paths(cache.keys())  # update
 
         if valid_idx is not None:
             print("Filtering non-valid samples")
@@ -735,7 +746,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 r = np.random.beta(8.0, 8.0)  # mixup ratio, alpha=beta=8.0
                 img = (img * r + img2 * (1 - r)).astype(np.uint8)
                 labels = np.concatenate((labels, labels2), 0)
-                segments = np.concatenate((segments, segments2), 0)
+                segments = segments + segments2#np.concatenate((segments, segments2), 0)
                 poses = np.concatenate((poses, poses2), 0)
 
             if hyp is not None and random.random() < hyp.get('face_cut_out', 0):
@@ -2436,7 +2447,7 @@ def flatten_recursive(path='../coco'):
     for file in tqdm(glob.glob(str(Path(path)) + '/**/*.*', recursive=True)):
         shutil.copyfile(file, new_path / Path(file).name)
 
-
+'''
 def extract_boxes(path='../coco/'):  # from utils.datasets import *; extract_boxes('../coco128')
     # Convert detection dataset into classification dataset, with one directory per class
 
@@ -2471,7 +2482,6 @@ def extract_boxes(path='../coco/'):  # from utils.datasets import *; extract_box
                     b[[1, 3]] = np.clip(b[[1, 3]], 0, h)
                     assert cv2.imwrite(str(f), im[b[1]:b[3], b[0]:b[2]]), f'box failure in {f}'
 
-
 def autosplit(path='../coco', weights=(0.9, 0.1, 0.0), annotated_only=False):
     """ Autosplit a dataset into train/val/test splits and save path/autosplit_*.txt files
     Usage: from utils.datasets import *; autosplit('../coco')
@@ -2492,8 +2502,8 @@ def autosplit(path='../coco', weights=(0.9, 0.1, 0.0), annotated_only=False):
     for i, img in tqdm(zip(indices, files), total=n):
         if not annotated_only or Path(img2label_paths([str(img)])[0]).exists():  # check label
             with open(path / txt[i], 'a') as f:
-                f.write(str(img) + '\n')  # add image to txt file
-    
+                f.write(str(img) + '\n')  # add image to txt file    
+'''
     
 def load_segmentations(self, index):
     key = '/work/handsomejw66/coco17/' + self.img_files[index]
