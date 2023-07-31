@@ -788,6 +788,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             
             if labels.size:  # normalized xywh to pixel xyxy format
                 labels[:, 1:] = xywhn2xyxy(labels[:, 1:], ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1])
+                segments = [xyn2xy(x, ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1]) for x in segments]
                 if self.pose_data is not None:
                     poses = self.pose_data[index].copy()
                     poses = np.array([pose_xyn2xy(x, ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1]) if x.any() is not None else x for x in poses])
@@ -968,9 +969,11 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
                 #label min size filtering or scaling
                 labels_after_filter = []
-                for label in labels:
+                segs_after_filter = []
+                for label_idx, label in enumerate(labels):
                     if (label[3]-label[1])*(label[4]-label[2]) > hyp.get('min_scale_up', 0):#if obj min_size exists
-                        labels_after_filter.append(label)                     
+                        labels_after_filter.append(label)          
+                        segs_after_filter.append(segments[label_idx])           
                     else:                        
                         if (label[3]-label[1])*(label[4]-label[2]) > hyp.get('min_size', 0):
                             center_x = int((label[1]+label[3])/2)
@@ -994,9 +997,12 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             new_label[3] = scale_up_x2
                             new_label[4] = scale_up_y2
                             labels_after_filter.append(new_label)
+                            segs_after_filter.append(segments[label_idx])
                         else:
                             img[int(label[2]):int(label[4]), int(label[1]):int(label[3]), :] = 0
                 labels = np.array(labels_after_filter)
+                segments = segs_after_filter
+
                                     
             if hyp is not None and random.random() < hyp.get('fakeseatbelt3', [None, 0])[1]:
                 if len(labels) > 0:
@@ -1365,8 +1371,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         labels_out = torch.zeros((nL, 6))
         if nL:
-            labels_out[:, 1:] = torch.from_numpy(labels)
-        
+            labels_out[:, 1:] = torch.from_numpy(labels)        
         segments_out = segments[:nL]
         
         #Visualize pose joints
