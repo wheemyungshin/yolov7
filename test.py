@@ -12,7 +12,7 @@ from tqdm import tqdm
 from models.experimental import attempt_load
 from utils.datasets import create_dataloader
 from utils.general import coco80_to_coco91_class, check_dataset, check_file, check_img_size, check_requirements, \
-    box_iou, non_max_suppression, scale_coords, xyxy2xywh, xywh2xyxy, set_logging, increment_path, colorstr
+    box_iou, non_max_suppression, scale_coords, xyxy2xywh, xywh2xyxy, set_logging, increment_path, colorstr, non_max_suppression_seg
 from utils.metrics import ap_per_class, ConfusionMatrix
 from utils.plots import plot_images, output_to_target, plot_study_txt
 from utils.torch_utils import select_device, time_synchronized, TracedModel
@@ -43,7 +43,8 @@ def test(data,
          is_coco=False,
          v5_metric=False,
          person_only=False,
-         opt_size_devision=False):
+         opt_size_division=False,
+         opt_seg=False):
     # Initialize/load model and set device
     training = model is not None
     if training:  # called by train.py
@@ -94,8 +95,7 @@ def test(data,
         valid_idx = data.get('valid_idx', None)
 
         dataloader = create_dataloader(data[task], imgsz, batch_size, gs, opt, pad=0.5, rect=True,
-                                       prefix=colorstr(f'{task}: '), valid_idx=valid_idx)[0]
-
+                                       prefix=colorstr(f'{task}: '), valid_idx=valid_idx, load_seg=opt_seg)[0]
     if v5_metric:
         print("Testing with YOLOv5 AP metric...")
     
@@ -107,12 +107,12 @@ def test(data,
     p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
     loss = torch.zeros(3, device=device)
     jdict, ap, ap_class, wandb_images = [], [], [], []
-    if opt_size_devision:
+    if opt_size_division:
         size_stats = defaultdict(list)
     else:
         size_stats = None
     stats = []
-    for batch_i, (img, targets, paths, shapes) in enumerate(tqdm(dataloader, desc=s)):
+    for batch_i, (img, targets, paths, shapes, masks) in enumerate(tqdm(dataloader, desc=s)):
         img = img.to(device, non_blocking=True)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
@@ -121,18 +121,21 @@ def test(data,
 
         with torch.no_grad():
             # Run model
-            t = time_synchronized()
+            t = time_synchronized()            
             out, train_out = model(img, augment=augment)  # inference and training outputs
             t0 += time_synchronized() - t
 
             # Compute loss
-            if compute_loss:
+            if compute_loss and not opt_seg:
                 loss += compute_loss([x.float() for x in train_out], targets)[1][:3]  # box, obj, cls
 
             # Run NMS
             targets[:, 2:] *= torch.Tensor([width, height, width, height]).to(device)  # to pixels
             lb = [targets[targets[:, 0] == i, 1:] for i in range(nb)] if save_hybrid else []  # for autolabelling
             t = time_synchronized()
+            #if opt_seg:
+            #    out = non_max_suppression_seg(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb, multi_label=True, nm=32)
+            #else:
             out = non_max_suppression(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb, multi_label=True)
             t1 += time_synchronized() - t
 
@@ -146,23 +149,23 @@ def test(data,
             path = Path(paths[si])
             seen += 1
 
-            size_devision = []
+            size_division = []
             for label in labels:
                 if label[3]*label[4] < 32*32:
-                    size_devision_ = 'small'
+                    size_division_ = 'small'
                 elif 32*32 <= label[3]*label[4] < 96*96:
-                    size_devision_ = 'medium'
+                    size_division_ = 'medium'
                 else:
-                    size_devision_ = 'large'
+                    size_division_ = 'large'
                 
-                size_devision.append(size_devision_)
-            size_devision = np.array(size_devision)
+                size_division.append(size_division_)
+            size_division = np.array(size_division)
 
             if len(pred) == 0:
                 if nl:
-                    if opt_size_devision:
-                        for size_devision_ in ['small', 'medium', 'large']:
-                            size_stats[size_devision_].append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls[size_devision==size_devision_]))
+                    if opt_size_division:
+                        for size_division_ in ['small', 'medium', 'large']:
+                            size_stats[size_division_].append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls[size_division==size_division_]))
                     stats.append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls))
                 continue
             
@@ -205,12 +208,12 @@ def test(data,
 
             # Assign all predictions as incorrect
             correct = torch.zeros(pred.shape[0], niou, dtype=torch.bool, device=device)
-            if opt_size_devision:
-                correct_size_devision = {}
-                conf_size_devision = {}
-                for size_devision_ in ['small', 'medium', 'large']:                        
-                    correct_size_devision[size_devision_] = torch.zeros(pred.shape[0], niou, dtype=torch.bool, device=device)
-                    conf_size_devision[size_devision_] = torch.clone(pred[:, 4])
+            if opt_size_division:
+                correct_size_division = {}
+                conf_size_division = {}
+                for size_division_ in ['small', 'medium', 'large']:                        
+                    correct_size_division[size_division_] = torch.zeros(pred.shape[0], niou, dtype=torch.bool, device=device)
+                    conf_size_division[size_division_] = torch.clone(pred[:, 4])
             if nl:
                 detected = []  # target indices
                 tcls_tensor = labels[:, 0]
@@ -240,38 +243,44 @@ def test(data,
                                 detected_set.add(d.item())
                                 detected.append(d)
                                 correct[pi[j]] = ious[j] > iouv  # iou_thres is 1xn
-                                if opt_size_devision:
-                                    correct_size_devision[size_devision[ti[i[j]].detach().cpu().numpy()][0]][pi[j]] = ious[j] > iouv
-                                    for size_devision__ in ['small', 'medium', 'large']:
-                                        if size_devision__ != size_devision[ti[i[j]].detach().cpu().numpy()][0]:
-                                            conf_size_devision[size_devision__][pi[j]] = 0
+                                if opt_size_division:
+                                    correct_size_division[size_division[ti[i[j]].detach().cpu().numpy()][0]][pi[j]] = ious[j] > iouv
+                                    for size_division__ in ['small', 'medium', 'large']:
+                                        if size_division__ != size_division[ti[i[j]].detach().cpu().numpy()][0]:
+                                            conf_size_division[size_division__][pi[j]] = 0
                                 if len(detected) == nl:  # all targets already located in image
                                     break
                                 
             # Append statistics (correct, conf, pcls, tcls)
-            if opt_size_devision:
-                for size_devision_ in ['small', 'medium', 'large']:
-                    sort_indices = torch.argsort(conf_size_devision[size_devision_], descending=True)
-                    correct_size_devision_ = correct_size_devision[size_devision_][sort_indices].cpu()
-                    conf_size_devision_ = conf_size_devision[size_devision_][sort_indices].cpu()
-                    class_size_devision_ = pred[:, 5][sort_indices].cpu()
-                    #print(size_devision_, " : ", conf_size_devision_)
-                    size_stats[size_devision_].append((correct_size_devision_, conf_size_devision_, class_size_devision_,
-                            [tcls[i] for i, is_size in enumerate(size_devision==size_devision_) if is_size]))
+            if opt_size_division:
+                for size_division_ in ['small', 'medium', 'large']:
+                    sort_indices = torch.argsort(conf_size_division[size_division_], descending=True)
+                    correct_size_division_ = correct_size_division[size_division_][sort_indices].cpu()
+                    conf_size_division_ = conf_size_division[size_division_][sort_indices].cpu()
+                    class_size_division_ = pred[:, 5][sort_indices].cpu()
+                    #print(size_division_, " : ", conf_size_division_)
+                    size_stats[size_division_].append((correct_size_division_, conf_size_division_, class_size_division_,
+                            [tcls[i] for i, is_size in enumerate(size_division==size_division_) if is_size]))
             stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls))
 
         # Plot images
         if plots and batch_i < 3:
-            f = save_dir / f'test_batch{batch_i}_labels.jpg'  # labels
-            Thread(target=plot_images, args=(img, targets, paths, f, names), daemon=True).start()
-            f = save_dir / f'test_batch{batch_i}_pred.jpg'  # predictions
-            Thread(target=plot_images, args=(img, output_to_target(out), paths, f, names), daemon=True).start()
+            if opt_seg:
+                f = save_dir / f'test_batch{batch_i}_labels.jpg'  # labels
+                Thread(target=plot_images, args=(img, targets, paths, f, masks, names), daemon=True).start()
+                f = save_dir / f'test_batch{batch_i}_pred.jpg'  # predictions
+                Thread(target=plot_images, args=(img, output_to_target(out), paths, f, masks, names), daemon=True).start()
+            else:
+                f = save_dir / f'test_batch{batch_i}_labels.jpg'  # labels
+                Thread(target=plot_images, args=(img, targets, paths, f, None, names), daemon=True).start()
+                f = save_dir / f'test_batch{batch_i}_pred.jpg'  # predictions
+                Thread(target=plot_images, args=(img, output_to_target(out), paths, f, None, names), daemon=True).start()
 
     # Compute statistics
-    if opt_size_devision:
-        for size_devision_ in ['small', 'medium', 'large']:
-            print(size_devision_+"          Class      Images      Labels           P           R      mAP@.5  mAP@.5:.95")
-            size_stats_ = size_stats[size_devision_]
+    if opt_size_division:
+        for size_division_ in ['small', 'medium', 'large']:
+            print(size_division_+"          Class      Images      Labels           P           R      mAP@.5  mAP@.5:.95")
+            size_stats_ = size_stats[size_division_]
             size_stats_ = [np.concatenate(x, 0) for x in zip(*size_stats_)]  # to numpy
             if len(size_stats_) and size_stats_[0].any():
                 p, r, ap, f1, ap_class = ap_per_class(*size_stats_, plot=plots, v5_metric=v5_metric, save_dir=save_dir, names=names)
@@ -383,7 +392,8 @@ if __name__ == '__main__':
     parser.add_argument('--v5-metric', action='store_true', help='assume maximum recall as 1.0 in AP calculation')
     parser.add_argument('--person-only', action='store_true', help='assume maximum recall as 1.0 in AP calculation')
     parser.add_argument('--xyxy', action='store_true', help='the box label type is xyxy not xywh')
-    parser.add_argument('--size-devision', action='store_true', help='show mAP for small, medium and large objects, respectively')
+    parser.add_argument('--size-division', action='store_true', help='show mAP for small, medium and large objects, respectively')
+    parser.add_argument('--seg', action='store_true', help='Segmentation-Training')
     opt = parser.parse_args()
     opt.save_json |= opt.data.endswith('coco.yaml')
     opt.data = check_file(opt.data)  # check file
@@ -407,7 +417,8 @@ if __name__ == '__main__':
              trace=not opt.no_trace,
              v5_metric=opt.v5_metric,
              person_only=opt.person_only,
-             opt_size_devision=opt.size_devision
+             opt_size_division=opt.size_division,
+             opt_seg=opt.seg
              )
 
     elif opt.task == 'speed':  # speed benchmarks
