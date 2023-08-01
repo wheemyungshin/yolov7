@@ -318,9 +318,12 @@ class IDetect(nn.Module):
 
 class Segment(Detect):
     # YOLOv5 Segment head for segmentation models
-    def __init__(self, nc=80, anchors=(), ch=()):
+    def __init__(self, nc=80, anchors=(), ch=(), nm=None):
         super().__init__(nc, anchors, ch)
-        self.nm = nc + 1 #32  # number of masks
+        if nm is not None:
+            self.nm = nm
+        else:
+            self.nm = nc + 1 #32  # number of masks
         self.npr = 256  # number of protos
         self.no = 5 + nc# + self.nm  # number of outputs per anchor
         self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.na, 1) for x in ch)  # output conv
@@ -334,9 +337,12 @@ class Segment(Detect):
 
 class ISegment(IDetect):
     # YOLOR Segment head for segmentation models
-    def __init__(self, nc=80, anchors=(), ch=()):
+    def __init__(self, nc=80, anchors=(), ch=(), nm=None):
         super().__init__(nc, anchors, ch)
-        self.nm = nc + 1 #32  # number of masks
+        if nm is not None:
+            self.nm = nm
+        else:
+            self.nm = nc + 1 #32  # number of masks
         self.npr = 256  # number of protos
         self.no = 5 + nc# + self.nm  # number of outputs per anchor
         self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.na, 1) for x in ch)  # output conv
@@ -648,7 +654,7 @@ class IBin(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, cfg='yolor-csp-c.yaml', ch=3, nc=None, anchors=None):  # model, input channels, number of classes
+    def __init__(self, cfg='yolor-csp-c.yaml', ch=3, nc=None, anchors=None, nm=None):  # model, input channels, number of classes
         super(Model, self).__init__()
         self.traced = False
         if isinstance(cfg, dict):
@@ -667,7 +673,7 @@ class Model(nn.Module):
         if anchors:
             logger.info(f'Overriding model.yaml anchors with anchors={anchors}')
             self.yaml['anchors'] = round(anchors)  # override yaml value
-        self.model, self.save = parse_model(deepcopy(self.yaml), ch=[ch])  # model, savelist
+        self.model, self.save = parse_model(deepcopy(self.yaml), ch=[ch], nm=nm)  # model, savelist
         self.names = [str(i) for i in range(self.yaml['nc'])]  # default names
         # print([x.shape for x in self.forward(torch.zeros(1, ch, 64, 64))])
 
@@ -1229,7 +1235,7 @@ class DetectPostPart(nn.Module):
         
         return (torch.cat(z,1), x)
 
-def parse_model(d, ch):  # model_dict, input_channels(3)
+def parse_model(d, ch, nm):  # model_dict, input_channels(3)
     logger.info('\n%3s%18s%3s%10s  %-40s%-30s' % ('', 'from', 'n', 'params', 'module', 'arguments'))
     anchors, nc, gd, gw = d['anchors'], d['nc'], d['depth_multiple'], d['width_multiple']
     na = (len(anchors[0]) // 2) if isinstance(anchors, list) else anchors  # number of anchors
@@ -1290,6 +1296,8 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
             args.append([ch[x] for x in f])
             if isinstance(args[1], int):  # number of anchors
                 args[1] = [list(range(args[1] * 2))] * len(f)
+            if m in [Segment, ISegment]:
+                args.append(nm)
         elif m is ReOrg:
             c2 = ch[f] * 4
         elif m is Contract:

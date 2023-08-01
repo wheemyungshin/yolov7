@@ -3,7 +3,7 @@ train: [/data/cityscapes/yolov7_det/train.txt, #2975
 /data/cityscapes/yolov7_det/val.txt, #500
 /data/waymo_data_yolo_v2/train.txt, #4080
 /data/waymo_data_yolo_v2/val.txt, #588
-/data/AIHUB_AI_ADAS_yolo_sampling/train.txt,
+/data/AIHUB_AI_ADAS_yolo_sampling/train.txt, # 10433
 /data/KITTI/train.txt] # 4767
 val: [/data/AIHUB_AI_ADAS_yolo_sampling/val.txt] # 1179
 test: [/data/AIHUB_AI_ADAS_yolo_sampling/val.txt] # 1179

@@ -95,8 +95,7 @@ def test(data,
         valid_idx = data.get('valid_idx', None)
 
         dataloader = create_dataloader(data[task], imgsz, batch_size, gs, opt, pad=0.5, rect=True,
-                                       prefix=colorstr(f'{task}: '), valid_idx=valid_idx)[0]
-
+                                       prefix=colorstr(f'{task}: '), valid_idx=valid_idx, load_seg=opt_seg)[0]
     if v5_metric:
         print("Testing with YOLOv5 AP metric...")
     

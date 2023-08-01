@@ -552,8 +552,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         if int(x_line[0]) == v_id:
                             new_x.append(np.array([id_index, x_line[1].copy(), x_line[2].copy(), x_line[3].copy(), x_line[4].copy()]))
                             if len(seg) > j:
-                                new_seg.append(seg[j])
-                                
+                                new_seg.append(seg[j])                                
                             else:
                                 new_seg.append(np.array([
                                     [x_line[1]-x_line[3]/2, x_line[2]-x_line[4]/2], 
@@ -615,6 +614,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             self.img_files = [self.img_files[i] for i in irect]
             self.label_files = [self.label_files[i] for i in irect]
             self.labels = [self.labels[i] for i in irect]
+            self.segments = [self.segments[i] for i in irect]
             self.shapes = s[irect]  # wh
             ar = ar[irect]
 

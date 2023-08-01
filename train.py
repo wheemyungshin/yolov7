@@ -83,12 +83,19 @@ def train(hyp, opt, device, tb_writer=None):
     assert len(names) == nc, '%g names found for nc=%g dataset in %s' % (len(names), nc, opt.data)  # check
 
     # Model
+    if opt.seg:
+        if len(opt.valid_segment_labels) > 0:
+            nm = len(opt.valid_segment_labels)+1
+        else:
+            nm = nc + 1
+    else:
+        nm = None
     pretrained = weights.endswith('.pt')
     if pretrained:
         with torch_distributed_zero_first(rank):
             attempt_download(weights)  # download if not found locally
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
-        model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+        model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors'), nm=nm).to(device)  # create
         exclude = ['anchor'] if not (opt.load_head_weight) and not opt.resume else []  # exclude keys
         if type(ckpt['model']) is Model:
             state_dict = ckpt['model'].float().state_dict()  # to FP32
@@ -101,7 +108,7 @@ def train(hyp, opt, device, tb_writer=None):
         model.load_state_dict(state_dict, strict=False)  # load
         logger.info('Transferred %g/%g items from %s' % (len(state_dict), len(model.state_dict()), weights))  # report
     else:
-        model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+        model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors'), nm=nm).to(device)  # create
     with torch_distributed_zero_first(rank):
         check_dataset(data_dict)  # check
     train_path = data_dict['train']
@@ -262,6 +269,22 @@ def train(hyp, opt, device, tb_writer=None):
     if pose_data[0] is None and pose_data[1] is None:
         pose_data = None
 
+    if opt.seg and hyp.get('min_scale_up', 0) > hyp.get('min_size', 0):
+        print("Min Scale Up with Segmentation is not available yet!!!")
+        print("Min Scale Up with Segmentation is not available yet!!!")
+        print("Min Scale Up with Segmentation is not available yet!!!")
+        print("Min Scale Up with Segmentation is not available yet!!!")
+        print("Min Scale Up with Segmentation is not available yet!!!")
+        exit()
+
+    if valid_idx is not None and opt.seg and len(opt.valid_segment_labels) > 0:
+        valid_segment_labels = []
+        for v_idx_i, v_idx in enumerate(valid_idx):
+            if v_idx in opt.valid_segment_labels:
+                valid_segment_labels.append(v_idx_i)
+    else:
+        valid_segment_labels = []
+
     # Trainloader
     dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, opt,
                                             hyp=hyp, augment=True, cache=opt.cache_images, rect=opt.rect, rank=rank,
@@ -275,7 +298,7 @@ def train(hyp, opt, device, tb_writer=None):
     # Process 0
     if rank in [-1, 0]:
         testloader = create_dataloader(test_path, imgsz_test, batch_size * 2, gs, opt,  # testloader
-                                       hyp=hyp, cache=opt.cache_images and not opt.notest, rect=True, rank=-1,
+                                       cache=opt.cache_images and not opt.notest, rect=True, rank=-1,
                                        world_size=opt.world_size, workers=opt.workers,
                                        pad=0.5, prefix=colorstr('val: '), valid_idx=valid_idx, load_seg=opt.seg)[0]
 
@@ -428,7 +451,7 @@ def train(hyp, opt, device, tb_writer=None):
             if opt.qat:
                 pred = model(imgs)  # forward
                 if opt.seg:
-                    loss, loss_items = compute_loss_seg(pred, targets.to(device), masks=masks.to(device).float())  # loss scaled by batch_size
+                    loss, loss_items = compute_loss_seg(pred, targets.to(device), masks=masks.to(device).float(), valid_segment_labels=valid_segment_labels)  # loss scaled by batch_size
                 elif 'loss_ota' not in hyp or hyp['loss_ota'] == 1:
                     loss, loss_items = compute_loss_ota(pred, targets.to(device), imgs)  # loss scaled by batch_size
                 else:
@@ -441,7 +464,7 @@ def train(hyp, opt, device, tb_writer=None):
                 with amp.autocast(enabled=cuda):
                     pred = model(imgs)  # forward
                     if opt.seg:
-                        loss, loss_items = compute_loss_seg(pred, targets.to(device), masks=masks.to(device).float())  # loss scaled by batch_size                    
+                        loss, loss_items = compute_loss_seg(pred, targets.to(device), masks=masks.to(device).float(), valid_segment_labels=valid_segment_labels)  # loss scaled by batch_size                    
                     elif 'loss_ota' not in hyp or hyp['loss_ota'] == 1:
                         loss, loss_items = compute_loss_ota(pred, targets.to(device), imgs)  # loss scaled by batch_size
                     else:
@@ -660,6 +683,7 @@ if __name__ == '__main__':
     parser.add_argument('--load-head-weight', action='store_true', help='Load head weights as well, when using pretrained model')
     parser.add_argument('--qat', action='store_true', help='Quantization-Aware-Training')
     parser.add_argument('--seg', action='store_true', help='Segmentation-Training')
+    parser.add_argument('--valid-segment-labels', nargs='+', type=int, default=[], help='labels to include when calculating segmentation loss')
     opt = parser.parse_args()
 
     device = opt.device
