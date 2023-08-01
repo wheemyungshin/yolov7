@@ -1740,7 +1740,7 @@ class ComputeLossSegment:
         self.device = device
         self.CEseg = CEseg
 
-    def __call__(self, preds, targets, masks):  # predictions, targets, model
+    def __call__(self, preds, targets, masks, valid_segment_labels):  # predictions, targets, model
         p, proto = preds
 
         bs, nm, mask_h, mask_w = proto.shape  # batch size, number of masks, mask height, mask width
@@ -1794,7 +1794,7 @@ class ComputeLossSegment:
                     mask_gti = masks[tidxs[i]][j]
                     if len(t[j]) > 0:
                         #lseg += self.semantic_mask_loss(mask_gti, pmask[j], proto[bi], mxyxy[j], marea[j], t[j])
-                        lseg += self.semantic_mask_loss(mask_gti, proto[bi], mxyxy[j], marea[j], t[j])
+                        lseg += self.semantic_mask_loss(mask_gti, proto[bi], mxyxy[j], marea[j], t[j], valid_segment_labels)
 
             obji = self.BCEobj(pi[..., 4], tobj)
             lobj += obji * self.balance[i]  # obj loss
@@ -1811,38 +1811,25 @@ class ComputeLossSegment:
         loss = lbox + lobj + lcls + lseg
         return loss * bs, torch.cat((lbox, lobj, lcls, lseg)).detach()
 
-    def semantic_mask_loss(self, gt_mask, proto, xyxy, area, tcls):
+    def semantic_mask_loss(self, gt_mask, proto, xyxy, area, tcls, valid_segment_labels):
         # Mask loss for one image
         #pred_mask = (pred @ proto.view(self.nm, -1)).view(-1, *proto.shape[1:])  # (n,32) @ (32,80,80) -> (n,80,80)
         semantic_pred_mask = proto # (nc+1,80,80)
 
         cls_idx_list = torch.argmax(tcls, axis=-1)
         semantic_gt_mask = torch.zeros((semantic_pred_mask.shape[1], semantic_pred_mask.shape[2]), dtype=torch.long, device=self.device)
-        #semantic_pred_mask = torch.zeros((self.nc, pred_mask.shape[1], pred_mask.shape[2]), dtype=pred_mask.dtype, device=self.device)
-        '''
-        for cls_idx_i, cls_idx in enumerate(cls_idx_list):
-            semantic_gt_mask[cls_idx][gt_mask[cls_idx_i]!=0] = 1
-            semantic_pred_mask[cls_idx] += (pred_mask[cls_idx_i] / len(cls_idx_list))
-        '''
+
 
         for cls_idx in torch.unique(cls_idx_list):
-            cls_j = cls_idx_list == cls_idx
-            semantic_gt_mask[(gt_mask[cls_j]!=0).sum(dim=0).bool()] = cls_idx + 1
-            #semantic_pred_mask[cls_idx] = pred_mask[cls_j].mean(dim=0)
-                
-        '''
-        print("semantic_gt_mask: ", semantic_gt_mask.shape)
-        print("semantic_gt_mask: ", torch.max(semantic_gt_mask))
-        print("semantic_gt_mask: ", torch.min(semantic_gt_mask))
-        print("semantic_gt_mask: ", torch.sum(semantic_gt_mask))
-        print("semantic_gt_mask: ", torch.mean(semantic_gt_mask))
+            if len(valid_segment_labels) > 0:
+                for valid_idx_i, valid_cls_idx in enumerate(valid_segment_labels):
+                    if cls_idx == valid_cls_idx:
+                        cls_j = cls_idx_list == cls_idx
+                        semantic_gt_mask[(gt_mask[cls_j]!=0).sum(dim=0).bool()] = valid_idx_i + 1
+            else:
+                cls_j = cls_idx_list == cls_idx
+                semantic_gt_mask[(gt_mask[cls_j]!=0).sum(dim=0).bool()] = cls_idx + 1
 
-        print("semantic_pred_mask: ", semantic_pred_mask.shape)
-        print("semantic_pred_mask: ", torch.max(semantic_pred_mask))
-        print("semantic_pred_mask: ", torch.min(semantic_pred_mask))
-        print("semantic_pred_mask: ", torch.sum(semantic_pred_mask))
-        print("semantic_pred_mask: ", torch.mean(semantic_pred_mask))
-        '''
         semantic_pred_mask = torch.unsqueeze(semantic_pred_mask, 0)
         semantic_gt_mask = torch.unsqueeze(semantic_gt_mask, 0)
 
@@ -1860,13 +1847,6 @@ class ComputeLossSegment:
         cv2.imwrite('test_vis_semantic_loss/'+str(len(cls_idx_list))+'.jpg', vis_np)
         '''        
         return loss.mean()
-        '''
-
-        sum_loss = torch.zeros(1, dtype=loss.dtype, device=self.device)
-        for cls_idx_i, cls_idx in enumerate(cls_idx_list):
-            sum_loss += (crop(torch.unsqueeze(loss[cls_idx], 0), torch.unsqueeze(xyxy[cls_idx_i], 0)).mean() / area[cls_idx_i])
-        return sum_loss / len(cls_idx_list)
-        '''
         
     def single_mask_loss(self, gt_mask, pred, proto, xyxy, area):
         # Mask loss for one image

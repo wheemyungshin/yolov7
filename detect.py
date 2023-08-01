@@ -68,6 +68,12 @@ def detect(save_img=False):
     # Get names and colors
     names = model.module.names if hasattr(model, 'module') else model.names
     colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
+    if opt.seg:
+        if len(opt.valid_segment_labels) > 0:
+            nm = len(opt.valid_segment_labels)+1
+        else:
+            nm = len(names)+1
+        seg_colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(nm)]
 
     # Run inference
     if device.type != 'cpu':
@@ -166,12 +172,12 @@ def detect(save_img=False):
                         #im0 = scale_masks(img.shape[2:], im_masks, im0.shape)  # scale to original h, w
                     
                         #for semantic masks
-                        print(masks)
                         image_masks = masks.detach().cpu().numpy().astype(float)#[label_indexing]
                         image_masks = cv2.resize(image_masks, (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
+                        print(np.unique(image_masks))
                         vis_mask = im0.copy()
-                        for image_mask_idx in range(len(names)):
-                            vis_mask[image_masks==image_mask_idx+1] = np.array(colors[image_mask_idx])
+                        for image_mask_idx in range(1, nm):
+                            vis_mask[image_masks==image_mask_idx] = np.array(seg_colors[image_mask_idx])
                         alpha = 0.5
                         im0 = cv2.addWeighted(im0, alpha, vis_mask, 1 - alpha, 0)
                     # Mask plotting ----------------------------------------------------------------------------------------
@@ -301,6 +307,7 @@ if __name__ == '__main__':
     parser.add_argument('--frame-ratio', default=1, type=int, help='save frame ratio')
     parser.add_argument('--save-frame', action='store_true', help='save each frame of video results')
     parser.add_argument('--seg', action='store_true', help='Segmentation-Training')
+    parser.add_argument('--valid-segment-labels', nargs='+', type=int, default=[], help='labels to include when calculating segmentation loss')
     opt = parser.parse_args()
     print(opt)
     #check_requirements(exclude=('pycocotools', 'thop'))
