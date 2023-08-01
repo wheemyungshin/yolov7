@@ -32,6 +32,7 @@ from utils.general import check_requirements, xyxy2xywh, xywh2xyxy, xywhn2xyxy, 
 from utils.torch_utils import torch_distributed_zero_first
 
 from collections import defaultdict
+import albumentations as A
 
 # Parameters
 help_url = 'https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
@@ -53,7 +54,7 @@ def gaussian_illumination(img):
     # Generate a random Gaussian gradient mask for the illumination change
     rows, cols = img.shape[:2]
     kernel_size = np.random.randint((min(rows, cols)//3)*2, min(rows, cols))
-    kernel = cv2.getGaussianKernel(192, np.random.randint(35, 40))
+    kernel = cv2.getGaussianKernel(192, np.random.randint(35, 45))
     kernel = cv2.resize(kernel, dsize=(kernel_size, kernel_size), interpolation=cv2.INTER_CUBIC)
     mask = kernel @ kernel.T
 
@@ -66,7 +67,7 @@ def gaussian_illumination(img):
 
     # Scale and shift the values of the mask to control the range of the illumination change
     if random.random() < 0.25:
-        pad_mask = (pad_mask - pad_mask.min()) / (pad_mask.max() - pad_mask.min()) * np.random.randint(160, 230)
+        pad_mask = (pad_mask - pad_mask.min()) / (pad_mask.max() - pad_mask.min()) * np.random.randint(180, 250)
     else:
         pad_mask = (pad_mask - pad_mask.min()) / (pad_mask.max() - pad_mask.min()) * np.random.randint(0, 50)
 
@@ -972,7 +973,105 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         else:
                             img[int(label[2]):int(label[4]), int(label[1]):int(label[3]), :] = 0
                 labels = np.array(labels_after_filter)
-                                    
+            
+            if hyp is not None and random.random() < hyp.get('check_clothes', [None, 0])[1]:
+                if len(labels) > 0:
+                    if 1 in labels[:, 0]:#face exists
+                        face_label = labels[0]
+                        color_sample = cv2.resize(img, (100,100))
+                        b = np.mean(color_sample[:, :, 0])
+                        g = np.mean(color_sample[:, :, 1])
+                        r = np.mean(color_sample[:, :, 2])
+                        origin_color_sum = (b + g + r)
+                        b = b/origin_color_sum
+                        g = g/origin_color_sum
+                        r = r/origin_color_sum
+
+                        '''
+                        check_image = np.zeros([192, 192, 4])
+                        check_part_total = random.randint(2, 12)
+                        mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
+                        for check_num in range(1, check_part_total):
+                            thickness = int((mosaic_patch_size/64) + random.random()*(mosaic_patch_size/32))                    
+                            check_color = (random.randint(16, 200)*b*3, random.randint(16, 200)*g*3, random.randint(16, 200)*r*3, random.randint(50, 200))
+                            check_x_coord = int((check_num / check_part_total) * check_image.shape[1])
+                            check_image = cv2.line(check_image, [check_x_coord+random.randint(-3, 3), 10], [check_x_coord+random.randint(-3, 3), check_image.shape[0]-10], 
+                                check_color, thickness, lineType=cv2.LINE_AA)
+                        check_part_total = random.randint(2, 6)
+                        for check_num in range(1, check_part_total):
+                            thickness = int((mosaic_patch_size/64) + random.random()*(mosaic_patch_size/32))                    
+                            check_color = (random.randint(16, 200)*b*3, random.randint(16, 200)*g*3, random.randint(16, 200)*r*3, random.randint(50, 200))
+                            check_y_coord = int((check_num / check_part_total) * check_image.shape[0])
+                            check_image = cv2.line(check_image, [10, check_y_coord+random.randint(-3, 3)], [check_image.shape[1]-10, check_y_coord+random.randint(-3, 3)], 
+                                check_color, thickness, lineType=cv2.LINE_AA)
+                        print(check_image.dtype)
+                        '''
+                        
+                        check_imgs = os.listdir(hyp.get('check_clothes', [None, 0])[0])      
+                        check_filename = check_imgs[random.randint(0, len(check_imgs) - 1)]
+                        check_image = cv2.imread(os.path.join(hyp.get('check_clothes', [None, 0])[0], check_filename), cv2.IMREAD_UNCHANGED)
+                        if len(check_image.shape) == 3 and check_image.shape[2] == 3 :  
+                            check_image = cv2.resize(check_image, (192, 192), interpolation=cv2.INTER_LINEAR)
+
+                            check_transform = A.Compose([
+                                A.OpticalDistortion(always_apply=False, p=1.0, distort_limit=(-0.63, 0.63), shift_limit=(-0.05, 0.05), interpolation=0, border_mode=4, value=(0, 0, 0), mask_value=None),
+                                A.ColorJitter(always_apply=False, p=0.5, brightness=(0.8, 1.2), contrast=(0.8, 1.2), saturation=(0.8, 1.2), hue=(-0.2, 0.2)),
+                                A.Rotate(always_apply=False, p=1.0, limit=(-30, 30), interpolation=0, border_mode=0, value=(0, 0, 0), mask_value=None, rotate_method='largest_box', crop_border=False)
+                            ])
+
+                            transformed = check_transform(image=check_image)
+                            check_image = transformed['image']
+
+                            check_image = cv2.cvtColor(check_image, cv2.COLOR_BGR2RGBA).astype(np.float64)
+                            check_image[:, :, 3] = check_image[:, :, 3] * (0.3+random.random()*0.4)
+                                
+                            check_x1 = int(min(max(face_label[1]-(face_label[3]-face_label[1])*(-0.25+random.random()*1.5), 0), img.shape[1]))
+                            check_y1 = int(min(max(face_label[4]+(face_label[4]-face_label[2])*(-0.05+random.random()*0.2), 0), img.shape[0]))
+                            check_x2 = int(min(max(face_label[3]+(face_label[3]-face_label[1])*(-0.25+random.random()*1.5), 0), img.shape[1]))
+                            
+                            check_width = check_x2 - check_x1
+                            check_y2 = int(min(max(check_y1+check_width, 0), img.shape[0]))
+                            cut_off = max(check_y1 + check_width - img.shape[0], 0)
+
+                            try:
+                                for idx_x in range(check_image.shape[1]) :
+                                    for idx_y in range(check_image.shape[0]) :
+
+                                        color_sum = np.sum(check_image[idx_y][idx_x][0:3])
+
+                                        if color_sum > 10 :
+                                            check_image[idx_y][idx_x][0] = min(int(color_sum * b),255)
+                                            check_image[idx_y][idx_x][1] = min(int(color_sum * g),255)
+                                            check_image[idx_y][idx_x][2] = min(int(color_sum * r),255)
+                            except:
+                                check_image = check_image
+
+                            if check_image.shape[0] > 1 and check_image.shape[1] > 1:
+                                check_image = cv2.resize(check_image, (check_width, check_width), interpolation=cv2.INTER_LINEAR)
+                                check_image = random_wave(check_image)
+
+                                if cut_off > 0:
+                                    check_image = check_image[:-cut_off, :, :]
+
+                                if random.randint(0,1) == 0 :
+                                    check_image = cv2.flip(check_image, 1)                                
+                                        
+
+                                if check_y2 - check_y1 > 1 and check_x2 - check_x1 > 1:
+                                    img_crop = img[check_y1:check_y2, check_x1:check_x2]
+                                    #img_crop = cv2.resize(img_crop, (check_image.shape[1], check_image.shape[0]), interpolation=cv2.INTER_LINEAR)
+                                    img_crop = cv2.cvtColor(img_crop, cv2.COLOR_RGB2RGBA)
+
+                                    # Pillow 에서 Alpha Blending
+                                    check_image_pillow = Image.fromarray(check_image.astype(np.uint8))
+                                    img_crop_pillow = Image.fromarray(img_crop)
+                                    blended_pillow = Image.alpha_composite(img_crop_pillow, check_image_pillow)
+                                    blended_img=np.array(blended_pillow)  
+
+                                    # 원본 이미지에 다시 합치기
+                                    blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
+                                    img[check_y1:check_y2, check_x1:check_x2] = blended_img
+
             if hyp is not None and random.random() < hyp.get('fakeseatbelt3', [None, 0])[1]:
                 if len(labels) > 0:
                     if 1 in labels[:, 0] and 0 not in labels[:, 0] and len(labels[:, 0])==1:#face exists, seatbelt does not exist                    
