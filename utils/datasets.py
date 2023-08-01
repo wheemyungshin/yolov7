@@ -1054,7 +1054,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
                             check_image = cv2.cvtColor(check_image, cv2.COLOR_BGR2RGBA).astype(np.float64)
                             check_image[:, :, 3] = check_image[:, :, 3] * (0.3+random.random()*0.4)
-                                
+                            
                             check_x1 = int(min(max(face_label[1]-(face_label[3]-face_label[1])*(-0.25+random.random()*1.5), 0), img.shape[1]))
                             check_y1 = int(min(max(face_label[4]+(face_label[4]-face_label[2])*(-0.05+random.random()*0.2), 0), img.shape[0]))
                             check_x2 = int(min(max(face_label[3]+(face_label[3]-face_label[1])*(-0.25+random.random()*1.5), 0), img.shape[1]))
@@ -1235,7 +1235,13 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                 blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
                                 img[seat_y1_start:seat_y2_start, seat_x1_start:seat_x2_start] = blended_img
 
-                                labels = np.append(labels, np.array([[0, x1, y1, x2, y2]]), axis=0) 
+                                labels = np.append(labels, np.array([[0, x1, y1, x2, y2]]), axis=0)  
+                                segments.append(np.array([
+                                    [x1, y1], 
+                                    [x2, y1],  
+                                    [x2, y2],
+                                    [x1, y2]
+                                    ]))
                         
         if hyp is not None and hyp.get('render_fire', None) is not None:
             nL = len(labels)  # number of labels
@@ -1774,6 +1780,12 @@ def load_mosaic(self, hyp, index):
                                 img[seat_y1_start:seat_y2_start, seat_x1_start:seat_x2_start] = blended_img
 
                                 labels = np.append(labels, np.array([[0, x1, y1, x2, y2]]), axis=0) 
+                                segments.append(np.array([
+                                    [x1, y1], 
+                                    [x2, y1],  
+                                    [x2, y2],
+                                    [x1, y2]
+                                    ]))
 
         labels4.append(labels)
         segments4.extend(segments)
@@ -1994,7 +2006,13 @@ def load_mosaic9(self, hyp, index):
                                 blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
                                 img[seat_y1_start:seat_y2_start, seat_x1_start:seat_x2_start] = blended_img
 
-                                labels = np.append(labels, np.array([[0, x1, y1, x2, y2]]), axis=0) 
+                                labels = np.append(labels, np.array([[0, x1, y1, x2, y2]]), axis=0)  
+                                segments.append(np.array([
+                                    [x1, y1], 
+                                    [x2, y1],  
+                                    [x2, y2],
+                                    [x1, y2]
+                                    ]))
 
         labels9.append(labels)
         segments9.extend(segments)
