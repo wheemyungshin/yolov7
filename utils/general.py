@@ -15,6 +15,7 @@ import cv2
 import numpy as np
 import pandas as pd
 import torch
+import torch.nn.functional as F
 import torchvision
 import yaml
 
@@ -320,7 +321,7 @@ def resample_segments(segments, n=1000):
         s = np.concatenate((s, s[0:1, :]), axis=0)
         x = np.linspace(0, len(s) - 1, n)
         xp = np.arange(len(s))
-        segments[i] = np.concatenate([np.interp(x, xp, s[:, i]) for i in range(2)]).reshape(2, -1).T  # segment xy
+        segments[i] = np.concatenate([np.interp(x, xp, s[:, i]) for i in range(2)]).reshape(2, -1).T  # segment xy    
     return segments
 
 
@@ -803,6 +804,129 @@ def non_max_suppression_kpt(prediction, conf_thres=0.25, iou_thres=0.45, classes
 
     return output
 
+def non_max_suppression_seg(
+        prediction,
+        conf_thres=0.25,
+        iou_thres=0.45,
+        classes=None,
+        agnostic=False,
+        multi_label=False,
+        labels=(),
+        max_det=300,
+        nm=0,  # number of masks
+):
+    """Non-Maximum Suppression (NMS) on inference results to reject overlapping detections
+
+    Returns:
+         list of detections, on (n,6) tensor per image [xyxy, conf, cls]
+    """
+
+    bs = prediction.shape[0]  # batch size
+    nc = prediction.shape[2] - nm - 5  # number of classes
+    xc = prediction[..., 4] > conf_thres  # candidates
+
+    # Checks
+    assert 0 <= conf_thres <= 1, f'Invalid Confidence threshold {conf_thres}, valid values are between 0.0 and 1.0'
+    assert 0 <= iou_thres <= 1, f'Invalid IoU {iou_thres}, valid values are between 0.0 and 1.0'
+
+    # Settings
+    # min_wh = 2  # (pixels) minimum box width and height
+    max_wh = 4096  # (pixels) maximum box width and height
+    max_nms = 30000  # maximum number of boxes into torchvision.ops.nms()
+    time_limit = 10.0  # seconds to quit after
+    redundant = True  # require redundant detections
+    multi_label &= nc > 1  # multiple labels per box (adds 0.5ms/img)
+    merge = False  # use merge-NMS
+
+    t = time.time()
+    mi = 5 + nc  # mask start index
+    output = [torch.zeros((0, 6 + nm), device=prediction.device)] * bs
+    for xi, x in enumerate(prediction):  # image index, image inference
+        # Apply constraints
+        # x[((x[..., 2:4] < min_wh) | (x[..., 2:4] > max_wh)).any(1), 4] = 0  # width-height
+        x = x[xc[xi]]  # confidence
+
+        # Cat apriori labels if autolabelling
+        if labels and len(labels[xi]):
+            lb = labels[xi]
+            v = torch.zeros((len(lb), nc + nm + 5), device=x.device)
+            v[:, :4] = lb[:, 1:5]  # box
+            v[:, 4] = 1.0  # conf
+            v[range(len(lb)), lb[:, 0].long() + 5] = 1.0  # cls
+            x = torch.cat((x, v), 0)
+
+        # If none remain process next image
+        if not x.shape[0]:
+            continue
+
+        # Compute conf
+        x[:, 5:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
+
+        # Box/Mask
+        box = xywh2xyxy(x[:, :4])  # center_x, center_y, width, height) to (x1, y1, x2, y2)
+        mask = x[:, mi:]  # zero columns if no masks
+
+        # Detections matrix nx6 (xyxy, conf, cls)
+        if multi_label:
+            i, j = (x[:, 5:mi] > conf_thres).nonzero(as_tuple=False).T
+            x = torch.cat((box[i], x[i, 5 + j, None], j[:, None].float(), mask[i]), 1)
+        else:  # best class only
+            conf, j = x[:, 5:mi].max(1, keepdim=True)
+            x = torch.cat((box, conf, j.float(), mask), 1)[conf.view(-1) > conf_thres]
+
+        # Filter by class
+        if classes is not None:
+            x = x[(x[:, 5:6] == torch.tensor(classes, device=x.device)).any(1)]
+
+        # Apply finite constraint
+        # if not torch.isfinite(x).all():
+        #     x = x[torch.isfinite(x).all(1)]
+
+        # Check shape
+        n = x.shape[0]  # number of boxes
+        if not n:  # no boxes
+            continue
+        elif n > max_nms:  # excess boxes
+            x = x[x[:, 4].argsort(descending=True)[:max_nms]]  # sort by confidence
+        else:
+            x = x[x[:, 4].argsort(descending=True)]  # sort by confidence
+
+        # Batched NMS
+        c = x[:, 5:6] * (0 if agnostic else max_wh)  # classes
+        boxes, scores = x[:, :4] + c, x[:, 4]  # boxes (offset by class), scores
+        i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
+        if i.shape[0] > max_det:  # limit detections
+            i = i[:max_det]
+        if merge and (1 < n < 3E3):  # Merge NMS (boxes merged using weighted mean)
+            # update boxes as boxes(i,4) = weights(i,n) * boxes(n,4)
+            iou = box_iou(boxes[i], boxes) > iou_thres  # iou matrix
+            weights = iou * scores[None]  # box weights
+            x[i, :4] = torch.mm(weights, x[:, :4]).float() / weights.sum(1, keepdim=True)  # merged boxes
+            if redundant:
+                i = i[iou.sum(1) > 1]  # require redundancy
+
+        output[xi] = x[i]
+        if (time.time() - t) > time_limit:
+            LOGGER.warning(f'WARNING: NMS time limit {time_limit:.3f}s exceeded')
+            break  # time limit exceeded
+
+    #for semantic segmentation
+    '''
+    new_output = []
+    for o in output:
+        masks = o[:, 6:]
+        cls_idx_list = o[:, 5]
+        semantic_masks = torch.zeros((masks.shape[0], nc), dtype=masks.dtype, device=masks.get_device())        
+        for cls_idx in torch.unique(cls_idx_list):
+            cls_j = cls_idx_list == cls_idx
+            semantic_masks[cls_j, int(cls_idx)] = masks[cls_j].mean(dim=1)        
+        new_output.append(torch.cat((o[:, :6], semantic_masks), 1))
+    output = new_output
+    '''
+
+    return output
+
+
 
 def strip_optimizer(f='best.pt', s=''):  # from utils.general import *; strip_optimizer()
     # Strip optimizer from 'f' to finalize training, optionally save as 's'
@@ -897,3 +1021,202 @@ def increment_path(path, exist_ok=True, sep=''):
         i = [int(m.groups()[0]) for m in matches if m]  # indices
         n = max(i) + 1 if i else 2  # increment number
         return f"{path}{sep}{n}"  # update path
+
+
+###########################mask/segmentation################################
+
+def crop(masks, boxes):
+    """
+    "Crop" predicted masks by zeroing out everything not in the predicted bbox.
+    Vectorized by Chong (thanks Chong).
+
+    Args:
+        - masks should be a size [h, w, n] tensor of masks
+        - boxes should be a size [n, 4] tensor of bbox coords in relative point form
+    """
+
+    n, h, w = masks.shape
+    x1, y1, x2, y2 = torch.chunk(boxes[:, :, None], 4, 1)  # x1 shape(1,1,n)
+    r = torch.arange(w, device=masks.device, dtype=x1.dtype)[None, None, :]  # rows shape(1,w,1)
+    c = torch.arange(h, device=masks.device, dtype=x1.dtype)[None, :, None]  # cols shape(h,1,1)
+
+    return masks * ((r >= x1) * (r < x2) * (c >= y1) * (c < y2))
+
+
+def process_mask_upsample(protos, masks_in, bboxes, shape):
+    """
+    Crop after upsample.
+    proto_out: [mask_dim, mask_h, mask_w]
+    out_masks: [n, mask_dim], n is number of masks after nms
+    bboxes: [n, 4], n is number of masks after nms
+    shape:input_image_size, (h, w)
+
+    return: h, w, n
+    """
+
+    c, mh, mw = protos.shape  # CHW
+    masks = (masks_in @ protos.float().view(c, -1)).sigmoid().view(-1, mh, mw)
+    masks = F.interpolate(masks[None], shape, mode='bilinear', align_corners=False)[0]  # CHW
+    masks = crop(masks, bboxes)  # CHW
+    return masks.gt_(0.5)
+
+
+def process_mask(protos, masks_in, bboxes, shape, upsample=False):
+    """
+    Crop before upsample.
+    proto_out: [mask_dim, mask_h, mask_w]
+    out_masks: [n, mask_dim], n is number of masks after nms
+    bboxes: [n, 4], n is number of masks after nms
+    shape:input_image_size, (h, w)
+
+    return: h, w, n
+    """
+    print("protos: ", protos.shape)
+    print("masks_in: ", masks_in.shape)
+    print("bboxes: ", bboxes.shape)
+
+    c, mh, mw = protos.shape  # CHW
+    ih, iw = shape
+    masks = (masks_in @ protos.float().view(c, -1)).sigmoid().view(-1, mh, mw)  # CHW
+
+    downsampled_bboxes = bboxes.clone()
+    downsampled_bboxes[:, 0] *= mw / iw
+    downsampled_bboxes[:, 2] *= mw / iw
+    downsampled_bboxes[:, 3] *= mh / ih
+    downsampled_bboxes[:, 1] *= mh / ih
+
+    masks = crop(masks, downsampled_bboxes)  # CHW
+    if upsample:
+        masks = F.interpolate(masks[None], shape, mode='bilinear', align_corners=False)[0]  # CHW
+    return masks.gt_(0.5)
+
+
+def process_semantic_mask(protos, masks_in, bboxes, shape, nc, upsample=False):
+    """
+    Crop before upsample.
+    proto_out: [mask_dim, mask_h, mask_w]
+    out_masks: [n, mask_dim], n is number of masks after nms
+    bboxes: [n, 4], n is number of masks after nms
+    shape:input_image_size, (h, w)
+
+    return: h, w, n
+    """
+    c, mh, mw = protos.shape  # CHW
+    ih, iw = shape
+    semantic_masks = F.softmax(protos.float(), dim=0)  # CHW
+
+    downsampled_bboxes = bboxes[:, :4].clone()
+    downsampled_bboxes[:, 0] *= mw / iw
+    downsampled_bboxes[:, 2] *= mw / iw
+    downsampled_bboxes[:, 3] *= mh / ih
+    downsampled_bboxes[:, 1] *= mh / ih
+
+    if upsample:
+        semantic_masks = F.interpolate(semantic_masks[None], shape, mode='bilinear', align_corners=False)[0] # CHW
+
+    output = semantic_masks.argmax(axis=0)
+    #output[semantic_masks.lt(0.5).all(dim=0)] = -1
+    #print("1: ", semantic_masks)
+    #print("1: ", torch.max(semantic_masks))
+    #print("1: ", torch.min(semantic_masks))
+    #print("1: ", torch.mean(semantic_masks))
+    return output
+'''
+def process_semantic_mask(protos, masks_in, bboxes, shape, nc, upsample=False):
+    """
+    Crop before upsample.
+    proto_out: [mask_dim, mask_h, mask_w]
+    out_masks: [n, mask_dim], n is number of masks after nms
+    bboxes: [n, 4], n is number of masks after nms
+    shape:input_image_size, (h, w)
+
+    return: h, w, n
+    """
+    c, mh, mw = protos.shape  # CHW
+    ih, iw = shape
+    masks = (masks_in @ protos.float().view(c, -1)).view(-1, mh, mw)  # CHW
+    semantic_masks = torch.zeros((nc, mh, mw), dtype=masks_in.dtype, device=masks_in.get_device())
+
+    cls_idx_list = bboxes[:, 5].clone()
+    for cls_idx in torch.unique(cls_idx_list):
+        cls_j = cls_idx_list == cls_idx
+        semantic_masks[int(cls_idx)] = masks[cls_j].mean(dim=0)
+
+    semantic_masks = semantic_masks.sigmoid()
+
+    downsampled_bboxes = bboxes[:, :4].clone()
+    downsampled_bboxes[:, 0] *= mw / iw
+    downsampled_bboxes[:, 2] *= mw / iw
+    downsampled_bboxes[:, 3] *= mh / ih
+    downsampled_bboxes[:, 1] *= mh / ih
+
+    semantic_mask_crops = torch.zeros((nc, mh, mw), dtype=masks_in.dtype, device=masks_in.get_device())
+    for cls_idx_i, cls_idx in enumerate(cls_idx_list):
+        semantic_mask_crops[int(cls_idx)][semantic_mask_crops[int(cls_idx)]==0] += crop(torch.unsqueeze(semantic_masks[int(cls_idx)], 0), torch.unsqueeze(downsampled_bboxes[cls_idx_i], 0))[0][semantic_mask_crops[int(cls_idx)]==0]
+    #semantic_masks = crop(semantic_masks, downsampled_bboxes)  # CHW
+    if upsample:
+        semantic_mask_crops = F.interpolate(semantic_mask_crops[None], shape, mode='bilinear', align_corners=False)[0]  # CHW
+    return semantic_mask_crops.gt_(0.5)
+'''
+
+
+def scale_masks(img1_shape, masks, img0_shape, ratio_pad=None):
+    """
+    img1_shape: model input shape, [h, w]
+    img0_shape: origin pic shape, [h, w, 3]
+    masks: [h, w, num]
+    resize for the most time
+    """
+    # Rescale coords (xyxy) from img1_shape to img0_shape
+    if ratio_pad is None:  # calculate from img0_shape
+        gain = min(img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])  # gain  = old / new
+        pad = (img1_shape[1] - img0_shape[1] * gain) / 2, (img1_shape[0] - img0_shape[0] * gain) / 2  # wh padding
+    else:
+        gain = ratio_pad[0][0]
+        pad = ratio_pad[1]
+    tl_pad = int(pad[1]), int(pad[0])  # y, x
+    br_pad = int(img1_shape[0] - pad[1]), int(img1_shape[1] - pad[0])
+
+    if len(masks.shape) < 2:
+        raise ValueError(f'"len of masks shape" should be 2 or 3, but got {len(masks.shape)}')
+    # masks_h, masks_w, n
+    masks = masks[tl_pad[0]:br_pad[0], tl_pad[1]:br_pad[1]]
+    # 1, n, masks_h, masks_w
+    # masks = masks.permute(2, 0, 1).contiguous()[None, :]
+    # # shape = [1, n, masks_h, masks_w] after F.interpolate, so take first element
+    # masks = F.interpolate(masks, img0_shape[:2], mode='bilinear', align_corners=False)[0]
+    # masks = masks.permute(1, 2, 0).contiguous()
+    # masks_h, masks_w, n
+    masks = cv2.resize(masks, (img0_shape[1], img0_shape[0]))
+
+    # keepdim
+    if len(masks.shape) == 2:
+        masks = masks[:, :, None]
+
+    return masks
+
+
+def mask_iou(mask1, mask2, eps=1e-7):
+    """
+    mask1: [N, n] m1 means number of predicted objects
+    mask2: [M, n] m2 means number of gt objects
+    Note: n means image_w x image_h
+
+    return: masks iou, [N, M]
+    """
+    intersection = torch.matmul(mask1, mask2.t()).clamp(0)
+    union = (mask1.sum(1)[:, None] + mask2.sum(1)[None]) - intersection  # (area1 + area2) - intersection
+    return intersection / (union + eps)
+
+
+def masks_iou(mask1, mask2, eps=1e-7):
+    """
+    mask1: [N, n] m1 means number of predicted objects
+    mask2: [N, n] m2 means number of gt objects
+    Note: n means image_w x image_h
+
+    return: masks iou, (N, )
+    """
+    intersection = (mask1 * mask2).sum(1).clamp(0)  # (N, )
+    union = (mask1.sum(1) + mask2.sum(1))[None] - intersection  # (area1 + area2) - intersection
+    return intersection / (union + eps)

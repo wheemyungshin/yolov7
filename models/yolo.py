@@ -316,6 +316,44 @@ class IDetect(nn.Module):
         box @= convert_matrix                          
         return (box, score)
 
+class Segment(Detect):
+    # YOLOv5 Segment head for segmentation models
+    def __init__(self, nc=80, anchors=(), ch=(), nm=None):
+        super().__init__(nc, anchors, ch)
+        if nm is not None:
+            self.nm = nm
+        else:
+            self.nm = nc + 1 #32  # number of masks
+        self.npr = 256  # number of protos
+        self.no = 5 + nc# + self.nm  # number of outputs per anchor
+        self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.na, 1) for x in ch)  # output conv
+        self.proto = Proto(ch[0], self.npr, self.nm)  # protos
+        self.detect = Detect.forward
+
+    def forward(self, x):
+        p = self.proto(x[0])
+        x = self.detect(self, x)
+        return (x, p) if self.training else (x[0], p) #if self.export else (x[0], (x[1], p))
+
+class ISegment(IDetect):
+    # YOLOR Segment head for segmentation models
+    def __init__(self, nc=80, anchors=(), ch=(), nm=None):
+        super().__init__(nc, anchors, ch)
+        if nm is not None:
+            self.nm = nm
+        else:
+            self.nm = nc + 1 #32  # number of masks
+        self.npr = 256  # number of protos
+        self.no = 5 + nc# + self.nm  # number of outputs per anchor
+        self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.na, 1) for x in ch)  # output conv
+        self.im = nn.ModuleList(ImplicitM(self.no * self.na) for _ in ch)
+        self.proto = Proto(ch[0], self.npr, self.nm)  # protos
+        self.detect = IDetect.forward
+
+    def forward(self, x):
+        p = self.proto(x[0])
+        x = self.detect(self, x)
+        return (x, p) if self.training else (x[0], p) if self.export else (x[0], (x[1], p))
 
 class IKeypoint(nn.Module):
     stride = None  # strides computed during build
@@ -616,7 +654,7 @@ class IBin(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, cfg='yolor-csp-c.yaml', ch=3, nc=None, anchors=None):  # model, input channels, number of classes
+    def __init__(self, cfg='yolor-csp-c.yaml', ch=3, nc=None, anchors=None, nm=None):  # model, input channels, number of classes
         super(Model, self).__init__()
         self.traced = False
         if isinstance(cfg, dict):
@@ -635,13 +673,20 @@ class Model(nn.Module):
         if anchors:
             logger.info(f'Overriding model.yaml anchors with anchors={anchors}')
             self.yaml['anchors'] = round(anchors)  # override yaml value
-        self.model, self.save = parse_model(deepcopy(self.yaml), ch=[ch])  # model, savelist
+        self.model, self.save = parse_model(deepcopy(self.yaml), ch=[ch], nm=nm)  # model, savelist
         self.names = [str(i) for i in range(self.yaml['nc'])]  # default names
         # print([x.shape for x in self.forward(torch.zeros(1, ch, 64, 64))])
 
         # Build strides, anchors
         m = self.model[-1]  # Detect()
-        if isinstance(m, Detect):
+        if isinstance(m, Segment):
+            s = 256  # 2x min stride
+            m.stride = torch.tensor([s / x[0].shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
+            check_anchor_order(m)
+            m.anchors /= m.stride.view(-1, 1, 1)
+            self.stride = m.stride
+            self._initialize_biases()  # only run once
+        elif isinstance(m, Detect):
             s = 256  # 2x min stride
             m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
             check_anchor_order(m)
@@ -649,7 +694,15 @@ class Model(nn.Module):
             self.stride = m.stride
             self._initialize_biases()  # only run once
             # print('Strides: %s' % m.stride.tolist())
-        if isinstance(m, IDetect):
+        if isinstance(m, ISegment):
+            s = 256  # 2x min stride
+            m.stride = torch.tensor([s / x[0].shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))[0]])  # forward
+            check_anchor_order(m)
+            m.anchors /= m.stride.view(-1, 1, 1)
+            self.stride = m.stride
+            self._initialize_biases()  # only run once
+            # print('Strides: %s' % m.stride.tolist())
+        elif isinstance(m, IDetect):
             s = 256  # 2x min stride
             m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
             check_anchor_order(m)
@@ -863,6 +916,7 @@ class Model(nn.Module):
         y, dt = [], []  # outputs
         if get_feature:
             features = []
+
         for m in self.model:
             if m.f != -1:  # if not from previous layer
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
@@ -871,11 +925,11 @@ class Model(nn.Module):
                 self.traced=False
 
             if self.traced:
-                if isinstance(m, Detect) or isinstance(m, IDetect) or isinstance(m, IAuxDetect) or isinstance(m, IKeypoint):
+                if isinstance(m, Detect) or isinstance(m, IDetect) or isinstance(m, IAuxDetect) or isinstance(m, IKeypoint) or isinstance(m, Segment) or isinstance(m, ISegment):
                     break
 
             if profile:
-                c = isinstance(m, (Detect, IDetect, IAuxDetect, IBin))
+                c = isinstance(m, (Detect, IDetect, IAuxDetect, IBin, Segment, ISegment))
                 o = thop.profile(m, inputs=(x.copy() if c else x,), verbose=False)[0] / 1E9 * 2 if thop else 0  # FLOPS
                 for _ in range(10):
                     m(x.copy() if c else x)
@@ -884,9 +938,8 @@ class Model(nn.Module):
                     m(x.copy() if c else x)
                 dt.append((time_synchronized() - t) * 100)
                 print('%10.1f%10.0f%10.1fms %-40s' % (o, m.np, dt[-1], m.type))
-
             x = m(x)  # run
-            
+
             y.append(x if m.i in self.save else None)  # save output
             if m.i in self.model[-1].f and get_feature and len(features) < 3:#distill features after the last repconv
                 features.append(x)
@@ -972,7 +1025,7 @@ class Model(nn.Module):
                 m.conv = fuse_conv_and_bn(m.conv, m.bn)  # update conv
                 delattr(m, 'bn')  # remove batchnorm
                 m.forward = m.fuseforward  # update forward
-            elif isinstance(m, (IDetect, IAuxDetect)):
+            elif isinstance(m, (IDetect, IAuxDetect)) and not isinstance(m, ISegment):
                 m.fuse()
                 m.forward = m.fuseforward
             elif type(m) is Shuffle_Block:
@@ -1182,7 +1235,7 @@ class DetectPostPart(nn.Module):
         
         return (torch.cat(z,1), x)
 
-def parse_model(d, ch):  # model_dict, input_channels(3)
+def parse_model(d, ch, nm):  # model_dict, input_channels(3)
     logger.info('\n%3s%18s%3s%10s  %-40s%-30s' % ('', 'from', 'n', 'params', 'module', 'arguments'))
     anchors, nc, gd, gw = d['anchors'], d['nc'], d['depth_multiple'], d['width_multiple']
     na = (len(anchors[0]) // 2) if isinstance(anchors, list) else anchors  # number of anchors
@@ -1239,10 +1292,12 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
             c2 = ch[f] // 2
         elif m is ADD:
             c2 = sum([ch[x] for x in f])//2
-        elif m in [Detect, IDetect, IAuxDetect, IBin, IKeypoint]:
+        elif m in [Detect, IDetect, IAuxDetect, IBin, IKeypoint, Segment, ISegment]:
             args.append([ch[x] for x in f])
             if isinstance(args[1], int):  # number of anchors
                 args[1] = [list(range(args[1] * 2))] * len(f)
+            if m in [Segment, ISegment]:
+                args.append(nm)
         elif m is ReOrg:
             c2 = ch[f] * 4
         elif m is Contract:
