@@ -1056,21 +1056,14 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             check_image = cv2.cvtColor(check_image, cv2.COLOR_BGR2RGBA).astype(np.float64)
                             check_image[:, :, 3] = check_image[:, :, 3] * (0.3+random.random()*0.4)
                             
-                            ''''
                             check_x1 = int(min(max(face_label[1]-(face_label[3]-face_label[1])*(-0.25+random.random()*1.5), 0), img.shape[1]))
                             check_y1 = int(min(max(face_label[4]+(face_label[4]-face_label[2])*(-0.05+random.random()*0.2), 0), img.shape[0]))
                             check_x2 = int(min(max(face_label[3]+(face_label[3]-face_label[1])*(-0.25+random.random()*1.5), 0), img.shape[1]))                            
                             check_width = check_x2 - check_x1
                             check_y2 = int(min(max(check_y1+check_width, 0), img.shape[0]))
-                            '''
-
-                            check_x1 = random.randint(0, img.shape[1]-check_image.shape[1])
-                            check_y1 = random.randint(0, img.shape[0]-check_image.shape[0])
-                            check_x2 = check_x1 + check_image.shape[1]
-                            check_y2 = check_y1 + check_image.shape[0]
-                            check_width = check_image.shape[1]
-
+                            
                             cut_off = max(check_y1 + check_width - img.shape[0], 0)
+                            #cut_off = max(check_y2 - check_y1, 0)
 
                             try:
                                 for idx_x in range(check_image.shape[1]) :
