@@ -1041,7 +1041,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         check_filename = check_imgs[random.randint(0, len(check_imgs) - 1)]
                         check_image = cv2.imread(os.path.join(hyp.get('check_clothes', [None, 0])[0], check_filename), cv2.IMREAD_UNCHANGED)
                         if len(check_image.shape) == 3 and check_image.shape[2] == 3 :  
-                            check_image = cv2.resize(check_image, (192, 192), interpolation=cv2.INTER_LINEAR)
+                            check_image_size = random.randint(img.shape[1]/4, img.shape[1]/2)
+                            check_image = cv2.resize(check_image, (check_image_size, check_image_size), interpolation=cv2.INTER_LINEAR)
 
                             check_transform = A.Compose([
                                 A.OpticalDistortion(always_apply=False, p=1.0, distort_limit=(-0.63, 0.63), shift_limit=(-0.05, 0.05), interpolation=0, border_mode=4, value=(0, 0, 0), mask_value=None),
@@ -1055,12 +1056,20 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             check_image = cv2.cvtColor(check_image, cv2.COLOR_BGR2RGBA).astype(np.float64)
                             check_image[:, :, 3] = check_image[:, :, 3] * (0.3+random.random()*0.4)
                             
+                            ''''
                             check_x1 = int(min(max(face_label[1]-(face_label[3]-face_label[1])*(-0.25+random.random()*1.5), 0), img.shape[1]))
                             check_y1 = int(min(max(face_label[4]+(face_label[4]-face_label[2])*(-0.05+random.random()*0.2), 0), img.shape[0]))
-                            check_x2 = int(min(max(face_label[3]+(face_label[3]-face_label[1])*(-0.25+random.random()*1.5), 0), img.shape[1]))
-                            
+                            check_x2 = int(min(max(face_label[3]+(face_label[3]-face_label[1])*(-0.25+random.random()*1.5), 0), img.shape[1]))                            
                             check_width = check_x2 - check_x1
                             check_y2 = int(min(max(check_y1+check_width, 0), img.shape[0]))
+                            '''
+
+                            check_x1 = random.randint(0, img.shape[1]-check_image.shape[1])
+                            check_y1 = random.randint(0, img.shape[0]-check_image.shape[0])
+                            check_x2 = check_x1 + check_image.shape[1]
+                            check_y2 = check_y1 + check_image.shape[0]
+                            check_width = check_image.shape[1]
+
                             cut_off = max(check_y1 + check_width - img.shape[0], 0)
 
                             try:
