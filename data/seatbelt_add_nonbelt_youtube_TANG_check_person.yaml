@@ -1,0 +1,21 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [/data/Pitta2ND_DB/seatbelt/train.txt, 
+      /data/smoke_non_seatbelt_filter/smoke_data_BFC/train.txt,
+      /data/smoke_non_seatbelt_filter/valid_pitta_smoke_BFC2/train.txt,
+      /data/AVATAR_Game_Beauty_Youtuber_body_crops/1-002/train.txt,
+      /data/AVATAR_Game_Beauty_Youtuber_body_crops/2-001/train.txt,
+      /data/seatbelt_TANG_after_inspection/train.txt,
+      /data/auto_BF_checks/auto_BF_check_0/train.txt,
+      /data/auto_BF_checks/auto_BF_check_1/train.txt,
+      /data/auto_BF_checks/auto_BF_check_2/train.txt
+      ] # 14695 + 23494
+val: [/data/Pitta2ND_DB/seatbelt/train.txt]   
+test: [/data/Pitta2ND_DB/seatbelt/train.txt]   
+
+# number of classes
+nc: 2
+
+# class names
+names: ['seatbelt', 'face']
+
+valid_idx: [0, 1]
