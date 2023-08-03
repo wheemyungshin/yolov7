@@ -1784,7 +1784,7 @@ class ComputeLossSegment:
 
                 # Mask regression
                 if tuple(masks.shape[-2:]) != (mask_h, mask_w):  # downsample
-                    masks = F.interpolate(masks[None], (mask_h, mask_w), mode="bilinear", align_corners=False)[0]
+                    masks = F.interpolate(masks[None], (mask_h, mask_w), mode="nearest")[0]
                 marea = xywhn[i][:, 2:].prod(1)  # mask width, height normalized
                 mxyxy = xywh2xyxy(xywhn[i] * torch.tensor([mask_w, mask_h, mask_w, mask_h], device=self.device))
 
@@ -1818,8 +1818,7 @@ class ComputeLossSegment:
 
         cls_idx_list = torch.argmax(tcls, axis=-1)
         semantic_gt_mask = torch.zeros((semantic_pred_mask.shape[1], semantic_pred_mask.shape[2]), dtype=torch.long, device=self.device)
-
-
+        
         for cls_idx in torch.unique(cls_idx_list):
             if len(valid_segment_labels) > 0:
                 for valid_idx_i, valid_cls_idx in enumerate(valid_segment_labels):
