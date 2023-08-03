@@ -345,15 +345,27 @@ class ISegment(IDetect):
             self.nm = nc + 1 #32  # number of masks
         self.npr = 256  # number of protos
         self.no = 5 + nc# + self.nm  # number of outputs per anchor
-        self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.na, 1) for x in ch)  # output conv
-        self.im = nn.ModuleList(ImplicitM(self.no * self.na) for _ in ch)
-        self.proto = Proto(ch[0], self.npr, self.nm)  # protos
+        #self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.na, 1) for x in ch)  # output conv
+        #self.im = nn.ModuleList(ImplicitM(self.no * self.na) for _ in ch)
+        self.protos = nn.ModuleList(Proto(x, self.npr, self.nm) for x in ch)  # protos
         self.detect = IDetect.forward
+        
+        self.ia_seg = nn.ModuleList(ImplicitA(x) for x in ch)
 
     def forward(self, x):
-        p = self.proto(x[0])
+        x_origin = x.copy()
         x = self.detect(self, x)
-        return (x, p) if self.training else (x[0], p) if self.export else (x[0], (x[1], p))
+        
+        leading_shape = (x_origin[0].shape[2], x_origin[0].shape[3])
+        proto_outputs = []
+        for x_i in range(len(x_origin)):
+            p_input = self.ia_seg[x_i](x_origin[x_i])  # conv
+            p = self.protos[x_i](p_input)
+            p = F.interpolate(p, leading_shape, mode="nearest")
+            proto_outputs.append(torch.unsqueeze(p, 0))
+        proto_output = torch.sum(torch.cat(proto_outputs, 0), dim=0, keepdim=False)
+            
+        return (x, proto_output) if self.training else (x[0], proto_output) if self.export else (x[0], (x[1], proto_output))
 
 class IKeypoint(nn.Module):
     stride = None  # strides computed during build
