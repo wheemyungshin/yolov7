@@ -155,7 +155,6 @@ def detect(save_img=False):
                         #masks = process_mask(proto[i], det[:, 6:], det[:, :4], img.shape[2:], upsample=True)
                         masks = process_semantic_mask(proto[i], det[:, 6:], det[:, :6], img.shape[2:], nc=len(names), upsample=True)
 
-                    print(masks.shape)
                     scores = det[:, 4]
                     # Rescale boxes from img_size to im0 size
                     det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape)#.round()
