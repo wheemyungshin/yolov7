@@ -11,12 +11,12 @@ train: [/data/smoke_data_BFC/train.txt,
 ] 
 
 val: [/data/TANG_phones_not_included/train.txt] # 995
-test: [/data/TANG_phones_not_included/train.txt] # 995
+test: [/data/TANG_phones_not_included/train.txt] # 995 
 
 # number of classes
-nc: 4
+nc: 2
 
 # class names
-names: ['person', 'face', 'smoke', 'cellphone']
+names: ['smoke','cellphone']
 
-valid_idx: [0, 1, 2, 3]
+valid_idx: [2, 3]
