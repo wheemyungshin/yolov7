@@ -1875,7 +1875,7 @@ class ComputeLossSegment:
 
         cls_idx_list = torch.argmax(tcls, axis=-1)
         semantic_gt_mask = torch.zeros((semantic_pred_mask.shape[1], semantic_pred_mask.shape[2]), dtype=torch.long, device=self.device)
-        
+
         for cls_idx in torch.unique(cls_idx_list):
             if len(valid_segment_labels) > 0:
                 for valid_idx_i, valid_cls_idx in enumerate(valid_segment_labels):

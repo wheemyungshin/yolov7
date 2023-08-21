@@ -153,7 +153,7 @@ def detect(save_img=False):
                 if len(det):
                     if opt.seg:
                         #masks = process_mask(proto[i], det[:, 6:], det[:, :4], img.shape[2:], upsample=True)
-                        masks = process_semantic_mask(proto[i], det[:, 6:], det[:, :6], img.shape[2:], nc=len(names), upsample=True)
+                        masks = process_semantic_mask(proto[i], det[:, 6:], det[:, :6], img.shape[2:], upsample=True)
 
                     scores = det[:, 4]
                     # Rescale boxes from img_size to im0 size
@@ -183,6 +183,8 @@ def detect(save_img=False):
                     
                     # Write results
                     for *xyxy, conf, cls in reversed(det[:, :6]):
+                        if cls in opt.valid_segment_labels:
+                            continue
                         if save_txt:  # Write to file
                             xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
                             line = (cls, *xywh, conf) if opt.save_conf else (cls, *xywh)  # label format
