@@ -54,7 +54,7 @@ def gaussian_illumination(img):
     # Generate a random Gaussian gradient mask for the illumination change
     rows, cols = img.shape[:2]
     kernel_size = np.random.randint((min(rows, cols)//3)*2, min(rows, cols))
-    kernel = cv2.getGaussianKernel(192, np.random.randint(35, 45))
+    kernel = cv2.getGaussianKernel(192, np.random.randint(45, 55))
     kernel = cv2.resize(kernel, dsize=(kernel_size, kernel_size), interpolation=cv2.INTER_CUBIC)
     mask = kernel @ kernel.T
 
@@ -66,7 +66,7 @@ def gaussian_illumination(img):
     pad_mask[cy:cy+kernel_size, cx:cx+kernel_size] = mask
 
     # Scale and shift the values of the mask to control the range of the illumination change
-    if random.random() < 0.25:
+    if random.random() < 0.5:
         pad_mask = (pad_mask - pad_mask.min()) / (pad_mask.max() - pad_mask.min()) * np.random.randint(180, 250)
     else:
         pad_mask = (pad_mask - pad_mask.min()) / (pad_mask.max() - pad_mask.min()) * np.random.randint(0, 50)
