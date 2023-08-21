@@ -1091,7 +1091,7 @@ def process_mask(protos, masks_in, bboxes, shape, upsample=False):
     return masks.gt_(0.5)
 
 
-def process_semantic_mask(protos, masks_in, bboxes, shape, nc, upsample=False):
+def process_semantic_mask(protos, masks_in, bboxes, shape, upsample=False):
     """
     Crop before upsample.
     proto_out: [mask_dim, mask_h, mask_w]
