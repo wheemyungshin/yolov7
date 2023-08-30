@@ -121,8 +121,8 @@ def detect(save_img=False):
         else:
             pred_list = []
             patch_num = 2
-            patch_size_x = int(img.shape[3] / patch_num)
-            patch_size_y = int(img.shape[2] / patch_num)
+            patch_size_x = int(img.shape[1] / patch_num)
+            patch_size_y = int(img.shape[0] / patch_num)
             for x_i in range(patch_num):
                 for y_i in range(patch_num):
                     x1 = x_i * patch_size_x
