@@ -2,10 +2,7 @@
 train: [
 /data/crowd/train.txt, /data/crowd/val.txt,
 /data/roboflow_head/train.txt, /data/roboflow_head/valid.txt,
-/data/SCUT_HEAD_Part_B/train.txt,
-/data/coco_head_from_kpts/train.txt,
-/data/coco_head_from_kpts/val.txt,
-/data/gangnam_street_BH/train.txt
+/data/SCUT_HEAD_Part_B/train.txt
 ] 
 val: [/data/roboflow_head/test.txt]   # 5884 images
 test: [/data/roboflow_head/test.txt]   # 5884
