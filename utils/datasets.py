@@ -54,7 +54,7 @@ def gaussian_illumination(img):
     # Generate a random Gaussian gradient mask for the illumination change
     rows, cols = img.shape[:2]
     kernel_size = np.random.randint((min(rows, cols)//3)*2, min(rows, cols))
-    kernel = cv2.getGaussianKernel(192, np.random.randint(35, 45))
+    kernel = cv2.getGaussianKernel(192, np.random.randint(45, 55))
     kernel = cv2.resize(kernel, dsize=(kernel_size, kernel_size), interpolation=cv2.INTER_CUBIC)
     mask = kernel @ kernel.T
 
@@ -66,7 +66,7 @@ def gaussian_illumination(img):
     pad_mask[cy:cy+kernel_size, cx:cx+kernel_size] = mask
 
     # Scale and shift the values of the mask to control the range of the illumination change
-    if random.random() < 0.25:
+    if random.random() < 0.5:
         pad_mask = (pad_mask - pad_mask.min()) / (pad_mask.max() - pad_mask.min()) * np.random.randint(180, 250)
     else:
         pad_mask = (pad_mask - pad_mask.min()) / (pad_mask.max() - pad_mask.min()) * np.random.randint(0, 50)
@@ -929,7 +929,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     if len(sample_images) == 0:
                         break
                 labels = dark_pastein(img, labels, sample_images, sample_masks)
-
+        
         nL = len(labels)  # number of labels
         if nL:
             shape_before = len(labels)
@@ -999,6 +999,37 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             img[int(label[2]):int(label[4]), int(label[1]):int(label[3]), :] = 0
                 labels = np.array(labels_after_filter)
             
+            if hyp is not None and hyp.get('piecewise_augment', False):
+                transform = A.Compose([
+                    A.PiecewiseAffine(always_apply=False, p=1.0, scale=(0.02, 0.03), nb_rows=(3, 3), nb_cols=(3, 3), interpolation=4, mask_interpolation=1, cval=0, cval_mask=0, mode='edge', absolute_scale=0, keypoints_threshold=0.01)
+                ])
+                if len(labels) > 0 and sum(labels[:, 0]==1) > 0:
+                    face_labels = labels[labels[:, 0]==1]
+                    for face_label in face_labels :
+                        ww = int(face_label[3] - face_label[1])
+                        hh = int(face_label[4] - face_label[2])
+
+                        # affine 적용 역역 2배
+                        a_x1 = int(face_label[1] - ww/2)
+                        a_y1 = int(face_label[2] - hh/2)
+                        a_x2 = int(face_label[3] + ww/2)
+                        a_y2 = int(face_label[4] + hh/2)
+
+                        # 경계 나가지 않도록 처리
+                        a_x1 = min(max(0,a_x1),img.shape[1])
+                        a_y1 = min(max(0,a_y1),img.shape[0])
+                        a_x2 = min(max(0,a_x2),img.shape[1])
+                        a_y2 = min(max(0,a_y2),img.shape[0])
+
+                        # piece wise affine 적용
+                        img_crop = img[a_y1:a_y2,a_x1:a_x2]
+                        try:
+                            transformed = transform(image=img_crop)
+                            img_crop = transformed['image']
+                            img[a_y1:a_y2,a_x1:a_x2] = img_crop
+                        except:
+                            print("Invalid transform")
+
             if hyp is not None and random.random() < hyp.get('check_clothes', [None, 0])[1]:
                 if len(labels) > 0:
                     if 1 in labels[:, 0]:#face exists
