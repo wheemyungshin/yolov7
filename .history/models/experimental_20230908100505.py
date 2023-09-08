@@ -255,7 +255,7 @@ class End2End_multihead(nn.Module):
         for head_i, _ in enumerate(multihead_matcher):
             self.model.model[-len(multihead_matcher)+head_i].end2end = True
         self.patch_model = ONNX_TRT if max_wh is None else ONNX_ORT
-        self.end2end = self.patch_model(max_obj, iou_thres, score_thres, max_wh, device, n_classes, agnostic_nms)
+        self.end2end = self.patch_model(max_obj, iou_thres, score_thres, max_wh, device, n_classes)
         self.end2end.eval()
         self.multihead_matcher = multihead_matcher
 

@@ -181,11 +181,9 @@ class ONNX_ORT(nn.Module):
             scores *= conf  # conf = obj_conf * cls_conf
         boxes @= self.convert_matrix
         max_score, category_id = scores.max(2, keepdim=True)
+        dis = category_id.float() * self.max_wh
         if self.agnostic_nms:
-            dis = category_id.float() * self.max_wh
             nmsbox = boxes + dis
-        else:
-            nmsbox = boxes
         max_score_tp = max_score.transpose(1, 2).contiguous()
         selected_indices = ORT_NMS.apply(nmsbox, max_score_tp, self.max_obj, self.iou_threshold, self.score_threshold)
         X, Y = selected_indices[:, 0], selected_indices[:, 2]
@@ -229,14 +227,14 @@ class ONNX_TRT(nn.Module):
 
 class End2End(nn.Module):
     '''export onnx or tensorrt model with NMS operation.'''
-    def __init__(self, model, max_obj=100, iou_thres=0.45, score_thres=0.25, max_wh=None, device=None, n_classes=80, agnostic_nms=False):
+    def __init__(self, model, max_obj=100, iou_thres=0.45, score_thres=0.25, max_wh=None, device=None, n_classes=80):
         super().__init__()
         device = device if device else torch.device('cpu')
         assert isinstance(max_wh,(int)) or max_wh is None
         self.model = model.to(device)
         self.model.model[-1].end2end = True
         self.patch_model = ONNX_TRT if max_wh is None else ONNX_ORT
-        self.end2end = self.patch_model(max_obj, iou_thres, score_thres, max_wh, device, n_classes, agnostic_nms)
+        self.end2end = self.patch_model(max_obj, iou_thres, score_thres, max_wh, device, n_classes)
         self.end2end.eval()
 
     def forward(self, x):
@@ -247,7 +245,7 @@ class End2End(nn.Module):
 
 class End2End_multihead(nn.Module):
     '''export onnx or tensorrt model with NMS operation.'''
-    def __init__(self, model, multihead_matcher, max_obj=100, iou_thres=0.45, score_thres=0.25, max_wh=None, device=None, n_classes=80, agnostic_nms=False):
+    def __init__(self, model, multihead_matcher, max_obj=100, iou_thres=0.45, score_thres=0.25, max_wh=None, device=None, n_classes=80):
         super().__init__()
         device = device if device else torch.device('cpu')
         assert isinstance(max_wh,(int)) or max_wh is None
@@ -255,7 +253,7 @@ class End2End_multihead(nn.Module):
         for head_i, _ in enumerate(multihead_matcher):
             self.model.model[-len(multihead_matcher)+head_i].end2end = True
         self.patch_model = ONNX_TRT if max_wh is None else ONNX_ORT
-        self.end2end = self.patch_model(max_obj, iou_thres, score_thres, max_wh, device, n_classes, agnostic_nms)
+        self.end2end = self.patch_model(max_obj, iou_thres, score_thres, max_wh, device, n_classes)
         self.end2end.eval()
         self.multihead_matcher = multihead_matcher
 
