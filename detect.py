@@ -19,9 +19,12 @@ import os
 
 import numpy as np
 
+from collections import defaultdict
+
 
 def detect(save_img=False):
     bbox_num = 0
+    bbox_num_per_cls = defaultdict(int)
     source, weights, view_img, save_txt, imgsz, trace = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, not opt.no_trace
     save_img = not opt.nosave and not source.endswith('.txt')  # save inference images
     webcam = source.isnumeric() or source.endswith('.txt') or source.lower().startswith(
@@ -228,6 +231,7 @@ def detect(save_img=False):
                                             'video_path': path.split("/")[-1]}
                                 jdict.append(jdict_item)
                         bbox_num+=1
+                        bbox_num_per_cls[names[int(cls)]]+=1
 
                 # Print time (inference + NMS)
                 print(f'{s}Done. ({(1E3 * (t2 - t1)):.1f}ms) Inference, ({(1E3 * (t3 - t2)):.1f}ms) NMS')
@@ -244,8 +248,8 @@ def detect(save_img=False):
                         print(f" The image with the result is saved in: {save_path}")
                         if opt.save_frame:
                             print(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0]))
-                            cv2.imwrite(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0])+'_'+str(frame)+'.jpg', im0)
                             if len(det) > 0:
+                                cv2.imwrite(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0])+'_'+str(frame)+'.jpg', im0)
                                 cv2.imwrite(os.path.join(save_dir, 'clean_frames', p.name.split('.')[0])+'_'+str(frame)+'_clean.jpg', clean_im0)
                     else:  # 'video' or 'stream'
                         if vid_path != save_path:  # new video
@@ -283,6 +287,8 @@ def detect(save_img=False):
 
     print(f'Done. ({time.time() - t0:.3f}s)')
     print("BBOX NUM: ", bbox_num)
+    for k, v in bbox_num_per_cls.items():
+        print(k, " : ", v)
     #with open('bboxnum.txt', 'a') as f:
     #    f.write(str(bbox_num) + '\n')
 
