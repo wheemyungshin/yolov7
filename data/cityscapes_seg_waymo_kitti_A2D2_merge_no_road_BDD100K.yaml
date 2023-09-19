@@ -4,7 +4,7 @@ train: [
     /data/KITTI_with_seg/train.txt, # 578
     /data/waymo_data_seg/train/train.txt, # 4080
     /data/waymo_data_seg/val/val.txt, # 588
-    /data/A2D2_det_with_seg/train.txt,
+    /data/A2D2_det_with_seg/train.txt, # 10154
     /data/bdd100k/train_seg.txt, #69863
     /data/bdd100k/val_seg.txt, #10000
 ]
