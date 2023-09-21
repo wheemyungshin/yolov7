@@ -120,7 +120,7 @@ def detect(save_img=False):
             print(proto.shape)
         else:
             pred_list = []
-            patch_num = 2
+            patch_num = 4
             patch_size_x = int(img.shape[3] / patch_num)
             patch_size_y = int(img.shape[2] / patch_num)
             for x_i in range(patch_num):
