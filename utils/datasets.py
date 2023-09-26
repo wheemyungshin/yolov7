@@ -1275,6 +1275,19 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                     [x2, y2],
                                     [x1, y2]
                                     ]))
+        
+        ciga_colors = [[0,0,0], [255,0,0], [0,255,0], [0,0,255], [255,255,0], [255,0,255], [0,255,255]]
+        if hyp is not None and hyp.get('ciga_cutout', None) is not None:
+            nL = len(labels)  # number of labels
+            if nL:
+                ciga_masks = polygons2masks(img.shape[:2], segments, color=1, downsample_ratio=1)
+                for ciga_idx, ciga_label in enumerate(labels):#enumerate(labels[labels[:, 0]==2]):
+                    if random.random() < hyp.get('ciga_cutout', 0):
+                        labels[ciga_idx,0] = 1
+
+                        ciga_color = ciga_colors[random.randint(0,6)]
+                        img[ciga_masks[ciga_idx] != 0] = ciga_color
+                        
                         
         if hyp is not None and hyp.get('render_fire', None) is not None:
             nL = len(labels)  # number of labels
