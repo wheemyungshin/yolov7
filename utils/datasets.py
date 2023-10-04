@@ -968,10 +968,12 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 labels = np.array(labels_after_filter)
             elif hyp is not None:
                 #label min size filtering or scaling
-                labels_after_filter = []
+                labels_after_filter = []                
+                segments_after_filter = []
                 for label_idx, label in enumerate(labels):
                     if (label[3]-label[1])*(label[4]-label[2]) > hyp.get('min_scale_up', 0):#if obj min_size exists
                         labels_after_filter.append(label)
+                        segments_after_filter.append(segments[label_idx])
                     else:                        
                         if (label[3]-label[1])*(label[4]-label[2]) > hyp.get('min_size', 0):
                             center_x = int((label[1]+label[3])/2)
@@ -995,9 +997,11 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             new_label[3] = scale_up_x2
                             new_label[4] = scale_up_y2
                             labels_after_filter.append(new_label)
+                            segments_after_filter.append(segments[label_idx])
                         else:
                             img[int(label[2]):int(label[4]), int(label[1]):int(label[3]), :] = 0
                 labels = np.array(labels_after_filter)
+                segments = segments_after_filter
             
             if hyp is not None and hyp.get('piecewise_augment', False):
                 transform = A.Compose([
@@ -1280,13 +1284,34 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         if hyp is not None and hyp.get('ciga_cutout', None) is not None:
             nL = len(labels)  # number of labels
             if nL:
+                labels_after_filter = []
+                segments_after_filter = []
+                
                 ciga_masks = polygons2masks(img.shape[:2], segments, color=1, downsample_ratio=1)
+                ciga_outer_masks = polygons2lines(img.shape[:2], segments, color=1, downsample_ratio=1, thickness=150)
+                #print("segments: ", len(segments))
+                #print("ciga_masks: ", ciga_masks.shape)
+                #print("labels: ", labels.shape)
                 for ciga_idx, ciga_label in enumerate(labels):#enumerate(labels[labels[:, 0]==2]):
-                    if random.random() < hyp.get('ciga_cutout', 0):
-                        labels[ciga_idx,0] = 1
-
-                        ciga_color = ciga_colors[random.randint(0,6)]
-                        img[ciga_masks[ciga_idx] != 0] = ciga_color
+                    if ciga_label[0]==2:
+                        cutout_random_percent = random.random()
+                        if cutout_random_percent < hyp.get('ciga_cutout', 0):
+                            ciga_color = ciga_colors[random.randint(0,len(ciga_colors)-1)]
+                            img[ciga_masks[ciga_idx] != 0] = ciga_color
+                        elif cutout_random_percent > 1 - hyp.get('ciga_outer_cutout', 0):
+                            ciga_color = ciga_colors[random.randint(0,len(ciga_colors)-1)]
+                            ciga_outer_masks[ciga_idx][np.sum(ciga_masks[labels[:, 0]==2], axis=0) != 0] = 0
+                            img[ciga_outer_masks[ciga_idx] != 0] = ciga_color                        
+                            labels_after_filter.append(ciga_label)
+                            segments_after_filter.append(segments[ciga_idx])
+                        else:
+                            labels_after_filter.append(ciga_label)
+                            segments_after_filter.append(segments[ciga_idx])
+                    else:
+                        labels_after_filter.append(ciga_label)
+                        segments_after_filter.append(segments[ciga_idx])
+                labels = np.array(labels_after_filter)
+                segments = segments_after_filter
                         
                         
         if hyp is not None and hyp.get('render_fire', None) is not None:
@@ -2711,6 +2736,42 @@ def polygons2masks(img_size, polygons, color, downsample_ratio=1):
     masks = []
     for si in range(len(polygons)):
         mask = polygon2mask(img_size, [polygons[si].reshape(-1)], color, downsample_ratio)
+        masks.append(mask)
+    return np.array(masks)
+
+
+def polygon2line(img_size, polygons, color=1, downsample_ratio=1, thickness=1):
+    """
+    Args:
+        img_size (tuple): The image size.
+        polygons (np.ndarray): [N, M], N is the number of polygons,
+            M is the number of points(Be divided by 2).
+    """
+    isClosed = True
+    mask = np.zeros(img_size, dtype=np.uint8)
+    polygons = np.asarray(polygons)
+    polygons = polygons.astype(np.int32)
+    shape = polygons.shape
+    polygons = polygons.reshape(shape[0], -1, 2)
+    cv2.polylines(mask, polygons, isClosed, color=color, thickness=thickness)
+    nh, nw = (img_size[0] // downsample_ratio, img_size[1] // downsample_ratio)
+    # NOTE: fillPoly firstly then resize is trying the keep the same way
+    # of loss calculation when mask-ratio=1.
+    mask = cv2.resize(mask, (nw, nh))
+    return mask
+
+
+def polygons2lines(img_size, polygons, color, downsample_ratio=1, thickness=1):
+    """
+    Args:
+        img_size (tuple): The image size.
+        polygons (list[np.ndarray]): each polygon is [N, M],
+            N is the number of polygons,
+            M is the number of points(Be divided by 2).
+    """
+    masks = []
+    for si in range(len(polygons)):
+        mask = polygon2line(img_size, [polygons[si].reshape(-1)], color, downsample_ratio, thickness)
         masks.append(mask)
     return np.array(masks)
 
