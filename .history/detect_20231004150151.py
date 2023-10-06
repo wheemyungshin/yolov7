@@ -25,13 +25,11 @@ from collections import defaultdict
 def detect(save_img=False):
     bbox_num = 0
     bbox_num_per_cls = defaultdict(int)
-    '''
     bbox_num_per_size = {}
     for size_ratio_div in range(0,200,4):
         bbox_num_per_size[size_ratio_div/100000] = 0
     bbox_num_per_size[1] = 0
     print(bbox_num_per_size)
-    '''
     source, weights, view_img, save_txt, imgsz, trace = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, not opt.no_trace
     save_img = not opt.nosave and not source.endswith('.txt')  # save inference images
     webcam = source.isnumeric() or source.endswith('.txt') or source.lower().startswith(
@@ -239,13 +237,11 @@ def detect(save_img=False):
                                 jdict.append(jdict_item)
                         bbox_num+=1
                         bbox_num_per_cls[names[int(cls)]]+=1
-                        '''
                         if cls == 1:#head only
                             head_size = ((xyxy[3]-xyxy[1])/im0.shape[0])*((xyxy[2]-xyxy[0]))/im0.shape[1]
                             for size_ratio_div_idx, size_ratio_div in enumerate(list(bbox_num_per_size.keys())):
                                 if size_ratio_div < head_size < list(bbox_num_per_size.keys())[size_ratio_div_idx+1]:
                                     bbox_num_per_size[size_ratio_div]+=1
-                        '''
 
                 # Print time (inference + NMS)
                 print(f'{s}Done. ({(1E3 * (t2 - t1)):.1f}ms) Inference, ({(1E3 * (t3 - t2)):.1f}ms) NMS')
@@ -303,8 +299,8 @@ def detect(save_img=False):
     print("BBOX NUM: ", bbox_num)
     for k, v in bbox_num_per_cls.items():
         print(k, " : ", v)
-    #for k, v in dict(sorted(bbox_num_per_size.items())).items():
-    #    print(k, " (", int(k*(im0.shape[0]*im0.shape[1])), ") : ", v)
+    for k, v in dict(sorted(bbox_num_per_size.items())).items():
+        print(k, " (", int(k*(im0.shape[0]*im0.shape[1])), ") : ", v)
         
     #with open('bboxnum.txt', 'a') as f:
     #    f.write(str(bbox_num) + '\n')
