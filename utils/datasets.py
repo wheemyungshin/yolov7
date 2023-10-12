@@ -1281,7 +1281,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                     ]))
         
         ciga_colors = [[0,0,0], [255,0,0], [0,255,0], [0,0,255], [255,255,0], [255,0,255], [0,255,255]]
-        if hyp is not None and hyp.get('ciga_cutout', None) is not None:
+        if hyp is not None and (hyp.get('ciga_cutout', None) is not None or hyp.get('cellphone_cutout', None) is not None):
             nL = len(labels)  # number of labels
             if nL:
                 labels_after_filter = []
@@ -1293,14 +1293,50 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 #print("ciga_masks: ", ciga_masks.shape)
                 #print("labels: ", labels.shape)
                 for ciga_idx, ciga_label in enumerate(labels):#enumerate(labels[labels[:, 0]==2]):
+                    cutout_random_percent1 = random.random()
+                    cutout_random_percent2 = random.random()
+                    '''
                     if ciga_label[0]==2:
-                        cutout_random_percent = random.random()
-                        if cutout_random_percent < hyp.get('ciga_cutout', 0):
+                        if cutout_random_percent1 < hyp.get('ciga_cutout', 0):
                             ciga_color = ciga_colors[random.randint(0,len(ciga_colors)-1)]
                             img[ciga_masks[ciga_idx] != 0] = ciga_color
-                        elif cutout_random_percent > 1 - hyp.get('ciga_outer_cutout', 0):
+                        elif cutout_random_percent1 > 1 - hyp.get('ciga_outer_cutout', 0):
                             ciga_color = ciga_colors[random.randint(0,len(ciga_colors)-1)]
                             ciga_outer_masks[ciga_idx][np.sum(ciga_masks[labels[:, 0]==2], axis=0) != 0] = 0
+                            img[ciga_outer_masks[ciga_idx] != 0] = ciga_color                        
+                            labels_after_filter.append(ciga_label)
+                            segments_after_filter.append(segments[ciga_idx])
+                        else:
+                            labels_after_filter.append(ciga_label)
+                            segments_after_filter.append(segments[ciga_idx])
+
+                    elif ciga_label[0]==3:
+                        if cutout_random_percent2 < hyp.get('cellphone_cutout', 0):
+                            ciga_color = ciga_colors[random.randint(0,len(ciga_colors)-1)]
+                            img[ciga_masks[ciga_idx] != 0] = ciga_color
+                        elif cutout_random_percent2 > 1 - hyp.get('cellphone_outer_cutout', 0):
+                            ciga_color = ciga_colors[random.randint(0,len(ciga_colors)-1)]
+                            ciga_outer_masks[ciga_idx][np.sum(ciga_masks[labels[:, 0]==3], axis=0) != 0] = 0
+                            ciga_outer_masks[ciga_idx][np.sum(ciga_masks[labels[:, 0]==4], axis=0) != 0] = 1
+                            img[ciga_outer_masks[ciga_idx] != 0] = ciga_color                        
+                            labels_after_filter.append(ciga_label)
+                            segments_after_filter.append(segments[ciga_idx])
+                        else:
+                            labels_after_filter.append(ciga_label)
+                            segments_after_filter.append(segments[ciga_idx])
+                    elif ciga_label[0]==4:
+                        if not (cutout_random_percent2 > 1 - hyp.get('cellphone_outer_cutout', 0)):#hand cutout togehter with cellphone
+                            labels_after_filter.append(ciga_label)
+                            segments_after_filter.append(segments[ciga_idx])
+                    '''
+                    if ciga_label[0]==2:
+                        if cutout_random_percent2 < hyp.get('cellphone_cutout', 0):
+                            ciga_color = ciga_colors[random.randint(0,len(ciga_colors)-1)]
+                            img[ciga_masks[ciga_idx] != 0] = ciga_color
+                        elif cutout_random_percent2 > 1 - hyp.get('cellphone_outer_cutout', 0):
+                            ciga_color = ciga_colors[random.randint(0,len(ciga_colors)-1)]
+                            ciga_outer_masks[ciga_idx][np.sum(ciga_masks[labels[:, 0]==2], axis=0) != 0] = 0
+                            #ciga_outer_masks[ciga_idx][np.sum(ciga_masks[labels[:, 0]==3], axis=0) != 0] = 1
                             img[ciga_outer_masks[ciga_idx] != 0] = ciga_color                        
                             labels_after_filter.append(ciga_label)
                             segments_after_filter.append(segments[ciga_idx])
