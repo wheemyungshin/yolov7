@@ -31,5 +31,5 @@ paste_in: 0.0  # image copy paste (probability), use 0 for faster training
 loss_ota: 0 # use ComputeLossOTA, use 0 for faster training
 min_size: 25
 min_scale_up: 25
-cellphone_cutout: 0.05
-cellphone_outer_cutout: 0.2
+cellphone_cutout: 0.2
+cellphone_outer_cutout: 0.4
