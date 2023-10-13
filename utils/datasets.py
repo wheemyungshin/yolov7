@@ -24,7 +24,6 @@ import json
 import pickle
 from copy import deepcopy
 #from pycocotools import mask as maskUtils
-from torchvision.transforms import RandomAffine
 from torchvision.utils import save_image
 from torchvision.ops import roi_pool, roi_align, ps_roi_pool, ps_roi_align
 
@@ -1281,68 +1280,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                     [x1, y2]
                                     ]))
         
-        ciga_colors = [[0,0,0], [255,0,0], [0,255,0], [0,0,255], [255,255,0], [255,0,255], 
-            [255,100,100], [100,255,100], [100,100,255], [100,255,255], [255,255,100], [255,100,255], [100,255,255]]
-        
-        if hyp is not None and hyp.get('cellphone_translation', None) is not None:
-            nL = len(labels)  # number of labels
-            if nL:
-                labels_after_filter = []
-                segments_after_filter = []
-                
-                ciga_masks = polygons2masks(img.shape[:2], segments, color=1, downsample_ratio=1)
-                ciga_outer_masks = polygons2lines(img.shape[:2], segments, color=1, downsample_ratio=1, thickness=150)
-                #print("segments: ", len(segments))
-                #print("ciga_masks: ", ciga_masks.shape)
-                #print("labels: ", labels.shape)
-                for ciga_idx, ciga_label in enumerate(labels):#enumerate(labels[labels[:, 0]==2]):
-                    cutout_random_percent1 = random.random()
-                    cutout_random_percent2 = random.random()
-                    if ciga_label[0]==2:
-                        if cutout_random_percent1 < hyp.get('cellphone_translation', 0):
-                            ciga_color = ciga_colors[random.randint(0,len(ciga_colors)-1)]
-                            ciga_color[0] = min(max(ciga_color[0] + random.randint(-30, 30), 0), 255)
-                            ciga_color[1] = min(max(ciga_color[1] + random.randint(-30, 30), 0), 255)
-                            ciga_color[2] = min(max(ciga_color[2] + random.randint(-30, 30), 0), 255)
-                            ciga_patch = np.zeros_like(img)
-                            ciga_patch[ciga_masks[ciga_idx] != 0] = img[ciga_masks[ciga_idx] != 0]
-                            img[ciga_masks[ciga_idx] != 0] = ciga_color
-
-                            affine_transfomer = RandomAffine(degrees=(-180, 180), translate=(0.05, 0.15), scale=(0.9, 1.1))
-                            affine_ciga_patch = torch.squeeze(affine_transfomer(torch.from_numpy(ciga_patch).permute(2, 0, 1).unsqueeze(0))).permute(1, 2, 0).numpy()
-                            img[affine_ciga_patch != 0] = affine_ciga_patch[affine_ciga_patch != 0]
-
-                            new_ciga_label = ciga_label.copy()
-                            non_zero_indices = np.nonzero(affine_ciga_patch)
-                            if len(non_zero_indices[0]) > 0 and len(non_zero_indices[1]) > 0:
-                                min_x = np.min(non_zero_indices[1])
-                                min_y = np.min(non_zero_indices[0])
-                                max_x = np.max(non_zero_indices[1])
-                                max_y = np.max(non_zero_indices[0])
-                                new_ciga_label[1] = min_x
-                                new_ciga_label[2] = min_y
-                                new_ciga_label[3] = max_x
-                                new_ciga_label[4] = max_y
-                                if max_x-min_x > 4 and max_y-min_y > 4:
-                                    affine_ciga_patch[affine_ciga_patch != 0] = 1
-                                    labels_after_filter.append(new_ciga_label)
-                                    segments_after_filter.append(affine_ciga_patch)
-                                else:
-                                    labels_after_filter.append(ciga_label)
-                                    segments_after_filter.append(segments[ciga_idx])
-                            else:
-                                labels_after_filter.append(ciga_label)
-                                segments_after_filter.append(segments[ciga_idx])
-                        else:
-                            labels_after_filter.append(ciga_label)
-                            segments_after_filter.append(segments[ciga_idx])
-                    else:
-                        labels_after_filter.append(ciga_label)
-                        segments_after_filter.append(segments[ciga_idx])
-
-                labels = np.array(labels_after_filter)
-                segments = segments_after_filter
-
+        ciga_colors = [[0,0,0], [255,0,0], [0,255,0], [0,0,255], [255,255,0], [255,0,255], [0,255,255]]
         if hyp is not None and (hyp.get('ciga_cutout', None) is not None or hyp.get('cellphone_cutout', None) is not None):
             nL = len(labels)  # number of labels
             if nL:
