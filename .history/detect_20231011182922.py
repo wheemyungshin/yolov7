@@ -21,6 +21,7 @@ import numpy as np
 
 from collections import defaultdict
 
+
 def detect(save_img=False):
     bbox_num = 0
     bbox_num_per_cls = defaultdict(int)
