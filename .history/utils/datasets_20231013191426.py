@@ -432,10 +432,9 @@ def img2seg_paths(img_paths):
         else:
             la, lb = os.sep + 'images' + os.sep, os.sep + 'labels' + os.sep
             label_path = 'txt'.join(x.replace(la, lb, 1).rsplit(x.split('.')[-1], 1)) 
-            seg_list.append(label_path)
-            print("Using label file (", label_path, ") instead segment (", seg_path, ")")
+            print("Using label file (", seg_path)
 
-    return seg_list
+    return ['txt'.join(x.replace(sa, sb, 1).rsplit(x.split('.')[-1], 1)) for x in img_paths]
 
 class LoadImagesAndLabels(Dataset):  # for training/testing
     def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, ratio_maintain=True, image_weights=False,
@@ -1309,7 +1308,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 for ciga_idx, ciga_label in enumerate(labels):#enumerate(labels[labels[:, 0]==2]):
                     cutout_random_percent1 = random.random()
                     cutout_random_percent2 = random.random()
-                    if ciga_label[0]==2 or ciga_label[0]==3:
+                    if ciga_label[0]==2:
                         if cutout_random_percent1 < hyp.get('cellphone_translation', 0):
                             ciga_color = ciga_colors[random.randint(0,len(ciga_colors)-1)]
                             ciga_color[0] = min(max(ciga_color[0] + random.randint(-30, 30), 0), 255)
