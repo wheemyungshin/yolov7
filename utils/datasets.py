@@ -433,7 +433,7 @@ def img2seg_paths(img_paths):
             la, lb = os.sep + 'images' + os.sep, os.sep + 'labels' + os.sep
             label_path = 'txt'.join(x.replace(la, lb, 1).rsplit(x.split('.')[-1], 1)) 
             seg_list.append(label_path)
-            print("Using label file (", label_path, ") instead segment (", seg_path, ")")
+            #print("Using label file (", label_path, ") instead segment (", seg_path, ")")
 
     return seg_list
 
