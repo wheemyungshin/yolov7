@@ -1309,7 +1309,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 for ciga_idx, ciga_label in enumerate(labels):#enumerate(labels[labels[:, 0]==2]):
                     cutout_random_percent1 = random.random()
                     cutout_random_percent2 = random.random()
-                    if ciga_label[0]==2 or ciga_label[0]==3:
+                    if ciga_label[0]==2:
                         if cutout_random_percent1 < hyp.get('cellphone_translation', 0):
                             ciga_color = ciga_colors[random.randint(0,len(ciga_colors)-1)]
                             ciga_color[0] = min(max(ciga_color[0] + random.randint(-30, 30), 0), 255)
