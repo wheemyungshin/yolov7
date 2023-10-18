@@ -9,8 +9,8 @@ train: [/data/smoke_data_BFC/train.txt,
 /data/BFcellphone/auto_TANG_phones_yolov7-e6e_s384_after_inspection/train.txt,
 /data/phonecalls_crawling_grounding_dino/train.txt, # 11932
 
-/data/valid_phone_data/roboflow_all/train.txt, # 1454 #addition
-/data/valid_phone_data/phonecalls_crawling2_auto/train.txt # 5415 #addition
+/data/valid_phone_data/roboflow_all/train.txt, # 1454
+/data/valid_phone_data/phonecalls_crawling2_auto/train.txt # 5415
 ] 
 
 val: [/data/TANG_phones_not_included/train.txt] # 995
