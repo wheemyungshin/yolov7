@@ -686,7 +686,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     with open(lb_file, 'r') as f:
                         l = [x.split() for x in f.read().strip().splitlines()]
                         if load_seg:  # is segment
-                            if any([len(x) > 8 for x in l]):  # is segment
+                            if len(l) >= 7:
                                 classes = np.array([x[0] for x in l], dtype=np.float32)
                                 segments = [np.array(x[1:], dtype=np.float32).reshape(-1, 2) for x in l]  # (cls, xy1...)
                                 l = np.concatenate((classes.reshape(-1, 1), segments2boxes(segments)), 1)  # (cls, xywh)
@@ -697,6 +697,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                     [float(x_line[1])+float(x_line[3])/2, float(x_line[2])+float(x_line[4])/2],
                                     [float(x_line[1])-float(x_line[3])/2, float(x_line[2])+float(x_line[4])/2]
                                     ]) for x_line in l]
+                                l = np.concatenate((classes.reshape(-1, 1), segments2boxes(segments)), 1)  # (cls, xywh)
+
                         else:
                             segments = [np.array([
                                     [float(x_line[1])-float(x_line[3])/2, float(x_line[2])-float(x_line[4])/2], 
