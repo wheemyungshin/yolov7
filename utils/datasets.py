@@ -46,6 +46,26 @@ for orientation in ExifTags.TAGS.keys():
     if ExifTags.TAGS[orientation] == 'Orientation':
         break
 
+def check_boxes_overlap(box1, box2, margin=0):
+    x1, y1, x2, y2 = box1
+    x3, y3, x4, y4 = box2
+
+    # Check if box1 is to the right of box2
+    if x1 > x4 + margin:
+        return False
+
+    # Check if box1 is to the left of box2
+    if x2 < x3 - margin:
+        return False
+
+    # Check if box1 is below box2
+    if y1 > y4 + margin:
+        return False
+
+    # Check if box1 is above box2
+    if y2 < y3 - margin:
+        return False
+    return True
 
 def gaussian_illumination(img):
     img = img.astype(np.uint8)
@@ -1355,6 +1375,61 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
                 labels = np.array(labels_after_filter)
                 segments = segments_after_filter
+
+        if hyp is not None and random.random() < hyp.get('render_hand', ['', 0.0])[1]:
+            num_of_hand_img = [1,4]
+            num_of_hand = random.randint(num_of_hand_img[0], num_of_hand_img[1])
+            hand_imgs = os.listdir(hyp.get('render_hand', None)[0])
+            for idx in range(num_of_hand) :
+                hand_img = cv2.imread(os.path.join(hyp.get('render_hand', None)[0], hand_imgs[random.randint(0, len(hand_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
+                hand_img = cv2.resize(hand_img, None, fx=0.8+random.random()*0.4, fy=0.8+random.random()*0.4, interpolation=cv2.INTER_LINEAR)
+
+                color_sample = cv2.resize(img, (100,100))
+                b = np.mean(color_sample[:, :, 0])
+                g = np.mean(color_sample[:, :, 1])
+                r = np.mean(color_sample[:, :, 2])
+                origin_color_sum = b + g + r
+                b = b/origin_color_sum
+                g = g/origin_color_sum
+                r = r/origin_color_sum
+
+                try:
+                    for idx_x in range(hand_img.shape[1]) :
+                        for idx_y in range(hand_img.shape[0]) :
+
+                            color_sum = np.sum(hand_img[idx_y][idx_x][0:3])
+
+                            if color_sum > 10 :
+                                hand_img[idx_y][idx_x][0] = min(int(color_sum * b),255)
+                                hand_img[idx_y][idx_x][1] = min(int(color_sum * g),255)
+                                hand_img[idx_y][idx_x][2] = min(int(color_sum * r),255)
+                except:
+                    hand_img = hand_img
+
+                # hand 위치 랜덤하게 지정
+                hand_img_position_x = random.randint(0, img.shape[1]-hand_img.shape[1])
+                hand_img_position_y = random.randint(0, img.shape[0]-hand_img.shape[0])
+                
+                is_invalid_position = False
+                for ciga_label in enumerate(labels):
+                    if ciga_label[0]==2 or ciga_label[0]==3:
+                        if check_boxes_overlap([hand_img_position_x, hand_img_position_y, hand_img_position_x+hand_img.shape[1], hand_img_position_y+hand_img.shape[0]],
+                            [ciga_label[1], ciga_label[2], ciga_label[3], ciga_label[4]]):
+                            is_invalid_position=True
+                            
+                if not is_invalid_position:
+                    img_crop = img[hand_img_position_y:hand_img_position_y+hand_img.shape[0], hand_img_position_x:hand_img_position_x+hand_img.shape[1]]
+                    img_crop = cv2.cvtColor(img_crop, cv2.COLOR_RGB2RGBA)
+
+                    # Pillow 에서 Alpha Blending
+                    hand_img_pillow = Image.fromarray(hand_img)
+                    img_crop_pillow = Image.fromarray(img_crop)
+                    blended_pillow = Image.alpha_composite(img_crop_pillow, hand_img_pillow)
+                    blended_img=np.array(blended_pillow)  
+
+                    # 원본 이미지에 다시 합치기
+                    blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
+                    img[hand_img_position_y:hand_img_position_y+hand_img.shape[0], hand_img_position_x:hand_img_position_x+hand_img.shape[1]] = blended_img
 
         if hyp is not None and (hyp.get('ciga_cutout', None) is not None or hyp.get('cellphone_cutout', None) is not None):
             nL = len(labels)  # number of labels
