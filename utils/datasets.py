@@ -1382,7 +1382,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             hand_imgs = os.listdir(hyp.get('render_hand', None)[0])
             for idx in range(num_of_hand) :
                 hand_img = cv2.imread(os.path.join(hyp.get('render_hand', None)[0], hand_imgs[random.randint(0, len(hand_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
-                hand_img = cv2.resize(hand_img, None, fx=0.8+random.random()*0.4, fy=0.8+random.random()*0.4, interpolation=cv2.INTER_LINEAR)
+                hand_img = cv2.resize(hand_img, None, fx=0.2+random.random()*0.1, fy=0.2+random.random()*0.1, interpolation=cv2.INTER_LINEAR)
 
                 color_sample = cv2.resize(img, (100,100))
                 b = np.mean(color_sample[:, :, 0])
@@ -1407,29 +1407,21 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     hand_img = hand_img
 
                 # hand 위치 랜덤하게 지정
-                hand_img_position_x = random.randint(0, img.shape[1]-hand_img.shape[1])
-                hand_img_position_y = random.randint(0, img.shape[0]-hand_img.shape[0])
-                
-                is_invalid_position = False
-                for ciga_label in enumerate(labels):
-                    if ciga_label[0]==2 or ciga_label[0]==3:
-                        if check_boxes_overlap([hand_img_position_x, hand_img_position_y, hand_img_position_x+hand_img.shape[1], hand_img_position_y+hand_img.shape[0]],
-                            [ciga_label[1], ciga_label[2], ciga_label[3], ciga_label[4]]):
-                            is_invalid_position=True
-                            
-                if not is_invalid_position:
-                    img_crop = img[hand_img_position_y:hand_img_position_y+hand_img.shape[0], hand_img_position_x:hand_img_position_x+hand_img.shape[1]]
-                    img_crop = cv2.cvtColor(img_crop, cv2.COLOR_RGB2RGBA)
-
-                    # Pillow 에서 Alpha Blending
-                    hand_img_pillow = Image.fromarray(hand_img)
-                    img_crop_pillow = Image.fromarray(img_crop)
-                    blended_pillow = Image.alpha_composite(img_crop_pillow, hand_img_pillow)
-                    blended_img=np.array(blended_pillow)  
-
-                    # 원본 이미지에 다시 합치기
-                    blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
-                    img[hand_img_position_y:hand_img_position_y+hand_img.shape[0], hand_img_position_x:hand_img_position_x+hand_img.shape[1]] = blended_img
+                if img.shape[1]-hand_img.shape[1] > 0 and img.shape[0]-hand_img.shape[0] > 0:
+                    hand_img_position_x = random.randint(0, img.shape[1]-hand_img.shape[1])
+                    hand_img_position_y = random.randint(0, img.shape[0]-hand_img.shape[0])
+                    
+                    is_invalid_position = False
+                    for ciga_label in labels:
+                        if ciga_label[0]==2 or ciga_label[0]==3:
+                            if check_boxes_overlap([hand_img_position_x, hand_img_position_y, hand_img_position_x+hand_img.shape[1], hand_img_position_y+hand_img.shape[0]],
+                                [ciga_label[1], ciga_label[2], ciga_label[3], ciga_label[4]]):
+                                is_invalid_position=True
+                                
+                    if not is_invalid_position:
+                        img_crop = img[hand_img_position_y:hand_img_position_y+hand_img.shape[0], hand_img_position_x:hand_img_position_x+hand_img.shape[1]]
+                        img_crop[hand_img!=0] = hand_img[hand_img!=0]
+                        img[hand_img_position_y:hand_img_position_y+hand_img.shape[0], hand_img_position_x:hand_img_position_x+hand_img.shape[1]] = img_crop
 
         if hyp is not None and (hyp.get('ciga_cutout', None) is not None or hyp.get('cellphone_cutout', None) is not None):
             nL = len(labels)  # number of labels
