@@ -1,8 +1,8 @@
 # parameters
 nc: 1  # number of classes
 nkpt: 5 # number of keypoints
-depth_multiple: 0.75  # model depth multiple
-width_multiple: 0.3  # layer channel multiple
+depth_multiple: 0.5  # model depth multiple
+width_multiple: 0.2  # layer channel multiple
 dw_conv_kpt: False
 
 anchors:
