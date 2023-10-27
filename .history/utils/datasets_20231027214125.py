@@ -24,6 +24,7 @@ import json
 import pickle
 from copy import deepcopy
 #from pycocotools import mask as maskUtils
+from torchvision.transforms import RandomAffine
 from torchvision.utils import save_image
 from torchvision.ops import roi_pool, roi_align, ps_roi_pool, ps_roi_align
 
@@ -45,6 +46,26 @@ for orientation in ExifTags.TAGS.keys():
     if ExifTags.TAGS[orientation] == 'Orientation':
         break
 
+def check_boxes_overlap(box1, box2, margin=0):
+    x1, y1, x2, y2 = box1
+    x3, y3, x4, y4 = box2
+
+    # Check if box1 is to the right of box2
+    if x1 > x4 + margin:
+        return False
+
+    # Check if box1 is to the left of box2
+    if x2 < x3 - margin:
+        return False
+
+    # Check if box1 is below box2
+    if y1 > y4 + margin:
+        return False
+
+    # Check if box1 is above box2
+    if y2 < y3 - margin:
+        return False
+    return True
 
 def gaussian_illumination(img):
     img = img.astype(np.uint8)
@@ -423,7 +444,18 @@ def img2label_paths(img_paths):
 def img2seg_paths(img_paths):
     # Define label paths as a function of image paths
     sa, sb = os.sep + 'images' + os.sep, os.sep + 'segments' + os.sep  # /images/, /labels/ substrings
-    return ['txt'.join(x.replace(sa, sb, 1).rsplit(x.split('.')[-1], 1)) for x in img_paths]
+    seg_list = []
+    for x in img_paths:
+        seg_path = 'txt'.join(x.replace(sa, sb, 1).rsplit(x.split('.')[-1], 1)) 
+        if os.path.exists(seg_path):
+            seg_list.append(seg_path)
+        else:
+            la, lb = os.sep + 'images' + os.sep, os.sep + 'labels' + os.sep
+            label_path = 'txt'.join(x.replace(la, lb, 1).rsplit(x.split('.')[-1], 1)) 
+            seg_list.append(label_path)
+            #print("Using label file (", label_path, ") instead segment (", seg_path, ")")
+
+    return seg_list
 
 class LoadImagesAndLabels(Dataset):  # for training/testing
     def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, ratio_maintain=True, image_weights=False,
@@ -594,6 +626,27 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             for i, x in enumerate(self.labels):
                 self.labels[i][:, 3] = x[:, 3]*box_margin
                 self.labels[i][:, 4] = x[:, 4]*box_margin
+        
+        if hyp is not None and hyp.get('render_phone', None) is not None:
+            self.phone_imgs = []
+            phone_folders = os.listdir(hyp.get('render_phone', None)[0])
+            for folder in phone_folders :
+                if len(folder.split(".")) == 1 :
+                    files = os.listdir(os.path.join(hyp.get('render_phone', None)[0], folder))
+                    for file in files :
+                        # 너무 수직인 각도면 거를 것
+                        if not(file[-6:] == "05.png" or  file[-6:] == "13.png") :
+                            self.phone_imgs.append(folder + "/" + file)
+
+        if hyp is not None and hyp.get('render_ciga', None) is not None:
+            self.ciga_imgs = []
+            ciga_folders = os.listdir(hyp.get('render_ciga', None)[0])
+            for folder in ciga_folders :
+                if len(folder.split(".")) == 1 :
+                    files = os.listdir(os.path.join(hyp.get('render_ciga', None)[0], folder))
+                    for file in files :
+                        # 너무 수직인 각도면 거를 것
+                        self.ciga_imgs.append(folder + "/" + file)
 
         if single_cls:
             for x in self.labels:
@@ -674,9 +727,17 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     with open(lb_file, 'r') as f:
                         l = [x.split() for x in f.read().strip().splitlines()]
                         if load_seg:  # is segment
-                            classes = np.array([x[0] for x in l], dtype=np.float32)
-                            segments = [np.array(x[1:], dtype=np.float32).reshape(-1, 2) for x in l]  # (cls, xy1...)
-                            l = np.concatenate((classes.reshape(-1, 1), segments2boxes(segments)), 1)  # (cls, xywh)
+                            if any([len(x) > 8 for x in l]):  # is segment
+                                classes = np.array([x[0] for x in l], dtype=np.float32)
+                                segments = [np.array(x[1:], dtype=np.float32).reshape(-1, 2) for x in l]  # (cls, xy1...)
+                                l = np.concatenate((classes.reshape(-1, 1), segments2boxes(segments)), 1)  # (cls, xywh)
+                            else:
+                                segments = [np.array([
+                                    [float(x_line[1])-float(x_line[3])/2, float(x_line[2])-float(x_line[4])/2], 
+                                    [float(x_line[1])+float(x_line[3])/2, float(x_line[2])-float(x_line[4])/2],  
+                                    [float(x_line[1])+float(x_line[3])/2, float(x_line[2])+float(x_line[4])/2],
+                                    [float(x_line[1])-float(x_line[3])/2, float(x_line[2])+float(x_line[4])/2]
+                                    ]) for x_line in l]
                         else:
                             segments = [np.array([
                                     [float(x_line[1])-float(x_line[3])/2, float(x_line[2])-float(x_line[4])/2], 
@@ -819,76 +880,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         cuty_max = int(min(max(cuty + cuth/2, 0), img.shape[0]))
                         img[cuty_min : cuty_max, cutx_min : cutx_max, :] = random.random()*255
 
-        # 투명도는 30, 60, 100 중 하나 
-        if hyp is not None and hyp.get('render_ciga', None) is not None:
-            num_of_ciga_img = [0,2]
-            num_of_ciga = random.randint(num_of_ciga_img[0], num_of_ciga_img[1])
-            ciga_imgs = os.listdir(os.path.join(hyp.get('render_ciga', None)[0], '100'))
-            for idx in range(num_of_ciga) :
-                opacity = [30, 60, 100][random.randint(0, 2)]
-                ciga_img = cv2.imread(os.path.join(hyp.get('render_ciga', None)[0], str(opacity), ciga_imgs[random.randint(0, len(ciga_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
-                if ciga_img.shape[0] < ciga_img.shape[1]:
-                    random_resize_w = max(img.shape[1]*(0.1+random.random()*0.15), 8)
-                    random_resize_h = max(random_resize_w * ciga_img.shape[0] / ciga_img.shape[1], 2)
-                else:
-                    random_resize_h = max(img.shape[0]*(0.1+random.random()*0.15), 8)
-                    random_resize_w = max(random_resize_h * ciga_img.shape[1] / ciga_img.shape[0], 2)
-
-                ciga_img = cv2.resize(ciga_img, (int(random_resize_w), int(random_resize_h)), interpolation=cv2.INTER_LINEAR)
-
-                color_sample = cv2.resize(img, (100,100))
-                b = np.mean(color_sample[:, :, 0])
-                g = np.mean(color_sample[:, :, 1])
-                r = np.mean(color_sample[:, :, 2])
-                origin_color_sum = b + g + r
-                b = b/origin_color_sum
-                g = g/origin_color_sum
-                r = r/origin_color_sum
-
-                try:
-                    for idx_x in range(ciga_img.shape[1]) :
-                        for idx_y in range(ciga_img.shape[0]) :
-
-                            color_sum = np.sum(ciga_img[idx_y][idx_x][0:3])
-
-                            if color_sum > 10 :
-                                ciga_img[idx_y][idx_x][0] = min(int(color_sum * b),255)
-                                ciga_img[idx_y][idx_x][1] = min(int(color_sum * g),255)
-                                ciga_img[idx_y][idx_x][2] = min(int(color_sum * r),255)
-                except:
-                    ciga_img = ciga_img
-
-                # ciga 위치 랜덤하게 지정
-                try_max = 20
-                try_count = 0
-                is_invalid_position = True
-                while is_invalid_position and try_count < try_max:
-                    ciga_img_position_x = random.randint(0, img.shape[1]-ciga_img.shape[1])
-                    ciga_img_position_y = random.randint(0, img.shape[0]-ciga_img.shape[0])
-                    try_count+=1
-                    is_invalid_position = False
-                    for ciga_label in labels[labels[:, 0]==hyp.get('render_ciga', None)[1]]:
-                        if ciga_label[1] < ciga_img_position_x < ciga_label[3] and ciga_label[2] < ciga_img_position_y < ciga_label[4]:
-                            is_invalid_position = True
-                
-                if not is_invalid_position:
-                    img_crop = img[ciga_img_position_y:ciga_img_position_y+ciga_img.shape[0], ciga_img_position_x:ciga_img_position_x+ciga_img.shape[1]]
-                    img_crop = cv2.cvtColor(img_crop, cv2.COLOR_RGB2RGBA)
-
-
-                    # Pillow 에서 Alpha Blending
-                    ciga_img_pillow = Image.fromarray(ciga_img)
-                    img_crop_pillow = Image.fromarray(img_crop)
-                    blended_pillow = Image.alpha_composite(img_crop_pillow, ciga_img_pillow)
-                    blended_img=np.array(blended_pillow)  
-
-                    # 원본 이미지에 다시 합치기
-                    blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
-                    img[ciga_img_position_y:ciga_img_position_y+ciga_img.shape[0], ciga_img_position_x:ciga_img_position_x+ciga_img.shape[1]] = blended_img
-
-                    labels = np.append(labels, [[hyp.get('render_ciga', None)[1], ciga_img_position_x, ciga_img_position_y, ciga_img_position_x+ciga_img.shape[1], ciga_img_position_y+ciga_img.shape[0]]], axis=0)
-                    #segments = np.append(segments, [[hyp.get('render_ciga', None)[1], ciga_img_position_x, ciga_img_position_y, ciga_img_position_x+ciga_img.shape[1], ciga_img_position_y+ciga_img.shape[0]]], axis=0)
-
         if self.augment:
             # Augment imagespace
             if not mosaic:
@@ -968,10 +959,12 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 labels = np.array(labels_after_filter)
             elif hyp is not None:
                 #label min size filtering or scaling
-                labels_after_filter = []
+                labels_after_filter = []                
+                segments_after_filter = []
                 for label_idx, label in enumerate(labels):
                     if (label[3]-label[1])*(label[4]-label[2]) > hyp.get('min_scale_up', 0):#if obj min_size exists
                         labels_after_filter.append(label)
+                        segments_after_filter.append(segments[label_idx])
                     else:                        
                         if (label[3]-label[1])*(label[4]-label[2]) > hyp.get('min_size', 0):
                             center_x = int((label[1]+label[3])/2)
@@ -995,9 +988,11 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             new_label[3] = scale_up_x2
                             new_label[4] = scale_up_y2
                             labels_after_filter.append(new_label)
+                            segments_after_filter.append(segments[label_idx])
                         else:
                             img[int(label[2]):int(label[4]), int(label[1]):int(label[3]), :] = 0
                 labels = np.array(labels_after_filter)
+                segments = segments_after_filter
             
             if hyp is not None and hyp.get('piecewise_augment', False):
                 transform = A.Compose([
@@ -1276,17 +1271,332 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                     [x1, y2]
                                     ]))
         
-        ciga_colors = [[0,0,0], [255,0,0], [0,255,0], [0,0,255], [255,255,0], [255,0,255], [0,255,255]]
-        if hyp is not None and hyp.get('ciga_cutout', None) is not None:
+        ciga_colors = [[0,0,0], [255,0,0], [0,255,0], [0,0,255], [255,255,0], [255,0,255], 
+            [255,100,100], [100,255,100], [100,100,255], [100,255,255], [255,255,100], [255,100,255], [100,255,255],
+            [255,255,200], [255,200,255], [200,255,255], [150,150,150], [75,75,75]]
+            
+        if hyp is not None and hyp.get('cellphone_translation', None) is not None:
             nL = len(labels)  # number of labels
             if nL:
+                labels_after_filter = []
+                segments_after_filter = []
+                
                 ciga_masks = polygons2masks(img.shape[:2], segments, color=1, downsample_ratio=1)
+                ciga_outer_masks = polygons2lines(img.shape[:2], segments, color=1, downsample_ratio=1, thickness=150)
+                #print("segments: ", len(segments))
+                #print("ciga_masks: ", ciga_masks.shape)
+                #print("labels: ", labels.shape)
                 for ciga_idx, ciga_label in enumerate(labels):#enumerate(labels[labels[:, 0]==2]):
-                    if random.random() < hyp.get('ciga_cutout', 0):
-                        labels[ciga_idx,0] = 1
+                    cutout_random_percent1 = random.random()
+                    cutout_random_percent2 = random.random()
+                    if ciga_label[0]==2 or ciga_label[0]==3:
+                        if cutout_random_percent1 < hyp.get('cellphone_translation', 0):
+                            ciga_color = ciga_colors[random.randint(0,len(ciga_colors)-1)]
+                            ciga_color[0] = min(max(ciga_color[0] + random.randint(-30, 30), 0), 255)
+                            ciga_color[1] = min(max(ciga_color[1] + random.randint(-30, 30), 0), 255)
+                            ciga_color[2] = min(max(ciga_color[2] + random.randint(-30, 30), 0), 255)
+                            ciga_patch = np.zeros_like(img)
+                            ciga_patch[ciga_masks[ciga_idx] != 0] = img[ciga_masks[ciga_idx] != 0]
+                            img[ciga_masks[ciga_idx] != 0] = ciga_color
 
-                        ciga_color = ciga_colors[random.randint(0,6)]
-                        img[ciga_masks[ciga_idx] != 0] = ciga_color
+                            affine_transfomer = RandomAffine(degrees=(-180, 180), translate=(0.05, 0.15), scale=(0.9, 1.1))
+                            affine_ciga_patch = torch.squeeze(affine_transfomer(torch.from_numpy(ciga_patch).permute(2, 0, 1).unsqueeze(0))).permute(1, 2, 0).numpy()
+                            img[affine_ciga_patch != 0] = affine_ciga_patch[affine_ciga_patch != 0]
+
+                            new_ciga_label = ciga_label.copy()
+                            non_zero_indices = np.nonzero(affine_ciga_patch)
+                            if len(non_zero_indices[0]) > 0 and len(non_zero_indices[1]) > 0:
+                                min_x = np.min(non_zero_indices[1])
+                                min_y = np.min(non_zero_indices[0])
+                                max_x = np.max(non_zero_indices[1])
+                                max_y = np.max(non_zero_indices[0])
+                                new_ciga_label[1] = min_x
+                                new_ciga_label[2] = min_y
+                                new_ciga_label[3] = max_x
+                                new_ciga_label[4] = max_y
+                                if max_x-min_x > 4 and max_y-min_y > 4:
+                                    affine_ciga_patch[affine_ciga_patch != 0] = 1
+                                    labels_after_filter.append(new_ciga_label)
+                                    segments_after_filter.append(affine_ciga_patch)
+                        else:
+                            labels_after_filter.append(ciga_label)
+                            segments_after_filter.append(segments[ciga_idx])
+                    else:
+                        labels_after_filter.append(ciga_label)
+                        segments_after_filter.append(segments[ciga_idx])
+
+                labels = np.array(labels_after_filter)
+                segments = segments_after_filter
+
+        if hyp is not None:
+            random_percentage = random.random()
+            
+            if random_percentage < hyp.get('render_ciga', ['', 0.0])[1]:
+                if len(labels) > 0:
+                    num_of_ciga_img = [1,2]
+                    num_of_ciga = random.randint(num_of_ciga_img[0], num_of_ciga_img[1])
+                    for idx in range(num_of_ciga) :
+                        ciga_img = cv2.imread(os.path.join(hyp.get('render_ciga', None)[0], self.ciga_imgs[random.randint(0, len(self.ciga_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
+                        ciga_img = cv2.resize(ciga_img, None, fx=0.075+random.random()*0.05, fy=0.075+random.random()*0.05, interpolation=cv2.INTER_LINEAR)
+                        if random.random() > 0.5 :
+                            ciga_img = ciga_img[:,::-1,:]
+                        if random.random() > 0.5 :
+                            ciga_img = ciga_img[::-1,:,:]
+                        if random.random() > 0.5 :
+                            ciga_img = cv2.rotate(ciga_img, cv2.ROTATE_90_CLOCKWISE)
+                        
+                        if img.shape[1]-ciga_img.shape[1] > 0 and img.shape[0]-ciga_img.shape[0] > 0:
+                            gray = ciga_img[:,:,3]
+                            th, threshed = cv2.threshold(gray, 10, 255, cv2.THRESH_BINARY)
+                            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11,11))
+                            morphed = cv2.morphologyEx(threshed, cv2.MORPH_CLOSE, kernel)
+                            cnts = cv2.findContours(morphed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
+                            cnt = sorted(cnts, key=cv2.contourArea)[-1]
+                            p_x1,p_y1,p_w,p_h = cv2.boundingRect(cnt)
+
+                            color_sample = cv2.resize(img, (100,100))
+                            b = np.mean(color_sample[:, :, 0])
+                            g = np.mean(color_sample[:, :, 1])
+                            r = np.mean(color_sample[:, :, 2])
+                            origin_color_sum = b + g + r
+                            b = b/origin_color_sum
+                            g = g/origin_color_sum
+                            r = r/origin_color_sum
+
+                            try:
+                                for idx_x in range(ciga_img.shape[1]) :
+                                    for idx_y in range(ciga_img.shape[0]) :
+
+                                        color_sum = np.sum(ciga_img[idx_y][idx_x][0:3])
+
+                                        if color_sum > 10 :
+                                            ciga_img[idx_y][idx_x][0] = min(int(color_sum * b),255)
+                                            ciga_img[idx_y][idx_x][1] = min(int(color_sum * g),255)
+                                            ciga_img[idx_y][idx_x][2] = min(int(color_sum * r),255)
+                            except:
+                                ciga_img = ciga_img
+
+                            # ciga 위치 랜덤하게 지정
+                            ciga_img_position_x = random.randint(0, img.shape[1]-ciga_img.shape[1])
+                            ciga_img_position_y = random.randint(0, img.shape[0]-ciga_img.shape[0])
+
+                            img_crop = img[ciga_img_position_y:ciga_img_position_y+ciga_img.shape[0], ciga_img_position_x:ciga_img_position_x+ciga_img.shape[1]]
+                            img_crop = cv2.cvtColor(img_crop, cv2.COLOR_BGR2BGRA)                            
+                            
+                            ciga_img_pillow = Image.fromarray(ciga_img)
+                            img_crop_pillow = Image.fromarray(img_crop)
+                            blended_pillow = Image.alpha_composite(img_crop_pillow, ciga_img_pillow)
+                            blended_img=np.array(blended_pillow)  
+
+                            blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
+                            img[ciga_img_position_y:ciga_img_position_y+ciga_img.shape[0], ciga_img_position_x:ciga_img_position_x+ciga_img.shape[1]] = blended_img
+
+                            min_x = p_x1 + ciga_img_position_x
+                            min_y = p_y1 + ciga_img_position_y
+                            max_x = p_x1 + p_w + ciga_img_position_x
+                            max_y = p_y1 + p_h + ciga_img_position_y
+                            new_label = np.array([[2, min_x, min_y, max_x, max_y]])
+                            new_segment = np.array([
+                                [min_x, min_y], 
+                                [max_x, min_y],  
+                                [max_x, max_y],
+                                [min_x, max_y]
+                                ])
+                            
+                            labels = np.append(labels, new_label, axis=0)  
+                            segments.append(new_segment)
+
+            #else : if there is ciga rendering, no phone rendering
+            elif random_percentage > 1-hyp.get('render_phone', ['', 0.0])[1]:
+                if len(labels) > 0:
+                    num_of_phone_img = [1,2]
+                    num_of_phone = random.randint(num_of_phone_img[0], num_of_phone_img[1])
+                    for idx in range(num_of_phone) :
+                        phone_img = cv2.imread(os.path.join(hyp.get('render_phone', None)[0], self.phone_imgs[random.randint(0, len(self.phone_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
+                        phone_img = cv2.resize(phone_img, None, fx=0.1+random.random()*0.1, fy=0.1+random.random()*0.1, interpolation=cv2.INTER_LINEAR)
+                        if random.random() > 0.5 :
+                            phone_img = phone_img[:,::-1,:]
+                        if random.random() > 0.5 :
+                            phone_img = phone_img[::-1,:,:]
+                        if random.random() > 0.5 :
+                            phone_img = cv2.rotate(phone_img, cv2.ROTATE_90_CLOCKWISE)
+                        
+                        if img.shape[1]-phone_img.shape[1] > 0 and img.shape[0]-phone_img.shape[0] > 0:
+                            gray = phone_img[:,:,3]
+                            th, threshed = cv2.threshold(gray, 10, 255, cv2.THRESH_BINARY)
+                            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11,11))
+                            morphed = cv2.morphologyEx(threshed, cv2.MORPH_CLOSE, kernel)
+                            cnts = cv2.findContours(morphed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
+                            cnt = sorted(cnts, key=cv2.contourArea)[-1]
+                            p_x1,p_y1,p_w,p_h = cv2.boundingRect(cnt)
+
+                            color_sample = cv2.resize(img, (100,100))
+                            b = np.mean(color_sample[:, :, 0])
+                            g = np.mean(color_sample[:, :, 1])
+                            r = np.mean(color_sample[:, :, 2])
+                            origin_color_sum = b + g + r
+                            b = b/origin_color_sum
+                            g = g/origin_color_sum
+                            r = r/origin_color_sum
+
+                            try:
+                                for idx_x in range(phone_img.shape[1]) :
+                                    for idx_y in range(phone_img.shape[0]) :
+
+                                        color_sum = np.sum(phone_img[idx_y][idx_x][0:3])
+
+                                        if color_sum > 10 :
+                                            phone_img[idx_y][idx_x][0] = min(int(color_sum * b),255)
+                                            phone_img[idx_y][idx_x][1] = min(int(color_sum * g),255)
+                                            phone_img[idx_y][idx_x][2] = min(int(color_sum * r),255)
+                            except:
+                                phone_img = phone_img
+
+                            # phone 위치 랜덤하게 지정
+                            phone_img_position_x = random.randint(0, img.shape[1]-phone_img.shape[1])
+                            phone_img_position_y = random.randint(0, img.shape[0]-phone_img.shape[0])
+
+                            img_crop = img[phone_img_position_y:phone_img_position_y+phone_img.shape[0], phone_img_position_x:phone_img_position_x+phone_img.shape[1]]
+                            img_crop = cv2.cvtColor(img_crop, cv2.COLOR_BGR2BGRA)                            
+                            
+                            phone_img_pillow = Image.fromarray(phone_img)
+                            img_crop_pillow = Image.fromarray(img_crop)
+                            blended_pillow = Image.alpha_composite(img_crop_pillow, phone_img_pillow)
+                            blended_img=np.array(blended_pillow)  
+
+                            blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
+                            img[phone_img_position_y:phone_img_position_y+phone_img.shape[0], phone_img_position_x:phone_img_position_x+phone_img.shape[1]] = blended_img
+
+                            min_x = p_x1 + phone_img_position_x
+                            min_y = p_y1 + phone_img_position_y
+                            max_x = p_x1 + p_w + phone_img_position_x
+                            max_y = p_y1 + p_h + phone_img_position_y
+                            new_label = np.array([[3, min_x, min_y, max_x, max_y]])
+                            new_segment = np.array([
+                                [min_x, min_y], 
+                                [max_x, min_y],  
+                                [max_x, max_y],
+                                [min_x, max_y]
+                                ])
+                            
+                            labels = np.append(labels, new_label, axis=0)  
+                            segments.append(new_segment)
+
+        if hyp is not None and random.random() < hyp.get('render_hand', ['', 0.0])[1]:
+            num_of_hand_img = [1,4]
+            num_of_hand = random.randint(num_of_hand_img[0], num_of_hand_img[1])
+            hand_imgs = os.listdir(hyp.get('render_hand', None)[0])
+            for idx in range(num_of_hand) :
+                hand_img = cv2.imread(os.path.join(hyp.get('render_hand', None)[0], hand_imgs[random.randint(0, len(hand_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
+                hand_img = cv2.resize(hand_img, None, fx=0.2+random.random()*0.1, fy=0.2+random.random()*0.1, interpolation=cv2.INTER_LINEAR)
+
+                color_sample = cv2.resize(img, (100,100))
+                b = np.mean(color_sample[:, :, 0])
+                g = np.mean(color_sample[:, :, 1])
+                r = np.mean(color_sample[:, :, 2])
+                origin_color_sum = b + g + r
+                b = b/origin_color_sum
+                g = g/origin_color_sum
+                r = r/origin_color_sum
+
+                try:
+                    for idx_x in range(hand_img.shape[1]) :
+                        for idx_y in range(hand_img.shape[0]) :
+
+                            color_sum = np.sum(hand_img[idx_y][idx_x][0:3])
+
+                            if color_sum > 10 :
+                                hand_img[idx_y][idx_x][0] = min(int(color_sum * b),255)
+                                hand_img[idx_y][idx_x][1] = min(int(color_sum * g),255)
+                                hand_img[idx_y][idx_x][2] = min(int(color_sum * r),255)
+                except:
+                    hand_img = hand_img
+
+                # hand 위치 랜덤하게 지정
+                if img.shape[1]-hand_img.shape[1] > 0 and img.shape[0]-hand_img.shape[0] > 0:
+                    hand_img_position_x = random.randint(0, img.shape[1]-hand_img.shape[1])
+                    hand_img_position_y = random.randint(0, img.shape[0]-hand_img.shape[0])
+                    
+                    is_invalid_position = False
+                    for ciga_label in labels:
+                        if ciga_label[0]==2 or ciga_label[0]==3:
+                            if check_boxes_overlap([hand_img_position_x, hand_img_position_y, hand_img_position_x+hand_img.shape[1], hand_img_position_y+hand_img.shape[0]],
+                                [ciga_label[1], ciga_label[2], ciga_label[3], ciga_label[4]], -16):
+                                is_invalid_position=True
+                                
+                    if not is_invalid_position:
+                        img_crop = img[hand_img_position_y:hand_img_position_y+hand_img.shape[0], hand_img_position_x:hand_img_position_x+hand_img.shape[1]]
+                        img_crop[hand_img!=0] = hand_img[hand_img!=0]
+                        img[hand_img_position_y:hand_img_position_y+hand_img.shape[0], hand_img_position_x:hand_img_position_x+hand_img.shape[1]] = img_crop
+
+
+        if hyp is not None and (hyp.get('ciga_cutout', None) is not None or hyp.get('cellphone_cutout', None) is not None):
+            nL = len(labels)  # number of labels
+            if nL:
+                labels_after_filter = []
+                segments_after_filter = []
+                
+                ciga_masks = polygons2masks(img.shape[:2], segments, color=1, downsample_ratio=1)
+                ciga_outer_masks = polygons2lines(img.shape[:2], segments, color=1, downsample_ratio=1, thickness=150)
+                #print("segments: ", len(segments))
+                #print("ciga_masks: ", ciga_masks.shape)
+                #print("labels: ", labels.shape)
+                for ciga_idx, ciga_label in enumerate(labels):#enumerate(labels[labels[:, 0]==2]):
+                    cutout_random_percent1 = random.random()
+                    cutout_random_percent2 = random.random()
+                    '''
+                    if ciga_label[0]==2:
+                        if cutout_random_percent1 < hyp.get('ciga_cutout', 0):
+                            ciga_color = ciga_colors[random.randint(0,len(ciga_colors)-1)]
+                            img[ciga_masks[ciga_idx] != 0] = ciga_color
+                        elif cutout_random_percent1 > 1 - hyp.get('ciga_outer_cutout', 0):
+                            ciga_color = ciga_colors[random.randint(0,len(ciga_colors)-1)]
+                            ciga_outer_masks[ciga_idx][np.sum(ciga_masks[labels[:, 0]==2], axis=0) != 0] = 0
+                            img[ciga_outer_masks[ciga_idx] != 0] = ciga_color                        
+                            labels_after_filter.append(ciga_label)
+                            segments_after_filter.append(segments[ciga_idx])
+                        else:
+                            labels_after_filter.append(ciga_label)
+                            segments_after_filter.append(segments[ciga_idx])
+
+                    elif ciga_label[0]==3:
+                        if cutout_random_percent2 < hyp.get('cellphone_cutout', 0):
+                            ciga_color = ciga_colors[random.randint(0,len(ciga_colors)-1)]
+                            img[ciga_masks[ciga_idx] != 0] = ciga_color
+                        elif cutout_random_percent2 > 1 - hyp.get('cellphone_outer_cutout', 0):
+                            ciga_color = ciga_colors[random.randint(0,len(ciga_colors)-1)]
+                            ciga_outer_masks[ciga_idx][np.sum(ciga_masks[labels[:, 0]==3], axis=0) != 0] = 0
+                            ciga_outer_masks[ciga_idx][np.sum(ciga_masks[labels[:, 0]==4], axis=0) != 0] = 1
+                            img[ciga_outer_masks[ciga_idx] != 0] = ciga_color                        
+                            labels_after_filter.append(ciga_label)
+                            segments_after_filter.append(segments[ciga_idx])
+                        else:
+                            labels_after_filter.append(ciga_label)
+                            segments_after_filter.append(segments[ciga_idx])
+                    elif ciga_label[0]==4:
+                        if not (cutout_random_percent2 > 1 - hyp.get('cellphone_outer_cutout', 0)):#hand cutout togehter with cellphone
+                            labels_after_filter.append(ciga_label)
+                            segments_after_filter.append(segments[ciga_idx])
+                    '''
+                    if ciga_label[0]==2:
+                        if cutout_random_percent2 < hyp.get('cellphone_cutout', 0):
+                            ciga_color = ciga_colors[random.randint(0,len(ciga_colors)-1)]
+                            img[ciga_masks[ciga_idx] != 0] = ciga_color
+                        elif cutout_random_percent2 > 1 - hyp.get('cellphone_outer_cutout', 0):
+                            ciga_color = ciga_colors[random.randint(0,len(ciga_colors)-1)]
+                            ciga_outer_masks[ciga_idx][np.sum(ciga_masks[labels[:, 0]==2], axis=0) != 0] = 0
+                            #ciga_outer_masks[ciga_idx][np.sum(ciga_masks[labels[:, 0]==3], axis=0) != 0] = 1
+                            img[ciga_outer_masks[ciga_idx] != 0] = ciga_color                        
+                            labels_after_filter.append(ciga_label)
+                            segments_after_filter.append(segments[ciga_idx])
+                        else:
+                            labels_after_filter.append(ciga_label)
+                            segments_after_filter.append(segments[ciga_idx])
+                    else:
+                        labels_after_filter.append(ciga_label)
+                        segments_after_filter.append(segments[ciga_idx])
+                labels = np.array(labels_after_filter)
+                segments = segments_after_filter
                         
                         
         if hyp is not None and hyp.get('render_fire', None) is not None:
@@ -2305,7 +2615,10 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     R = np.eye(3)
     a = random.uniform(-degrees, degrees)
     # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
-    s = random.uniform(1 - scale, 1.1 + scale)
+    if isinstance(scale, float):
+        s = random.uniform(1 - scale, 1.1 + scale)
+    else:
+        s = random.uniform(1 + scale[0], 1.1 + scale[1])
     # s = 2 ** random.uniform(-scale, scale)
     R[:2] = cv2.getRotationMatrix2D(angle=a, center=(0, 0), scale=s)
 
@@ -2711,6 +3024,42 @@ def polygons2masks(img_size, polygons, color, downsample_ratio=1):
     masks = []
     for si in range(len(polygons)):
         mask = polygon2mask(img_size, [polygons[si].reshape(-1)], color, downsample_ratio)
+        masks.append(mask)
+    return np.array(masks)
+
+
+def polygon2line(img_size, polygons, color=1, downsample_ratio=1, thickness=1):
+    """
+    Args:
+        img_size (tuple): The image size.
+        polygons (np.ndarray): [N, M], N is the number of polygons,
+            M is the number of points(Be divided by 2).
+    """
+    isClosed = True
+    mask = np.zeros(img_size, dtype=np.uint8)
+    polygons = np.asarray(polygons)
+    polygons = polygons.astype(np.int32)
+    shape = polygons.shape
+    polygons = polygons.reshape(shape[0], -1, 2)
+    cv2.polylines(mask, polygons, isClosed, color=color, thickness=thickness)
+    nh, nw = (img_size[0] // downsample_ratio, img_size[1] // downsample_ratio)
+    # NOTE: fillPoly firstly then resize is trying the keep the same way
+    # of loss calculation when mask-ratio=1.
+    mask = cv2.resize(mask, (nw, nh))
+    return mask
+
+
+def polygons2lines(img_size, polygons, color, downsample_ratio=1, thickness=1):
+    """
+    Args:
+        img_size (tuple): The image size.
+        polygons (list[np.ndarray]): each polygon is [N, M],
+            N is the number of polygons,
+            M is the number of points(Be divided by 2).
+    """
+    masks = []
+    for si in range(len(polygons)):
+        mask = polygon2line(img_size, [polygons[si].reshape(-1)], color, downsample_ratio, thickness)
         masks.append(mask)
     return np.array(masks)
 
