@@ -1395,7 +1395,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             min_y = p_y1 + ciga_img_position_y
                             max_x = p_x1 + p_w + ciga_img_position_x
                             max_y = p_y1 + p_h + ciga_img_position_y
-                            new_label = np.array([[2, min_x, min_y, max_x, max_y]])
+                            new_label = np.array([[3, min_x, min_y, max_x, max_y]])
                             new_segment = np.array([
                                 [min_x, min_y], 
                                 [max_x, min_y],  
@@ -1521,7 +1521,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     for ciga_label in labels:
                         if ciga_label[0]==2 or ciga_label[0]==3:
                             if check_boxes_overlap([hand_img_position_x, hand_img_position_y, hand_img_position_x+hand_img.shape[1], hand_img_position_y+hand_img.shape[0]],
-                                [ciga_label[1], ciga_label[2], ciga_label[3], ciga_label[4]], -16):
+                                [ciga_label[1], ciga_label[2], ciga_label[3], ciga_label[4]]):
                                 is_invalid_position=True
                                 
                     if not is_invalid_position:

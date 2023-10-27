@@ -1328,6 +1328,53 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 labels = np.array(labels_after_filter)
                 segments = segments_after_filter
 
+        if hyp is not None and random.random() < hyp.get('render_hand', ['', 0.0])[1]:
+            num_of_hand_img = [1,4]
+            num_of_hand = random.randint(num_of_hand_img[0], num_of_hand_img[1])
+            hand_imgs = os.listdir(hyp.get('render_hand', None)[0])
+            for idx in range(num_of_hand) :
+                hand_img = cv2.imread(os.path.join(hyp.get('render_hand', None)[0], hand_imgs[random.randint(0, len(hand_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
+                hand_img = cv2.resize(hand_img, None, fx=0.2+random.random()*0.1, fy=0.2+random.random()*0.1, interpolation=cv2.INTER_LINEAR)
+
+                color_sample = cv2.resize(img, (100,100))
+                b = np.mean(color_sample[:, :, 0])
+                g = np.mean(color_sample[:, :, 1])
+                r = np.mean(color_sample[:, :, 2])
+                origin_color_sum = b + g + r
+                b = b/origin_color_sum
+                g = g/origin_color_sum
+                r = r/origin_color_sum
+
+                try:
+                    for idx_x in range(hand_img.shape[1]) :
+                        for idx_y in range(hand_img.shape[0]) :
+
+                            color_sum = np.sum(hand_img[idx_y][idx_x][0:3])
+
+                            if color_sum > 10 :
+                                hand_img[idx_y][idx_x][0] = min(int(color_sum * b),255)
+                                hand_img[idx_y][idx_x][1] = min(int(color_sum * g),255)
+                                hand_img[idx_y][idx_x][2] = min(int(color_sum * r),255)
+                except:
+                    hand_img = hand_img
+
+                # hand 위치 랜덤하게 지정
+                if img.shape[1]-hand_img.shape[1] > 0 and img.shape[0]-hand_img.shape[0] > 0:
+                    hand_img_position_x = random.randint(0, img.shape[1]-hand_img.shape[1])
+                    hand_img_position_y = random.randint(0, img.shape[0]-hand_img.shape[0])
+                    
+                    is_invalid_position = False
+                    for ciga_label in labels:
+                        if ciga_label[0]==2 or ciga_label[0]==3:
+                            if check_boxes_overlap([hand_img_position_x, hand_img_position_y, hand_img_position_x+hand_img.shape[1], hand_img_position_y+hand_img.shape[0]],
+                                [ciga_label[1], ciga_label[2], ciga_label[3], ciga_label[4]]):
+                                is_invalid_position=True
+                                
+                    if not is_invalid_position:
+                        img_crop = img[hand_img_position_y:hand_img_position_y+hand_img.shape[0], hand_img_position_x:hand_img_position_x+hand_img.shape[1]]
+                        img_crop[hand_img!=0] = hand_img[hand_img!=0]
+                        img[hand_img_position_y:hand_img_position_y+hand_img.shape[0], hand_img_position_x:hand_img_position_x+hand_img.shape[1]] = img_crop
+
         if hyp is not None:
             random_percentage = random.random()
             
@@ -1395,7 +1442,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             min_y = p_y1 + ciga_img_position_y
                             max_x = p_x1 + p_w + ciga_img_position_x
                             max_y = p_y1 + p_h + ciga_img_position_y
-                            new_label = np.array([[2, min_x, min_y, max_x, max_y]])
+                            new_label = np.array([[3, min_x, min_y, max_x, max_y]])
                             new_segment = np.array([
                                 [min_x, min_y], 
                                 [max_x, min_y],  
@@ -1482,52 +1529,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             labels = np.append(labels, new_label, axis=0)  
                             segments.append(new_segment)
 
-        if hyp is not None and random.random() < hyp.get('render_hand', ['', 0.0])[1]:
-            num_of_hand_img = [1,4]
-            num_of_hand = random.randint(num_of_hand_img[0], num_of_hand_img[1])
-            hand_imgs = os.listdir(hyp.get('render_hand', None)[0])
-            for idx in range(num_of_hand) :
-                hand_img = cv2.imread(os.path.join(hyp.get('render_hand', None)[0], hand_imgs[random.randint(0, len(hand_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
-                hand_img = cv2.resize(hand_img, None, fx=0.2+random.random()*0.1, fy=0.2+random.random()*0.1, interpolation=cv2.INTER_LINEAR)
-
-                color_sample = cv2.resize(img, (100,100))
-                b = np.mean(color_sample[:, :, 0])
-                g = np.mean(color_sample[:, :, 1])
-                r = np.mean(color_sample[:, :, 2])
-                origin_color_sum = b + g + r
-                b = b/origin_color_sum
-                g = g/origin_color_sum
-                r = r/origin_color_sum
-
-                try:
-                    for idx_x in range(hand_img.shape[1]) :
-                        for idx_y in range(hand_img.shape[0]) :
-
-                            color_sum = np.sum(hand_img[idx_y][idx_x][0:3])
-
-                            if color_sum > 10 :
-                                hand_img[idx_y][idx_x][0] = min(int(color_sum * b),255)
-                                hand_img[idx_y][idx_x][1] = min(int(color_sum * g),255)
-                                hand_img[idx_y][idx_x][2] = min(int(color_sum * r),255)
-                except:
-                    hand_img = hand_img
-
-                # hand 위치 랜덤하게 지정
-                if img.shape[1]-hand_img.shape[1] > 0 and img.shape[0]-hand_img.shape[0] > 0:
-                    hand_img_position_x = random.randint(0, img.shape[1]-hand_img.shape[1])
-                    hand_img_position_y = random.randint(0, img.shape[0]-hand_img.shape[0])
-                    
-                    is_invalid_position = False
-                    for ciga_label in labels:
-                        if ciga_label[0]==2 or ciga_label[0]==3:
-                            if check_boxes_overlap([hand_img_position_x, hand_img_position_y, hand_img_position_x+hand_img.shape[1], hand_img_position_y+hand_img.shape[0]],
-                                [ciga_label[1], ciga_label[2], ciga_label[3], ciga_label[4]], -16):
-                                is_invalid_position=True
-                                
-                    if not is_invalid_position:
-                        img_crop = img[hand_img_position_y:hand_img_position_y+hand_img.shape[0], hand_img_position_x:hand_img_position_x+hand_img.shape[1]]
-                        img_crop[hand_img!=0] = hand_img[hand_img!=0]
-                        img[hand_img_position_y:hand_img_position_y+hand_img.shape[0], hand_img_position_x:hand_img_position_x+hand_img.shape[1]] = img_crop
 
 
         if hyp is not None and (hyp.get('ciga_cutout', None) is not None or hyp.get('cellphone_cutout', None) is not None):
