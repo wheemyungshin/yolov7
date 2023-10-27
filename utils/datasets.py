@@ -1337,7 +1337,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     num_of_ciga = random.randint(num_of_ciga_img[0], num_of_ciga_img[1])
                     for idx in range(num_of_ciga) :
                         ciga_img = cv2.imread(os.path.join(hyp.get('render_ciga', None)[0], self.ciga_imgs[random.randint(0, len(self.ciga_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
-                        ciga_img = cv2.resize(ciga_img, None, fx=0.1+random.random()*0.1, fy=0.1+random.random()*0.1, interpolation=cv2.INTER_LINEAR)
+                        ciga_img = cv2.resize(ciga_img, None, fx=0.075+random.random()*0.05, fy=0.075+random.random()*0.05, interpolation=cv2.INTER_LINEAR)
                         if random.random() > 0.5 :
                             ciga_img = ciga_img[:,::-1,:]
                         if random.random() > 0.5 :
