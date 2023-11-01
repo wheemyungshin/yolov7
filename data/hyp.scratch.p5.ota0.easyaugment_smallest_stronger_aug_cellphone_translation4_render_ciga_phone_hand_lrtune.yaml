@@ -32,4 +32,6 @@ loss_ota: 0 # use ComputeLossOTA, use 0 for faster training
 min_size: 25
 min_scale_up: 25
 cellphone_translation: 0.4
+render_phone: ['/data/render_pc_bbox/phone_model_alpha', 0.1]
+render_ciga: ['/data/render_pc_bbox/ciga_model_alpha', 0.1]
 render_hand: ['/data/hand_blendings_from_ego2hands', 0.5]
