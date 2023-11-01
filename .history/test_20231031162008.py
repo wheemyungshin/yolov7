@@ -401,8 +401,8 @@ def test(data,
 
     if not compute_loss and opt_seg:
         print(miou)
+        print(len(miou[0]))
         for c, iou in enumerate(miou):
-            print(len(iou))
             if len(iou) > 0:
                 print(names[c] , " : ", sum(iou)/len(iou))
     return (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t

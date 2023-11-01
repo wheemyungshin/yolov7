@@ -1526,7 +1526,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                 
                     if not is_invalid_position:
                         img_crop = img[hand_img_position_y:hand_img_position_y+hand_img.shape[0], hand_img_position_x:hand_img_position_x+hand_img.shape[1]]
-                        img_crop[hand_img>40] = hand_img[hand_img>40]
+                        img_crop[hand_img!=0] = hand_img[hand_img!=0]
                         img[hand_img_position_y:hand_img_position_y+hand_img.shape[0], hand_img_position_x:hand_img_position_x+hand_img.shape[1]] = img_crop
 
 

@@ -195,6 +195,7 @@ def test(data,
                     semantic_gt_mask[int(t_cls)][((masks[t_cls_idx])!=0).bool()] = 1
 
                 gt_mask = torch.flatten(semantic_gt_mask.float(), start_dim=1)
+                if torch.sum(gt_mask)
                 ious = torch.squeeze(mask_iou(pred_mask, gt_mask), 0)
                 max_ious_idx = torch.argmax(ious)
                 miou[max_ious_idx].append(ious[max_ious_idx])
@@ -400,9 +401,7 @@ def test(data,
         maps[c] = ap[i]
 
     if not compute_loss and opt_seg:
-        print(miou)
         for c, iou in enumerate(miou):
-            print(len(iou))
             if len(iou) > 0:
                 print(names[c] , " : ", sum(iou)/len(iou))
     return (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t

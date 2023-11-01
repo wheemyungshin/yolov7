@@ -1483,7 +1483,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             segments.append(new_segment)
 
         if hyp is not None and random.random() < hyp.get('render_hand', ['', 0.0])[1]:
-            num_of_hand_img = [1,3]
+            num_of_hand_img = [1,4]
             num_of_hand = random.randint(num_of_hand_img[0], num_of_hand_img[1])
             hand_imgs = os.listdir(hyp.get('render_hand', None)[0])
             for idx in range(num_of_hand) :
@@ -1526,7 +1526,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                 
                     if not is_invalid_position:
                         img_crop = img[hand_img_position_y:hand_img_position_y+hand_img.shape[0], hand_img_position_x:hand_img_position_x+hand_img.shape[1]]
-                        img_crop[hand_img>40] = hand_img[hand_img>40]
+                        img_crop[hand_img!=0] = hand_img[hand_img!=0]
                         img[hand_img_position_y:hand_img_position_y+hand_img.shape[0], hand_img_position_x:hand_img_position_x+hand_img.shape[1]] = img_crop
 
 
