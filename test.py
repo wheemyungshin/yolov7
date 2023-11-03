@@ -172,6 +172,7 @@ def test(data,
             for label in labels:
                 if label[3]*label[4] < 32*32:
                     size_division_ = 'small'
+                #elif 32*32 <= label[3]*label[4] < 100000*100000:
                 elif 32*32 <= label[3]*label[4] < 96*96:
                     size_division_ = 'medium'
                 else:
