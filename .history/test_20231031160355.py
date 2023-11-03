@@ -172,7 +172,6 @@ def test(data,
             for label in labels:
                 if label[3]*label[4] < 32*32:
                     size_division_ = 'small'
-                #elif 32*32 <= label[3]*label[4] < 100000*100000:
                 elif 32*32 <= label[3]*label[4] < 96*96:
                     size_division_ = 'medium'
                 else:
@@ -198,7 +197,8 @@ def test(data,
                 gt_mask = torch.flatten(semantic_gt_mask.float(), start_dim=1)
                 ious = torch.squeeze(mask_iou(pred_mask, gt_mask), 0)
                 max_ious_idx = torch.argmax(ious)
-                miou[max_ious_idx].append(ious[max_ious_idx])
+                if ious[max_ious_idx] > 0:
+                    miou[max_ious_idx].append(ious[max_ious_idx])
 
             if len(pred) == 0:
                 if nl:
@@ -403,7 +403,6 @@ def test(data,
     if not compute_loss and opt_seg:
         print(miou)
         for c, iou in enumerate(miou):
-            print(len(iou))
             if len(iou) > 0:
                 print(names[c] , " : ", sum(iou)/len(iou))
     return (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t

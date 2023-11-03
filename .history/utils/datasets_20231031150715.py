@@ -636,8 +636,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     for file in files :
                         # 너무 수직인 각도면 거를 것
                         if not(file[-6:] == "05.png" or  file[-6:] == "13.png") :
-                            phone_img = cv2.imread(os.path.join(hyp.get('render_phone', None)[0], folder + "/" + file), cv2.IMREAD_UNCHANGED)
-                            self.phone_imgs.append(phone_img)
+                            self.phone_imgs.append(folder + "/" + file)
 
         if hyp is not None and hyp.get('render_ciga', None) is not None:
             self.ciga_imgs = []
@@ -647,15 +646,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     files = os.listdir(os.path.join(hyp.get('render_ciga', None)[0], folder))
                     for file in files :
                         # 너무 수직인 각도면 거를 것
-                        ciga_img = cv2.imread(os.path.join(hyp.get('render_ciga', None)[0], folder + "/" + file), cv2.IMREAD_UNCHANGED)
-                        self.ciga_imgs.append(ciga_img)
-
-        if hyp is not None and hyp.get('render_hand', None) is not None:
-            self.hand_imgs = []
-            hand_files = os.listdir(hyp.get('render_hand', None)[0])
-            for file in hand_files :
-                hand_img = cv2.imread(os.path.join(hyp.get('render_hand', None)[0], file), cv2.IMREAD_UNCHANGED)
-                self.hand_imgs.append(hand_img)
+                        self.ciga_imgs.append(folder + "/" + file)
 
         if single_cls:
             for x in self.labels:
@@ -929,16 +920,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     if len(sample_images) == 0:
                         break
                 labels = dark_pastein(img, labels, sample_images, sample_masks)
-
-        color_sample = cv2.resize(img, (100,100))
-        b = np.mean(color_sample[:, :, 0])
-        g = np.mean(color_sample[:, :, 1])
-        r = np.mean(color_sample[:, :, 2])
-        origin_color_sum = b + g + r
-        b = b/origin_color_sum
-        g = g/origin_color_sum
-        r = r/origin_color_sum
-
+        
         nL = len(labels)  # number of labels
         if nL:
             shape_before = len(labels)
@@ -1047,6 +1029,14 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 if len(labels) > 0:
                     if 1 in labels[:, 0]:#face exists
                         face_label = labels[0]
+                        color_sample = cv2.resize(img, (100,100))
+                        b = np.mean(color_sample[:, :, 0])
+                        g = np.mean(color_sample[:, :, 1])
+                        r = np.mean(color_sample[:, :, 2])
+                        origin_color_sum = (b + g + r)
+                        b = b/origin_color_sum
+                        g = g/origin_color_sum
+                        r = r/origin_color_sum
 
                         '''
                         check_image = np.zeros([192, 192, 4])
@@ -1142,7 +1132,16 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
             if hyp is not None and random.random() < hyp.get('fakeseatbelt3', [None, 0])[1]:
                 if len(labels) > 0:
-                    if 1 in labels[:, 0] and 0 not in labels[:, 0] and len(labels[:, 0])==1:#face exists, seatbelt does not exist
+                    if 1 in labels[:, 0] and 0 not in labels[:, 0] and len(labels[:, 0])==1:#face exists, seatbelt does not exist                    
+                        color_sample = cv2.resize(img, (100,100))
+                        b = np.mean(color_sample[:, :, 0])
+                        g = np.mean(color_sample[:, :, 1])
+                        r = np.mean(color_sample[:, :, 2])
+                        origin_color_sum = (b + g + r)
+                        b = b/origin_color_sum
+                        g = g/origin_color_sum
+                        r = r/origin_color_sum
+                        
                         seatbelt_filename = None
                         if random.random() < 0.5:
                             seatbelt_imgs = os.listdir(hyp.get('fakeseatbelt3', [None, 0])[0])      
@@ -1279,8 +1278,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         if hyp is not None and hyp.get('cellphone_translation', None) is not None:
             nL = len(labels)  # number of labels
             if nL:
-                affine_transfomer = RandomAffine(degrees=(-180, 180), translate=(0.05, 0.15), scale=(0.9, 1.1))
-
                 labels_after_filter = []
                 segments_after_filter = []
                 
@@ -1300,9 +1297,12 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             ciga_color[2] = min(max(ciga_color[2] + random.randint(-30, 30), 0), 255)
                             ciga_patch = np.zeros_like(img)
                             ciga_patch[ciga_masks[ciga_idx] != 0] = img[ciga_masks[ciga_idx] != 0]
+                            img[ciga_masks[ciga_idx] != 0] = ciga_color
 
+                            affine_transfomer = RandomAffine(degrees=(-180, 180), translate=(0.05, 0.15), scale=(0.9, 1.1))
                             affine_ciga_patch = torch.squeeze(affine_transfomer(torch.from_numpy(ciga_patch).permute(2, 0, 1).unsqueeze(0))).permute(1, 2, 0).numpy()
-                            
+                            img[affine_ciga_patch != 0] = affine_ciga_patch[affine_ciga_patch != 0]
+
                             new_ciga_label = ciga_label.copy()
                             non_zero_indices = np.nonzero(affine_ciga_patch)
                             if len(non_zero_indices[0]) > 0 and len(non_zero_indices[1]) > 0:
@@ -1314,29 +1314,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                 new_ciga_label[2] = min_y
                                 new_ciga_label[3] = max_x
                                 new_ciga_label[4] = max_y
-                                if ciga_label[0]==3 and max_x-min_x > 16 and max_y-min_y > 16 and random.random() < hyp.get('render_hand', ['', 0.0])[1]:
-                                    hand_img = self.hand_imgs[random.randint(0, len(self.hand_imgs) - 1)]
-                                    hand_img = cv2.resize(hand_img, (max_x-min_x, max_y-min_y), interpolation=cv2.INTER_LINEAR)
-
-                                    try:
-                                        for idx_x in range(hand_img.shape[1]) :
-                                            for idx_y in range(hand_img.shape[0]) :
-
-                                                color_sum = np.sum(hand_img[idx_y][idx_x][0:3])
-
-                                                if color_sum > 10 :
-                                                    hand_img[idx_y][idx_x][0] = min(int(color_sum * b),255)
-                                                    hand_img[idx_y][idx_x][1] = min(int(color_sum * g),255)
-                                                    hand_img[idx_y][idx_x][2] = min(int(color_sum * r),255)
-                                    except:
-                                        hand_img = hand_img
-                                        
-                                    img[ciga_masks[ciga_idx] != 0] = ciga_color
-                                    img[min_y:max_y, min_x:max_x][hand_img>10] = hand_img[hand_img>10]
-                                else:
-                                    img[ciga_masks[ciga_idx] != 0] = ciga_color
-                                img[affine_ciga_patch != 0] = affine_ciga_patch[affine_ciga_patch != 0]
-                                
                                 if max_x-min_x > 4 and max_y-min_y > 4:
                                     affine_ciga_patch[affine_ciga_patch != 0] = 1
                                     labels_after_filter.append(new_ciga_label)
@@ -1359,7 +1336,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     num_of_ciga_img = [1,2]
                     num_of_ciga = random.randint(num_of_ciga_img[0], num_of_ciga_img[1])
                     for idx in range(num_of_ciga) :
-                        ciga_img = self.ciga_imgs[random.randint(0, len(self.ciga_imgs) - 1)]
+                        ciga_img = cv2.imread(os.path.join(hyp.get('render_ciga', None)[0], self.ciga_imgs[random.randint(0, len(self.ciga_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
                         ciga_img = cv2.resize(ciga_img, None, fx=0.075+random.random()*0.05, fy=0.075+random.random()*0.05, interpolation=cv2.INTER_LINEAR)
                         if random.random() > 0.5 :
                             ciga_img = ciga_img[:,::-1,:]
@@ -1376,6 +1353,15 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             cnts = cv2.findContours(morphed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
                             cnt = sorted(cnts, key=cv2.contourArea)[-1]
                             p_x1,p_y1,p_w,p_h = cv2.boundingRect(cnt)
+
+                            color_sample = cv2.resize(img, (100,100))
+                            b = np.mean(color_sample[:, :, 0])
+                            g = np.mean(color_sample[:, :, 1])
+                            r = np.mean(color_sample[:, :, 2])
+                            origin_color_sum = b + g + r
+                            b = b/origin_color_sum
+                            g = g/origin_color_sum
+                            r = r/origin_color_sum
 
                             try:
                                 for idx_x in range(ciga_img.shape[1]) :
@@ -1426,7 +1412,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     num_of_phone_img = [1,2]
                     num_of_phone = random.randint(num_of_phone_img[0], num_of_phone_img[1])
                     for idx in range(num_of_phone) :
-                        phone_img = self.phone_imgs[random.randint(0, len(self.phone_imgs) - 1)]
+                        phone_img = cv2.imread(os.path.join(hyp.get('render_phone', None)[0], self.phone_imgs[random.randint(0, len(self.phone_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
                         phone_img = cv2.resize(phone_img, None, fx=0.1+random.random()*0.1, fy=0.1+random.random()*0.1, interpolation=cv2.INTER_LINEAR)
                         if random.random() > 0.5 :
                             phone_img = phone_img[:,::-1,:]
@@ -1443,6 +1429,15 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             cnts = cv2.findContours(morphed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
                             cnt = sorted(cnts, key=cv2.contourArea)[-1]
                             p_x1,p_y1,p_w,p_h = cv2.boundingRect(cnt)
+
+                            color_sample = cv2.resize(img, (100,100))
+                            b = np.mean(color_sample[:, :, 0])
+                            g = np.mean(color_sample[:, :, 1])
+                            r = np.mean(color_sample[:, :, 2])
+                            origin_color_sum = b + g + r
+                            b = b/origin_color_sum
+                            g = g/origin_color_sum
+                            r = r/origin_color_sum
 
                             try:
                                 for idx_x in range(phone_img.shape[1]) :
@@ -1490,9 +1485,19 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         if hyp is not None and random.random() < hyp.get('render_hand', ['', 0.0])[1]:
             num_of_hand_img = [1,3]
             num_of_hand = random.randint(num_of_hand_img[0], num_of_hand_img[1])
+            hand_imgs = os.listdir(hyp.get('render_hand', None)[0])
             for idx in range(num_of_hand) :
-                hand_img = self.hand_imgs[random.randint(0, len(self.hand_imgs) - 1)]
-                hand_img = cv2.resize(hand_img, None, fx=0.12+random.random()*0.23, fy=0.12+random.random()*0.23, interpolation=cv2.INTER_LINEAR)
+                hand_img = cv2.imread(os.path.join(hyp.get('render_hand', None)[0], hand_imgs[random.randint(0, len(hand_imgs) - 1)]), cv2.IMREAD_UNCHANGED)
+                hand_img = cv2.resize(hand_img, None, fx=0.2+random.random()*0.1, fy=0.2+random.random()*0.1, interpolation=cv2.INTER_LINEAR)
+
+                color_sample = cv2.resize(img, (100,100))
+                b = np.mean(color_sample[:, :, 0])
+                g = np.mean(color_sample[:, :, 1])
+                r = np.mean(color_sample[:, :, 2])
+                origin_color_sum = b + g + r
+                b = b/origin_color_sum
+                g = g/origin_color_sum
+                r = r/origin_color_sum
 
                 try:
                     for idx_x in range(hand_img.shape[1]) :
@@ -1521,7 +1526,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                 
                     if not is_invalid_position:
                         img_crop = img[hand_img_position_y:hand_img_position_y+hand_img.shape[0], hand_img_position_x:hand_img_position_x+hand_img.shape[1]]
-                        img_crop[hand_img>40] = hand_img[hand_img>40]
+                        img_crop[hand_img>10] = hand_img[hand_img!=0]
                         img[hand_img_position_y:hand_img_position_y+hand_img.shape[0], hand_img_position_x:hand_img_position_x+hand_img.shape[1]] = img_crop
 
 
@@ -1626,7 +1631,20 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         if min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2]) > min_ciga_size and random.random() < 0.5:
                             fire_size = max(8, random.randint(int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/5), int(min(ciga_label[3]-ciga_label[1], ciga_label[4]-ciga_label[2])/3)))
                             fire_img = cv2.imread(fire_imgs[random.randint(0, len(fire_imgs) - 1)], cv2.IMREAD_UNCHANGED)
+                            
                             fire_img = cv2.resize(fire_img, (fire_size, fire_size), cv2.INTER_CUBIC)
+                            #random_shine_ratio = 1+random.random()*0.5
+                            #fire_img = np.clip(fire_img * random_shine_ratio, 0, 255).astype((np.uint8))
+                            
+                            # 원본 이미지 색상 계열에 맞추기
+                            color_sample = cv2.resize(img, (100,100))
+                            b = np.mean(color_sample[:, :, 0])
+                            g = np.mean(color_sample[:, :, 1])
+                            r = np.mean(color_sample[:, :, 2])
+                            origin_color_sum = b + g + r
+                            b = b/origin_color_sum
+                            g = g/origin_color_sum
+                            r = r/origin_color_sum
 
                             for idx_x in range(fire_img.shape[1]) :
                                 for idx_y in range(fire_img.shape[0]) :
@@ -1687,6 +1705,16 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             fire_img = cv2.imread(fire_imgs[random.randint(0, len(fire_imgs) - 1)], cv2.IMREAD_UNCHANGED)
                             
                             fire_img = cv2.resize(fire_img, (fire_size, fire_size), cv2.INTER_CUBIC)
+                            
+                            # 원본 이미지 색상 계열에 맞추기
+                            color_sample = cv2.resize(img, (100,100))
+                            b = np.mean(color_sample[:, :, 0])
+                            g = np.mean(color_sample[:, :, 1])
+                            r = np.mean(color_sample[:, :, 2])
+                            origin_color_sum = b + g + r
+                            b = b/origin_color_sum
+                            g = g/origin_color_sum
+                            r = r/origin_color_sum
 
                             for idx_x in range(fire_img.shape[1]) :
                                 for idx_y in range(fire_img.shape[0]) :
@@ -1977,7 +2005,16 @@ def load_mosaic(self, hyp, index):
 
             if hyp is not None and random.random() < hyp.get('fakeseatbelt3', [None, 0])[1]:
                 if len(labels) > 0:
-                    if 1 in labels[:, 0] and 0 not in labels[:, 0] and len(labels[:, 0])==1:#face exists, seatbelt does not exist
+                    if 1 in labels[:, 0] and 0 not in labels[:, 0] and len(labels[:, 0])==1:#face exists, seatbelt does not exist                    
+                        color_sample = cv2.resize(img, (100,100))
+                        b = np.mean(color_sample[:, :, 0])
+                        g = np.mean(color_sample[:, :, 1])
+                        r = np.mean(color_sample[:, :, 2])
+                        origin_color_sum = (b + g + r)
+                        b = b/origin_color_sum
+                        g = g/origin_color_sum
+                        r = r/origin_color_sum
+                        
                         seatbelt_filename = None
                         if random.random() < 0.5:
                             seatbelt_imgs = os.listdir(hyp.get('fakeseatbelt3', [None, 0])[0])      
@@ -2197,6 +2234,15 @@ def load_mosaic9(self, hyp, index):
             if hyp is not None and random.random() < hyp.get('fakeseatbelt3', [None, 0])[1]:
                 if len(labels) > 0:
                     if 1 in labels[:, 0] and 0 not in labels[:, 0] and len(labels[:, 0])==1:#face exists, seatbelt does not exist                    
+                        color_sample = cv2.resize(img, (100,100))
+                        b = np.mean(color_sample[:, :, 0])
+                        g = np.mean(color_sample[:, :, 1])
+                        r = np.mean(color_sample[:, :, 2])
+                        origin_color_sum = (b + g + r)
+                        b = b/origin_color_sum
+                        g = g/origin_color_sum
+                        r = r/origin_color_sum
+                        
                         seatbelt_filename = None
                         if random.random() < 0.5:
                             seatbelt_imgs = os.listdir(hyp.get('fakeseatbelt3', [None, 0])[0])      
