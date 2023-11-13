@@ -13,11 +13,12 @@ from models.experimental import attempt_load
 from utils.datasets import create_dataloader
 from utils.general import coco80_to_coco91_class, check_dataset, check_file, check_img_size, check_requirements, \
     box_iou, non_max_suppression, scale_coords, xyxy2xywh, xywh2xyxy, set_logging, increment_path, colorstr, non_max_suppression_seg, \
-    mask_iou, process_semantic_mask
+    mask_iou, masks_iou, process_semantic_mask
 from utils.metrics import ap_per_class, ConfusionMatrix
 from utils.plots import plot_images, output_to_target, plot_study_txt
 from utils.torch_utils import select_device, time_synchronized, TracedModel
 from collections import defaultdict
+import cv2
 
 
 def test(data,
@@ -117,6 +118,7 @@ def test(data,
 
     miou = [[] for _ in range(nc)]
     for batch_i, (img, targets, paths, shapes, masks) in enumerate(tqdm(dataloader, desc=s)):
+        '''
         if len(valid_cls_idx) > 0:
             valid_target_idx = []
             for t_cls_idx, t_cls in enumerate(targets[:, 1]):
@@ -124,7 +126,8 @@ def test(data,
                     valid_target_idx.append(t_cls_idx)
             targets = targets[valid_target_idx]
             masks = masks[valid_target_idx]
-            
+        '''
+
         img = img.to(device, non_blocking=True)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
@@ -172,33 +175,75 @@ def test(data,
             for label in labels:
                 if label[3]*label[4] < 32*32:
                     size_division_ = 'small'
-                #elif 32*32 <= label[3]*label[4] < 100000*100000:
+                elif 32*32 <= label[3]*label[4] < 90006*96000:
+                    size_division_ = 'medium'
+                else:
+                    size_division_ = 'large'
+                '''
+                if label[3]*label[4] < 32*32:
+                    size_division_ = 'small'
                 elif 32*32 <= label[3]*label[4] < 96*96:
                     size_division_ = 'medium'
                 else:
                     size_division_ = 'large'
+                '''
                 
                 size_division.append(size_division_)
             size_division = np.array(size_division)
-
+            
+            '''
             if len(valid_cls_idx) > 0:
                 valid_pred_idx = []
                 for p_cls_idx, p_cls in enumerate(pred[:, -1]):
                     if p_cls in valid_cls_idx:
                         valid_pred_idx.append(p_cls_idx)
                 pred = pred[valid_pred_idx]
-            
+            '''         
             
             if not compute_loss and opt_seg: #only bs 1 is possible
-                pred_mask = torch.flatten(torch.unsqueeze(seg_pred.gt_(0.5).float() , 0), start_dim=1)
-                semantic_gt_mask = torch.zeros((nc, masks.shape[1], masks.shape[2]), dtype=torch.long, device=device)                
-                for t_cls_idx, t_cls in enumerate(targets[:, 1]):
-                    semantic_gt_mask[int(t_cls)][((masks[t_cls_idx])!=0).bool()] = 1
+                pred_masks_per_cls = torch.zeros((nc, masks.shape[1], masks.shape[2]), dtype=torch.long, device=device)
+                semantic_gt_mask = torch.zeros((nc, masks.shape[1], masks.shape[2]), dtype=torch.long, device=device)
+                for t_cls_idx, t_cls in enumerate(targets[targets[:, 0] == si, 1]):
+                    pred_masks_per_cls[int(t_cls)][seg_pred==t_cls+1] = 1
+                    semantic_gt_mask[int(t_cls)][((masks[targets[:, 0] == si][t_cls_idx])!=0).bool()] = 1
 
+                pred_mask = torch.flatten(pred_masks_per_cls.float(), start_dim=1)
                 gt_mask = torch.flatten(semantic_gt_mask.float(), start_dim=1)
-                ious = torch.squeeze(mask_iou(pred_mask, gt_mask), 0)
+                ious = torch.squeeze(masks_iou(pred_mask, gt_mask), 0)
                 max_ious_idx = torch.argmax(ious)
                 miou[max_ious_idx].append(ious[max_ious_idx])
+
+                #vis mask start
+                '''
+                vis_img = cv2.imread(str(path.resolve()))
+                image_masks = semantic_gt_mask[-1].detach().cpu().numpy().astype(float)#[label_indexing]
+                image_masks = cv2.resize(image_masks, (vis_img.shape[1], vis_img.shape[0]), interpolation = cv2.INTER_NEAREST)
+                
+                vis_mask = vis_img.copy()
+                vis_mask[image_masks!=0] = np.array([50,50,255])
+                alpha = 0.5
+                vis_img = cv2.addWeighted(vis_img, alpha, vis_mask, 1 - alpha, 0)
+                
+                image_masks = pred_masks_per_cls[-1].detach().cpu().numpy().astype(float)#[label_indexing]
+                image_masks = cv2.resize(image_masks, (vis_img.shape[1], vis_img.shape[0]), interpolation = cv2.INTER_NEAREST)
+                
+                vis_mask = vis_img.copy()
+                vis_mask[image_masks!=0] = np.array([255,50,50])
+                alpha = 0.5
+                vis_img = cv2.addWeighted(vis_img, alpha, vis_mask, 1 - alpha, 0)
+
+                tl = 2
+                vis_txt = str(ious[max_ious_idx])
+                tf = max(tl - 1, 1)  # font thickness
+                t_size = cv2.getTextSize(vis_txt, 0, fontScale=tl / 3, thickness=tf)[0]
+                c1 = (0, t_size[1]*2)
+                c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
+                cv2.rectangle(vis_img, c1, c2, (0,0,0), -1, cv2.LINE_AA)  # filled
+                cv2.putText(vis_img, vis_txt, (c1[0], c1[1] - 2), 0, tl / 3, [255, 200, 255], thickness=tf, lineType=cv2.LINE_AA)
+                cv2.imwrite('test_iou/'+str(path.resolve()).split('/')[-1], vis_img)
+                '''
+                #vis mask end
+            
 
             if len(pred) == 0:
                 if nl:
@@ -401,9 +446,7 @@ def test(data,
         maps[c] = ap[i]
 
     if not compute_loss and opt_seg:
-        print(miou)
         for c, iou in enumerate(miou):
-            print(len(iou))
             if len(iou) > 0:
                 print(names[c] , " : ", sum(iou)/len(iou))
     return (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t
