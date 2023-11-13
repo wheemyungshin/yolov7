@@ -107,6 +107,7 @@ def train(hyp, opt, device, tb_writer=None):
             assert (type(ckpt['model']) is Model or type(ckpt['model']) is collections.OrderedDict), "Invalid model types to load"
 
         state_dict = intersect_dicts(state_dict, model.state_dict(), exclude=exclude)  # intersect
+        #print(state_dict.keys())
         model.load_state_dict(state_dict, strict=False)  # load
         logger.info('Transferred %g/%g items from %s' % (len(state_dict), len(model.state_dict()), weights))  # report
     else:

@@ -1,0 +1,27 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+    /data/bdd100k/train.txt, #69863
+    /data/bdd100k/val.txt, #10000
+]
+val: [/data/cityscapes/yolov7_det_with_seg/val.txt] # 500
+test: [/data/cityscapes/yolov7_det_with_seg/val.txt]
+# number of classes
+nc: 13
+
+# class names
+names: ['fence',
+    'guard rail',
+    'traffic light',
+    'traffic sign',
+    'person',
+    'rider',
+    'car',
+    'truck',
+    'bus',
+    'train',
+    'motorcycle',
+    'bicycle',
+    'road'
+]
+    
+valid_idx: [0, 1, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14]
