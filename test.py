@@ -97,7 +97,12 @@ def test(data,
         
         valid_idx = data.get('valid_idx', None)
 
-        dataloader = create_dataloader(data[task], imgsz, batch_size, gs, opt, pad=0.5, rect=True,
+        if opt_seg:
+            pad_ratio = 0.0
+        else:
+            pad_ratio = 0.5
+        
+        dataloader = create_dataloader(data[task], imgsz, batch_size, gs, opt, pad=pad_ratio, rect=True,
                                        prefix=colorstr(f'{task}: '), valid_idx=valid_idx, load_seg=opt_seg)[0]
     if v5_metric:
         print("Testing with YOLOv5 AP metric...")
@@ -345,7 +350,9 @@ def test(data,
                     #print(size_division_, " : ", conf_size_division_)
                     size_stats[size_division_].append((correct_size_division_, conf_size_division_, class_size_division_,
                             [tcls[i] for i, is_size in enumerate(size_division==size_division_) if is_size]))
+            
             stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls))
+
 
         # Plot images
         if plots and batch_i < 3:
