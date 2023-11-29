@@ -173,9 +173,9 @@ def test(data,
 
             size_division = []
             for label in labels:
-                if label[3]*label[4] < 32*32:
+                if label[3]*label[4] < 16*16:
                     size_division_ = 'small'
-                elif 32*32 <= label[3]*label[4] < 90006*96000:
+                elif 16*16 <= label[3]*label[4] < 90006*96000:
                     size_division_ = 'medium'
                 else:
                     size_division_ = 'large'
