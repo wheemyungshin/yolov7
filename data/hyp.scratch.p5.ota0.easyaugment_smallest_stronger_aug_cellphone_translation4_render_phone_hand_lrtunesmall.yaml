@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 lr0: 0.0003  # initial learning rate (SGD=1E-2, Adam=1E-3)
+=======
+lr0: 0.0001  # initial learning rate (SGD=1E-2, Adam=1E-3)
+>>>>>>> f9a9b8d40f41356fe427fa295d6bed9ec916a645
 lrf: 0.1  # final OneCycleLR learning rate (lr0 * lrf)
 momentum: 0.937  # SGD momentum/Adam beta1
 weight_decay: 0.0005  # optimizer weight decay 5e-4
@@ -33,4 +37,8 @@ min_size: 25
 min_scale_up: 25
 cellphone_translation: 0.4
 render_phone: ['/data/render_pc_bbox/phone_model_alpha', 0.05]
+<<<<<<< HEAD
 render_hand: ['/data/hand_blendings_from_ego2hands', 0.1]
+=======
+render_hand: ['/data/hand_blendings_from_egohands', 0.2]
+>>>>>>> f9a9b8d40f41356fe427fa295d6bed9ec916a645
