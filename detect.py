@@ -122,14 +122,7 @@ def detect(save_img=False):
         t1 = time_synchronized()
         if opt.seg:
             pred, out = model(img, augment=opt.augment)
-<<<<<<< HEAD
             proto = out[1]
-=======
-            print(len(pred))
-            print(pred.shape)
-            proto = out[1]
-            print(type(proto))
->>>>>>> f9a9b8d40f41356fe427fa295d6bed9ec916a645
             print(proto.shape)
         else:
             pred = model(img, augment=opt.augment)[0]
@@ -185,7 +178,7 @@ def detect(save_img=False):
                     
                         #for semantic masks
                         image_masks = masks.detach().cpu().numpy().astype(float)#[label_indexing]
-<<<<<<< HEAD
+                        
                         resize_ratio = im0.shape[1] / img.shape[3]
                         image_masks = image_masks[int((image_masks.shape[0]-(im0.shape[0]/resize_ratio))*2/3):-int((image_masks.shape[0]-(im0.shape[0]/resize_ratio))/3)]
                         image_masks = cv2.resize(image_masks, (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
@@ -193,12 +186,7 @@ def detect(save_img=False):
                         if opt.save_npy:
                             os.makedirs(os.path.join(save_dir, 'mask_npy'), exist_ok=True)
                             np.save(os.path.join(save_dir, 'mask_npy', p.name.split('.')[0]+'_'+'0'*(6-len(str(frame)))+str(frame)), image_masks)
-=======
-                        image_masks = cv2.resize(image_masks, (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
 
-                        #os.makedirs(os.path.join(save_dir, 'mask_npy'), exist_ok=True)
-                        #np.save(os.path.join(save_dir, 'mask_npy', p.name.split('.')[0]+'_'+'0'*(6-len(str(frame)))+str(frame)), image_masks)
->>>>>>> f9a9b8d40f41356fe427fa295d6bed9ec916a645
 
                         vis_mask = im0.copy()
                         for image_mask_idx in range(1, nm):
@@ -340,10 +328,7 @@ if __name__ == '__main__':
     parser.add_argument('--frame-ratio', default=1, type=int, help='save frame ratio')
     parser.add_argument('--save-frame', action='store_true', help='save each frame of video results')
     parser.add_argument('--seg', action='store_true', help='Segmentation-Training')
-<<<<<<< HEAD
     parser.add_argument('--save-npy', action='store_true', help='save npy files')
-=======
->>>>>>> f9a9b8d40f41356fe427fa295d6bed9ec916a645
     parser.add_argument('--valid-segment-labels', nargs='+', type=int, default=[], help='labels to include when calculating segmentation loss')
     opt = parser.parse_args()
     print(opt)

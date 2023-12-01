@@ -37,8 +37,4 @@ min_size: 25
 min_scale_up: 25
 cellphone_translation: 0.4
 render_phone: ['/data/render_pc_bbox/phone_model_alpha', 0.05]
-<<<<<<< HEAD
 render_hand: ['/data/hand_blendings_from_ego2hands', 0.1]
-=======
-render_hand: ['/data/hand_blendings_from_egohands', 0.2]
->>>>>>> f9a9b8d40f41356fe427fa295d6bed9ec916a645
