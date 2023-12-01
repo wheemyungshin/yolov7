@@ -178,20 +178,12 @@ def test(data,
 
             size_division = []
             for label in labels:
-                if label[3]*label[4] < 16*16:
-                    size_division_ = 'small'
-                elif 16*16 <= label[3]*label[4] < 90006*96000:
-                    size_division_ = 'medium'
-                else:
-                    size_division_ = 'large'
-                '''
                 if label[3]*label[4] < 32*32:
                     size_division_ = 'small'
                 elif 32*32 <= label[3]*label[4] < 96*96:
                     size_division_ = 'medium'
                 else:
                     size_division_ = 'large'
-                '''
                 
                 size_division.append(size_division_)
             size_division = np.array(size_division)

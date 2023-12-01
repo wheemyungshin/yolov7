@@ -1,16 +1,9 @@
 # train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
 train: [
-<<<<<<< HEAD
-    /data/small_ticket_det_testset/test.txt # 4471
-]
-val: [/data/small_ticket_det_testset/test.txt] # 4471
-test: [/data/small_ticket_det_testset/test.txt] # 4471
-=======
     /data/small_ticket_testset_all/small_ticket_det_testset/test.txt # 4471
 ]
 val: [/data/small_ticket_testset_all/small_ticket_det_testset/test.txt] # 4471
 test: [/data/small_ticket_testset_all/small_ticket_det_testset/test.txt] # 4471
->>>>>>> 81225ab6bb1616fb3d86e368b2027aadd41e0a1f
 # number of classes
 nc: 12
 

@@ -178,6 +178,7 @@ def detect(save_img=False):
                     
                         #for semantic masks
                         image_masks = masks.detach().cpu().numpy().astype(float)#[label_indexing]
+                        
                         resize_ratio = im0.shape[1] / img.shape[3]
                         image_masks = image_masks[int((image_masks.shape[0]-(im0.shape[0]/resize_ratio))*2/3):-int((image_masks.shape[0]-(im0.shape[0]/resize_ratio))/3)]
                         image_masks = cv2.resize(image_masks, (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
@@ -185,6 +186,7 @@ def detect(save_img=False):
                         if opt.save_npy:
                             os.makedirs(os.path.join(save_dir, 'mask_npy'), exist_ok=True)
                             np.save(os.path.join(save_dir, 'mask_npy', p.name.split('.')[0]+'_'+'0'*(6-len(str(frame)))+str(frame)), image_masks)
+
 
                         vis_mask = im0.copy()
                         for image_mask_idx in range(1, nm):
