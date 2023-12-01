@@ -1,0 +1,25 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+    /data/small_ticket_testset_all_full/small_ticket_det_testset_full/test.txt # 4471
+]
+val: [/data/small_ticket_testset_all_full/small_ticket_det_testset_full/test.txt] # 4471
+test: [/data/small_ticket_testset_all_full/small_ticket_det_testset_full/test.txt] # 4471
+# number of classes
+nc: 12
+
+# class names
+names: ['fence',
+    'guard rail',
+    'traffic light',
+    'traffic sign',
+    'person',
+    'rider',
+    'car',
+    'truck',
+    'bus',
+    'train',
+    'motorcycle',
+    'bicycle'
+]
+    
+valid_idx: [0, 1, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13]
