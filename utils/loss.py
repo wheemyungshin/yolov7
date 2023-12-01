@@ -1905,6 +1905,7 @@ class ComputeLossSegment:
                 continue
             color = colors[gt_mask_np_cls % len(colors)]
             vis_np[gt_mask_np==gt_mask_np_cls] = color
+            
         #os.makedirs('test_vis_semantic_loss', exist_ok=True)
         #cv2.imwrite('test_vis_semantic_loss/'+str(len(cls_idx_list))+'.jpg', vis_np)
         #print("img.detach().cpu().numpy(): ", img.detach().cpu().numpy().shape) # 3,384,640

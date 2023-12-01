@@ -123,7 +123,6 @@ def detect(save_img=False):
         if opt.seg:
             pred, out = model(img, augment=opt.augment)
             proto = out[1]
-            print(proto.shape)
         else:
             pred = model(img, augment=opt.augment)[0]
         t2 = time_synchronized()
@@ -186,7 +185,6 @@ def detect(save_img=False):
                         if opt.save_npy:
                             os.makedirs(os.path.join(save_dir, 'mask_npy'), exist_ok=True)
                             np.save(os.path.join(save_dir, 'mask_npy', p.name.split('.')[0]+'_'+'0'*(6-len(str(frame)))+str(frame)), image_masks)
-
 
                         vis_mask = im0.copy()
                         for image_mask_idx in range(1, nm):
