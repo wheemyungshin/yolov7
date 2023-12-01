@@ -1827,10 +1827,10 @@ class ComputeLossSegment:
             lseg += self.semantic_mask_loss_all(semantic_gt_mask[bi], proto[bi])
             
             vis_img = np.transpose(semantic_gt_mask[bi].detach().cpu().numpy())*255
-            os.makedirs('test_vis_semantic_merge', exist_ok=True)
-            cv2.imwrite('test_vis_semantic_merge/'+str(np.mean(vis_img))+'.jpg', vis_img)
-            os.makedirs('test_vis_semantic_imgs', exist_ok=True)
-            cv2.imwrite('test_vis_semantic_imgs/'+str(np.mean(vis_img))+'.jpg', np.transpose(imgs[bi].detach().cpu().numpy(), (1,2,0))*255)
+            #os.makedirs('test_vis_semantic_merge', exist_ok=True)
+            #cv2.imwrite('test_vis_semantic_merge/'+str(np.mean(vis_img))+'.jpg', vis_img)
+            #os.makedirs('test_vis_semantic_imgs', exist_ok=True)
+            #cv2.imwrite('test_vis_semantic_imgs/'+str(np.mean(vis_img))+'.jpg', np.transpose(imgs[bi].detach().cpu().numpy(), (1,2,0))*255)
 
         if self.autobalance:
             self.balance = [x / self.balance[self.ssi] for x in self.balance]
@@ -1905,11 +1905,11 @@ class ComputeLossSegment:
                 continue
             color = colors[gt_mask_np_cls % len(colors)]
             vis_np[gt_mask_np==gt_mask_np_cls] = color
-        os.makedirs('test_vis_semantic_loss', exist_ok=True)
-        cv2.imwrite('test_vis_semantic_loss/'+str(len(cls_idx_list))+'.jpg', vis_np)
+        #os.makedirs('test_vis_semantic_loss', exist_ok=True)
+        #cv2.imwrite('test_vis_semantic_loss/'+str(len(cls_idx_list))+'.jpg', vis_np)
         #print("img.detach().cpu().numpy(): ", img.detach().cpu().numpy().shape) # 3,384,640
-        os.makedirs('test_vis_semantic_imgs', exist_ok=True)
-        cv2.imwrite('test_vis_semantic_imgs/'+str(len(cls_idx_list))+'.jpg', np.transpose(img.detach().cpu().numpy(), (1,2,0))*255)
+        #os.makedirs('test_vis_semantic_imgs', exist_ok=True)
+        #cv2.imwrite('test_vis_semantic_imgs/'+str(len(cls_idx_list))+'.jpg', np.transpose(img.detach().cpu().numpy(), (1,2,0))*255)
         return loss.mean()
         
     def single_mask_loss(self, gt_mask, pred, proto, xyxy, area):
