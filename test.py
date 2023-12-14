@@ -211,7 +211,6 @@ def test(data,
                 miou[max_ious_idx].append(ious[max_ious_idx])
 
                 #vis mask start
-                '''
                 vis_img = cv2.imread(str(path.resolve()))
                 image_masks = semantic_gt_mask[-1].detach().cpu().numpy().astype(float)#[label_indexing]
                 image_masks = cv2.resize(image_masks, (vis_img.shape[1], vis_img.shape[0]), interpolation = cv2.INTER_NEAREST)
@@ -238,7 +237,6 @@ def test(data,
                 cv2.rectangle(vis_img, c1, c2, (0,0,0), -1, cv2.LINE_AA)  # filled
                 cv2.putText(vis_img, vis_txt, (c1[0], c1[1] - 2), 0, tl / 3, [255, 200, 255], thickness=tf, lineType=cv2.LINE_AA)
                 cv2.imwrite('test_iou/'+str(path.resolve()).split('/')[-1], vis_img)
-                '''
                 #vis mask end
             
 

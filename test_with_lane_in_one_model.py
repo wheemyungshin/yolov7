@@ -16,48 +16,12 @@ from utils.general import check_dataset, check_file, check_img_size, check_requi
 from utils.torch_utils import select_device, TracedModel
 import cv2
 
-from models.lane_model import ENet
 import torchvision.transforms as transforms
 import random
 
 
-# Lane 데이터 Resize 전처리 정의
-class GroupRandomScale(object):
-    def __init__(self, size=(0.5, 1.5), interpolation=(cv2.INTER_LINEAR, cv2.INTER_NEAREST)):
-        self.size = size
-        self.interpolation = interpolation
-
-    def __call__(self, img_group):
-        assert (len(self.interpolation) == len(img_group))
-        scale = random.uniform(self.size[0], self.size[1])
-        out_images = list()
-        for img, interpolation in zip(img_group, self.interpolation):
-            out_images.append(cv2.resize(img, None, fx=scale, fy=scale, interpolation=interpolation))
-            if len(img.shape) > len(out_images[-1].shape):
-                out_images[-1] = out_images[-1][..., np.newaxis]  # single channel image
-        return out_images
-
-# Lane 데이터 Normalize 전처리 정의
-class GroupNormalize(object):
-    def __init__(self, mean, std):
-        self.mean = mean
-        self.std = std
-
-    def __call__(self, img_group):
-        out_images = list()
-        for img, m, s in zip(img_group, self.mean, self.std):
-            if len(m) == 1:
-                img = img - np.array(m)  # single channel image
-                img = img / np.array(s)
-            else:
-                img = img - np.array(m)[np.newaxis, np.newaxis, ...]
-                img = img / np.array(s)[np.newaxis, np.newaxis, ...]
-            out_images.append(img)
-        return out_images
-
 def test(data,
          weights=None,
-         lane_weights=None,
          batch_size=32,
          imgsz=640,
          conf_thres=0.001,
@@ -86,26 +50,6 @@ def test(data,
     dataloader = create_dataloader(data[task], imgsz, batch_size, gs, opt, pad=0.0, rect=True,
                                     prefix=colorstr(f'{task}: '), valid_idx=valid_idx, load_seg=True)[0]
     
-    
-    # Lane detection 모델 불러오기
-    heads = {'hm': 5, 'vaf': 2, 'haf': 1}
-    model_lane = ENet(heads=heads)
-    if lane_weights is not None:
-        pretrained_dict = {k: v for k, v in torch.load(lane_weights).items() if k in model_lane.state_dict()}
-            #and k not in ['hm.2.weight', 'hm.2.bias', 'haf.2.weight', 'haf.2.bias']}
-        model_lane.load_state_dict(pretrained_dict, strict=False)        
-    if device.type != 'cpu':
-        model_lane.to(device)
-    model_lane.eval()
-
-
-    # Lane detection 데이터 전처리 정의
-    data_mean = [0.485, 0.456, 0.406] #[103.939, 116.779, 123.68]
-    data_std = [0.229, 0.224, 0.225] #[1, 1, 1]
-    data_transforms = transforms.Compose([
-                    GroupRandomScale(size=(0.5, 0.5), interpolation=(cv2.INTER_LINEAR, cv2.INTER_NEAREST)),
-                    GroupNormalize(mean=(data_mean, (0, )), std=(data_std, (1, ))),
-                ])
 
     #labels_f = open('seg_results_raw_data.txt', 'w') 
 
@@ -138,56 +82,14 @@ def test(data,
             path = Path(paths[si])
             
 
-            # Lane 데이터 전처리
-            lane_img = cv2.imread(str(path.resolve())).astype(np.float32)/255. # (H, W, 3)
-            lane_img = cv2.resize(lane_img[14:, :, :], (1664, 576), interpolation=cv2.INTER_LINEAR)
-            lane_img = cv2.cvtColor(lane_img, cv2.COLOR_BGR2RGB)            
-            lane_img, _ = data_transforms((lane_img, lane_img))
-            lane_img = torch.from_numpy(lane_img).permute(2, 0, 1).contiguous().float().unsqueeze(0).to(device)
-        
-
-            # Lane 모델 돌리기
-            outputs = model_lane(lane_img)[-1]
-            
-            # Lane 예측 결과 후처리 (선 그어주기)
-            all_cls_pred_dilated = np.zeros((1, masks.shape[1], masks.shape[2]))
-            for cls_idx in range(5):
-                if cls_idx in [0, 2, 4]:
-                    continue
-                sig_output = torch.sigmoid(outputs['hm'])[:, cls_idx] #좌표
-                vaf = np.transpose(outputs['vaf'][0, :, :, :].detach().cpu().float().numpy(), (1, 2, 0)) #방향
-                np_sig_output = sig_output[0].detach().cpu().float().numpy()                
-                vaf = cv2.resize(vaf, (masks.shape[2], masks.shape[1]), interpolation=cv2.INTER_CUBIC)
-                np_sig_output = cv2.resize(np_sig_output, (masks.shape[2], masks.shape[1]), interpolation=cv2.INTER_CUBIC)
-                sig_output_mask = np.zeros_like(np_sig_output)
-                sig_output_mask[np_sig_output>0.3]=1
-                rows, cols = np.nonzero(sig_output_mask)
-                # 선 그어주기
-                for r, c in zip(rows, cols):
-                    sp = (int(c-vaf[r, c, 0]*3), int(r-vaf[r, c, 1]*3))
-                    ep = (int(c+vaf[r, c, 0]*3), int(r+vaf[r, c, 1]*3))
-                    if r > masks.shape[1]*4/5:
-                        thickness=3
-                    elif r > masks.shape[1]*3/4:
-                        thickness=2
-                    else:
-                        thickness=1
-                    cv2.line(sig_output_mask, sp, ep, 1, thickness)
-                sig_output_mask = np.expand_dims(sig_output_mask, axis=0)
-                all_cls_pred_dilated[sig_output_mask!=0]=1
-            all_cls_pred_dilated = torch.from_numpy(all_cls_pred_dilated).contiguous().float().cuda()
-
-
-            # Drivable area 예측 결과와 Lane 예측 결과 merge 시키기
+            # Drivable area + Lane 예측 결과만 남기고 나머지 object 버리기
             pred_masks_per_cls = torch.zeros((1, masks.shape[1], masks.shape[2]), dtype=torch.long, device=device)
             semantic_gt_mask = torch.zeros((1, masks.shape[1], masks.shape[2]), dtype=torch.long, device=device)
             for t_cls_idx, t_cls in enumerate(targets[targets[:, 0] == si, 1]):
                 if int(t_cls) >= 12:
                     pred_masks_per_cls[0][seg_pred==t_cls+1] = 1
                     semantic_gt_mask[0][((masks[targets[:, 0] == si][t_cls_idx])!=0).bool()] = 1
-            pred_masks_per_cls[all_cls_pred_dilated!=0] = 1
             
-
             # 예측 결과와 GT를 비교하여 IoU 계산
             pred_mask = torch.flatten(pred_masks_per_cls.float(), start_dim=1)
             gt_mask = torch.flatten(semantic_gt_mask.float(), start_dim=1)
@@ -230,11 +132,6 @@ def test(data,
             #for pred_masks_per_cls_line_to_write in pred_masks_per_cls[0]:
             #    raw_data = str(pred_masks_per_cls_line_to_write) + '\n'
             #    labels_f.write(raw_data)
-
-            del lane_img
-            del outputs
-            del pred_masks_per_cls
-            del semantic_gt_mask
             
     #labels_f.close()
 
@@ -245,7 +142,6 @@ def test(data,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='test.py')
     parser.add_argument('--weights', nargs='+', type=str, default='yolov7.pt', help='model.pt path(s)')
-    parser.add_argument('--lane-weights', type=str, default='yolov7.pt', help='model.pt path')
     parser.add_argument('--data', type=str, default='data/coco.yaml', help='*.data path')
     parser.add_argument('--batch-size', type=int, default=32, help='size of each image batch')
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
@@ -260,7 +156,6 @@ if __name__ == '__main__':
 
     test(opt.data,
         opt.weights,
-        opt.lane_weights,
         opt.batch_size,
         opt.img_size,
         opt.conf_thres,

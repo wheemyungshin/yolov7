@@ -12,7 +12,7 @@ from tqdm import tqdm
 from models.experimental import attempt_load
 from utils.datasets import create_dataloader
 from utils.general import check_dataset, check_file, check_img_size, check_requirements, \
-    box_iou, non_max_suppression, scale_coords, xyxy2xywh, xywh2xyxy, increment_path, colorstr
+    box_iou, non_max_suppression, scale_coords, xyxy2xywh, xywh2xyxy, increment_path, colorstr, set_logging
 from utils.metrics import ap_per_class, ConfusionMatrix
 from utils.torch_utils import select_device, time_synchronized, TracedModel
 from collections import defaultdict
@@ -26,6 +26,8 @@ def test(data,
          imgsz=640,
          conf_thres=0.001,
          iou_thres=0.6):
+    set_logging()
+
     # 모델 불러오기
     device = select_device(opt.device, batch_size=batch_size)
     model = attempt_load(weights, map_location=device)  # load FP32 model
@@ -96,6 +98,7 @@ def test(data,
             scale_coords(img[si].shape[1:], predn[:, :4], shapes[si][0], shapes[si][1])  # native-space pred
 
             # 예측 결과를 이미지로 저장
+            '''
             os.makedirs('det_results', exist_ok=True)
             im0 = cv2.imread(str(path.resolve()))
             for *xyxy, conf, cls in reversed(predn[:, :6]):
@@ -107,6 +110,7 @@ def test(data,
                     raw_data = str(path.resolve()).split('/')[-1] + ' : cls (' + str(label) + '), box (' + str(xyxy) + ')' + '\n'
                     labels_f.write(raw_data)
             cv2.imwrite(os.path.join('det_results', str(path.resolve()).split('/')[-1]), im0)
+            '''
 
             # 평가
             correct = torch.zeros(pred.shape[0], niou, dtype=torch.bool, device=device)

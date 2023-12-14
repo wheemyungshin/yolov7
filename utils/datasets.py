@@ -735,6 +735,16 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     nf += 1  # label found
                     with open(lb_file, 'r') as f:
                         l = [x.split() for x in f.read().strip().splitlines()]
+
+                        #fix label out of bouonds
+                        l_fix = []
+                        for x_line in l:
+                            line_fixed = [x_line[0]]
+                            for x_item in x_line[1:]:
+                                line_fixed.append(str(round(max(min(float(x_item),1),0),6)))
+                            l_fix.append(line_fixed)
+                        l = l_fix
+
                         if load_seg:  # is segment
                             if any([len(x) > 8 for x in l]):  # is segment
                                 classes = np.array([x[0] for x in l], dtype=np.float32)
