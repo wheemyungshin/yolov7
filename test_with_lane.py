@@ -195,7 +195,7 @@ def test(data,
             max_ious_idx = torch.argmax(ious)
 
             # 샘플마다 계산된 IoU를 저장
-            miou.append(ious[max_ious_idx])
+            miou.append(ious[max_ious_idx].detach().cpu())
             
             # 예측 결과를 이미지로 저장 준비
             os.makedirs('test_iou', exist_ok=True)
@@ -216,21 +216,25 @@ def test(data,
             vis_img = cv2.addWeighted(vis_img, alpha, vis_mask, 1 - alpha, 0)
             # 예측 결과를 이미지로 저장
             tl = 2
-            vis_txt = str(ious[max_ious_idx])
+            vis_txt = str(ious[max_ious_idx].detach().cpu())
             tf = max(tl - 1, 1)  # font thickness
             t_size = cv2.getTextSize(vis_txt, 0, fontScale=tl / 3, thickness=tf)[0]
             c1 = (0, t_size[1]*2)
             c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
             cv2.rectangle(vis_img, c1, c2, (0,0,0), -1, cv2.LINE_AA)  # filled
             cv2.putText(vis_img, vis_txt, (c1[0], c1[1] - 2), 0, tl / 3, [255, 200, 255], thickness=tf, lineType=cv2.LINE_AA)
-            cv2.imwrite('test_iou/'+str(path.resolve()).split('/')[-1], vis_img)
-            
+            cv2.imwrite('test_iou/'+str(path.resolve()).split('/')[-1], vis_img)            
 
-            raw_data = str(path.resolve()).split('/')[-1] + '\n'
+            #raw_data = str(path.resolve()).split('/')[-1] + '\n'
             #labels_f.write(raw_data)
             #for pred_masks_per_cls_line_to_write in pred_masks_per_cls[0]:
             #    raw_data = str(pred_masks_per_cls_line_to_write) + '\n'
             #    labels_f.write(raw_data)
+
+            del lane_img
+            del outputs
+            del pred_masks_per_cls
+            del semantic_gt_mask
             
     #labels_f.close()
 

@@ -1,0 +1,41 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+    /data/small_ticket_testset_addition_ready/detection/small_ticket_testset_all_full_shuffle/test.txt,
+    /data/small_ticket_testset_addition_ready/detection/vis_det_images_excluded_from_train/test.txt,
+    /data/small_ticket_testset_addition_ready/detection/vis_det_small_ticket_bundangsongji0828/test.txt,
+    /data/small_ticket_testset_addition_ready/detection/vis_det_small_ticket_sungnamhansong0830_more/test.txt,
+    /data/small_ticket_testset_addition_ready/detection/vis_det_small_ticket_sungnamhansong0831_more/test.txt
+]
+val: [
+    /data/small_ticket_testset_addition_ready/detection/small_ticket_testset_all_full_shuffle/test.txt,
+    /data/small_ticket_testset_addition_ready/detection/vis_det_images_excluded_from_train/test.txt,
+    /data/small_ticket_testset_addition_ready/detection/vis_det_small_ticket_bundangsongji0828/test.txt,
+    /data/small_ticket_testset_addition_ready/detection/vis_det_small_ticket_sungnamhansong0830_more/test.txt,
+    /data/small_ticket_testset_addition_ready/detection/vis_det_small_ticket_sungnamhansong0831_more/test.txt
+]   
+test: [
+    /data/small_ticket_testset_addition_ready/detection/small_ticket_testset_all_full_shuffle/test.txt,
+    /data/small_ticket_testset_addition_ready/detection/vis_det_images_excluded_from_train/test.txt,
+    /data/small_ticket_testset_addition_ready/detection/vis_det_small_ticket_bundangsongji0828/test.txt,
+    /data/small_ticket_testset_addition_ready/detection/vis_det_small_ticket_sungnamhansong0830_more/test.txt,
+    /data/small_ticket_testset_addition_ready/detection/vis_det_small_ticket_sungnamhansong0831_more/test.txt
+]
+# number of classes
+nc: 12
+
+# class names
+names: ['fence',
+    'guard rail',
+    'traffic light',
+    'traffic sign',
+    'person',
+    'rider',
+    'car',
+    'truck',
+    'bus',
+    'train',
+    'motorcycle',
+    'bicycle'
+]
+    
+valid_idx: [0, 1, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13]

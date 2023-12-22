@@ -122,11 +122,7 @@ def detect(save_img=False):
         t1 = time_synchronized()
         if opt.seg:
             pred, out = model(img, augment=opt.augment)
-            print(len(pred))
-            print(pred.shape)
             proto = out[1]
-            print(type(proto))
-            print(proto.shape)
         else:
             pred = model(img, augment=opt.augment)[0]
         t2 = time_synchronized()
@@ -181,10 +177,14 @@ def detect(save_img=False):
                     
                         #for semantic masks
                         image_masks = masks.detach().cpu().numpy().astype(float)#[label_indexing]
+                        
+                        resize_ratio = im0.shape[1] / img.shape[3]
+                        image_masks = image_masks[int((image_masks.shape[0]-(im0.shape[0]/resize_ratio))*2/3):-int((image_masks.shape[0]-(im0.shape[0]/resize_ratio))/3)]
                         image_masks = cv2.resize(image_masks, (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
 
-                        #os.makedirs(os.path.join(save_dir, 'mask_npy'), exist_ok=True)
-                        #np.save(os.path.join(save_dir, 'mask_npy', p.name.split('.')[0]+'_'+'0'*(6-len(str(frame)))+str(frame)), image_masks)
+                        if opt.save_npy:
+                            os.makedirs(os.path.join(save_dir, 'mask_npy'), exist_ok=True)
+                            np.save(os.path.join(save_dir, 'mask_npy', p.name.split('.')[0]+'_'+'0'*(6-len(str(frame)))+str(frame)), image_masks)
 
                         vis_mask = im0.copy()
                         for image_mask_idx in range(1, nm):
@@ -206,7 +206,7 @@ def detect(save_img=False):
                         if save_img or view_img:  # Add bbox to image
                             size = (xyxy[2]-xyxy[0])*(xyxy[3]-xyxy[1])
                             label = f'{names[int(cls)]} {conf:.2f} {size}'
-                            plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
+                            plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
                         
                         if opt.save_json:
                             if dataset.mode == 'image':
@@ -326,6 +326,7 @@ if __name__ == '__main__':
     parser.add_argument('--frame-ratio', default=1, type=int, help='save frame ratio')
     parser.add_argument('--save-frame', action='store_true', help='save each frame of video results')
     parser.add_argument('--seg', action='store_true', help='Segmentation-Training')
+    parser.add_argument('--save-npy', action='store_true', help='save npy files')
     parser.add_argument('--valid-segment-labels', nargs='+', type=int, default=[], help='labels to include when calculating segmentation loss')
     opt = parser.parse_args()
     print(opt)

@@ -1,0 +1,162 @@
+import argparse
+import json
+import os
+from pathlib import Path
+from threading import Thread
+
+import numpy as np
+import torch
+import yaml
+from tqdm import tqdm
+
+from models.experimental import attempt_load
+from utils.datasets import create_dataloader
+from utils.general import check_dataset, check_file, check_img_size, check_requirements, \
+    non_max_suppression, increment_path, colorstr, masks_iou, process_semantic_mask
+from utils.torch_utils import select_device, TracedModel
+import cv2
+
+import torchvision.transforms as transforms
+import random
+
+
+def test(data,
+         weights=None,
+         batch_size=32,
+         imgsz=640,
+         conf_thres=0.001,
+         iou_thres=0.6):
+    # 모델 불러오기
+    device = select_device(opt.device, batch_size=batch_size)
+    model = attempt_load(weights, map_location=device)  # load FP32 model
+    gs = max(int(model.stride.max()), 32)  # grid size (max stride)
+    imgsz = check_img_size(imgsz, s=gs)  # check img_size    
+    model = TracedModel(model, device, imgsz)
+    model.eval()
+    
+    
+    # Config 불러오기
+    if isinstance(data, str):
+        with open(data) as f:
+            data = yaml.load(f, Loader=yaml.SafeLoader)
+
+
+    # Dataloader 만들기
+    check_dataset(data)  # check
+    if device.type != 'cpu':
+        model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))  # run once
+    task = 'val'  # path to train/val/test images  
+    valid_idx = data.get('valid_idx', None)
+    dataloader = create_dataloader(data[task], imgsz, batch_size, gs, opt, pad=0.0, rect=True,
+                                    prefix=colorstr(f'{task}: '), valid_idx=valid_idx, load_seg=True)[0]
+    
+
+    labels_f = open('seg_results_raw_data.txt', 'w') 
+
+    # 평가 metric 설정하기
+    miou = []
+
+    # Data 읽어서 Prediction 진행
+    for batch_i, (img, targets, paths, shapes, masks) in enumerate(tqdm(dataloader)):
+        #데이터 불러와서 전처리
+        img = img.to(device, non_blocking=True)
+        img = img.float()  # uint8 to fp16/32
+        img /= 255.0  # 0 - 255 to 0.0 - 1.0
+        targets = targets.to(device)
+        masks = masks.to(device)
+        nb, _, height, width = img.shape  # batch size, channels, height, width
+
+        # Drivable area 모델 돌리기
+        out, train_out = model(img, augment=False)  # inference and training outputs
+        # NMS 적용
+        targets[:, 2:] *= torch.Tensor([width, height, width, height]).to(device)  # to pixels            
+        out = non_max_suppression(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=[], multi_label=True)
+        proto = train_out[1]
+
+        for si, pred in enumerate(out):
+            # Drivable area 예측 결과값 후처리
+            seg_pred = process_semantic_mask(proto[si], pred[:, 6:], pred[:, :6], img.shape[2:], upsample=True)
+            labels = targets[targets[:, 0] == si, 1:]
+            nl = len(labels)
+            tcls = labels[:, 0].tolist() if nl else []  # target class
+            path = Path(paths[si])            
+
+            # Drivable area + Lane 예측 결과만 남기고 나머지 object 버리기
+            pred_masks_per_cls = torch.zeros((1, masks.shape[1], masks.shape[2]), dtype=torch.long, device=device)
+            semantic_gt_mask = torch.zeros((1, masks.shape[1], masks.shape[2]), dtype=torch.long, device=device)
+            for t_cls_idx, t_cls in enumerate(targets[targets[:, 0] == si, 1]):
+                if int(t_cls) >= 12:
+                    pred_masks_per_cls[0][seg_pred==t_cls+1] = 1
+                    semantic_gt_mask[0][((masks[targets[:, 0] == si][t_cls_idx])!=0).bool()] = 1
+            
+            # 예측 결과와 GT를 비교하여 IoU 계산
+            pred_mask = torch.flatten(pred_masks_per_cls.float(), start_dim=1)
+            gt_mask = torch.flatten(semantic_gt_mask.float(), start_dim=1)
+            ious = torch.squeeze(masks_iou(pred_mask, gt_mask), 0)        
+            max_ious_idx = torch.argmax(ious)
+
+            # 샘플마다 계산된 IoU를 저장
+            miou.append(ious[max_ious_idx].detach().cpu())
+            
+            # 예측 결과를 이미지로 저장 준비
+            os.makedirs('test_iou', exist_ok=True)
+            vis_img = cv2.imread(str(path.resolve()))
+            # 비교를 위해 GT를 먼저 그려주기
+            image_masks = semantic_gt_mask[0].detach().cpu().numpy().astype(float)#[label_indexing]
+            image_masks = cv2.resize(image_masks, (vis_img.shape[1], vis_img.shape[0]), interpolation = cv2.INTER_NEAREST)            
+            vis_mask = vis_img.copy()
+            vis_mask[image_masks!=0] = np.array([50,50,255])
+            alpha = 0.5
+            vis_img = cv2.addWeighted(vis_img, alpha, vis_mask, 1 - alpha, 0)
+            # 예측 결과 그려주기
+            image_masks = pred_masks_per_cls[0].detach().cpu().numpy().astype(float)#[label_indexing]
+            image_masks = cv2.resize(image_masks, (vis_img.shape[1], vis_img.shape[0]), interpolation = cv2.INTER_NEAREST)            
+            vis_mask = vis_img.copy()
+            vis_mask[image_masks!=0] = np.array([255,50,50])
+            alpha = 0.5
+            vis_img = cv2.addWeighted(vis_img, alpha, vis_mask, 1 - alpha, 0)
+            # 예측 결과를 이미지로 저장
+            tl = 2
+            vis_txt = str(ious[max_ious_idx].detach().cpu())
+            tf = max(tl - 1, 1)  # font thickness
+            t_size = cv2.getTextSize(vis_txt, 0, fontScale=tl / 3, thickness=tf)[0]
+            c1 = (0, t_size[1]*2)
+            c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
+            cv2.rectangle(vis_img, c1, c2, (0,0,0), -1, cv2.LINE_AA)  # filled
+            cv2.putText(vis_img, vis_txt, (c1[0], c1[1] - 2), 0, tl / 3, [255, 200, 255], thickness=tf, lineType=cv2.LINE_AA)
+            cv2.imwrite('test_iou/'+str(path.resolve()).split('/')[-1], vis_img)            
+
+            raw_data = str(path.resolve()).split('/')[-1] + '\n'
+            labels_f.write(raw_data)
+            for pred_masks_per_cls_line_to_write in pred_masks_per_cls[0]:
+                raw_data = str(pred_masks_per_cls_line_to_write) + '\n'
+                labels_f.write(raw_data)
+            
+    labels_f.close()
+
+    # 결과 출력
+    print("drivable area + lane : ", (sum(miou)/len(miou)).item()*100, " %")
+
+# 실행 및 option 설정
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(prog='test.py')
+    parser.add_argument('--weights', nargs='+', type=str, default='yolov7.pt', help='model.pt path(s)')
+    parser.add_argument('--data', type=str, default='data/coco.yaml', help='*.data path')
+    parser.add_argument('--batch-size', type=int, default=32, help='size of each image batch')
+    parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
+    parser.add_argument('--conf-thres', type=float, default=0.001, help='object confidence threshold')
+    parser.add_argument('--iou-thres', type=float, default=0.65, help='IOU threshold for NMS')
+    parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
+    parser.add_argument('--single-cls', action='store_true', help='treat as single-class dataset')
+    opt = parser.parse_args()
+    opt.data = check_file(opt.data)  # check file
+    print(opt)
+    #check_requirements()
+
+    test(opt.data,
+        opt.weights,
+        opt.batch_size,
+        opt.img_size,
+        opt.conf_thres,
+        opt.iou_thres
+        )
