@@ -80,7 +80,12 @@ def test(data,
             nl = len(labels)
             tcls = labels[:, 0].tolist() if nl else []  # target class
 <<<<<<< HEAD
+<<<<<<< HEAD
             path = Path(paths[si])            
+=======
+            path = Path(paths[si])
+            
+>>>>>>> 6d1ca9cd59ce11ee65be626d7cc5de554f39e499
 =======
             path = Path(paths[si])
             
@@ -105,7 +110,10 @@ def test(data,
             
             # 예측 결과를 이미지로 저장 준비
 <<<<<<< HEAD
+<<<<<<< HEAD
             '''
+=======
+>>>>>>> 6d1ca9cd59ce11ee65be626d7cc5de554f39e499
 =======
 >>>>>>> 6d1ca9cd59ce11ee65be626d7cc5de554f39e499
             os.makedirs('test_iou', exist_ok=True)
@@ -134,8 +142,12 @@ def test(data,
             cv2.rectangle(vis_img, c1, c2, (0,0,0), -1, cv2.LINE_AA)  # filled
             cv2.putText(vis_img, vis_txt, (c1[0], c1[1] - 2), 0, tl / 3, [255, 200, 255], thickness=tf, lineType=cv2.LINE_AA)
 <<<<<<< HEAD
+<<<<<<< HEAD
             cv2.imwrite('test_iou/'+str(path.resolve()).split('/')[-1], vis_img)   
             '''         
+=======
+            cv2.imwrite('test_iou/'+str(path.resolve()).split('/')[-1], vis_img)            
+>>>>>>> 6d1ca9cd59ce11ee65be626d7cc5de554f39e499
 =======
             cv2.imwrite('test_iou/'+str(path.resolve()).split('/')[-1], vis_img)            
 >>>>>>> 6d1ca9cd59ce11ee65be626d7cc5de554f39e499

@@ -1,0 +1,36 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+/data/coco_face_from_kpts_wholebody/train.txt, # 56673
+/data/coco_face_from_kpts_wholebody/val.txt, # 2355
+/data/MAFA_concat/train.txt, # 25876
+/data/MAFA_concat/val.txt, # 4935
+
+/data/smoke_data_BFC/train.txt, # 34493
+/data/valid_ciga_data_cbf_for_training/tang.txt, # 3423
+/data/valid_ciga_data_cbf_for_training/ncap.txt, # 967
+/data/valid_ciga_data_cbf_for_training/pitta_1st.txt, # 2023
+/data/PITTA_2ND_ir_smoke_frames_after_inspection/train.txt, # 5555
+/data/valid_pitta_smoke_BFC2/train.txt, #3942
+
+/data/roboflow_smoke_after_inspection/train.txt, # 76469 -> 75793
+
+/data/BFcellphone/auto_PITTA_2ND_divided_cellphone_yolov7-e6e_s384_after_inspection/train.txt, #6538
+/data/BFcellphone/auto_TANG_phones_yolov7-e6e_s384_after_inspection/train.txt, #2727
+
+/data/valid_phone_data/phonecalls_crawling_grounding_dino/train.txt, # 11517
+/data/valid_phone_data/roboflow_all/train.txt, # 1454
+/data/valid_phone_data/phonecalls_crawling2_auto/train.txt, # 5415
+
+/data/roboflow_phone/train.txt, # 33518 -> 28873
+] 
+
+val: [/data/TANG_phones_not_included/train.txt] # 995
+test: [/data/TANG_phones_not_included/train.txt] # 995
+
+# number of classes
+nc: 4
+
+# class names
+names: ['person', 'face', 'smoke', 'cellphone']
+
+valid_idx: [0, 1, 2, 3]
