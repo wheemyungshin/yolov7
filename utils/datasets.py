@@ -169,7 +169,12 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
 
     batch_size = min(batch_size, len(dataset))
     nw = min([os.cpu_count() // world_size, batch_size if batch_size > 1 else 0, workers])  # number of workers
-    sampler = torch.utils.data.distributed.DistributedSampler(dataset=dataset, shuffle=True) if rank != -1 else None
+    if rank != -1:
+        sampler = torch.utils.data.distributed.DistributedSampler(dataset=dataset, shuffle=True)
+        is_shuffle = False
+    else:
+        sampler = None
+        is_shuffle = True
     loader = torch.utils.data.DataLoader if image_weights else InfiniteDataLoader
     # Use torch.utils.data.DataLoader() if dataset.properties will update during training else InfiniteDataLoader()
     dataloader = loader(dataset,
@@ -177,7 +182,7 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
                         num_workers=nw,
                         sampler=sampler,
                         pin_memory=True,
-                        shuffle=True,
+                        shuffle=is_shuffle,
                         collate_fn=LoadImagesAndLabels.collate_fn4 if quad else LoadImagesAndLabels.collate_fn,)
     return dataloader, dataset
 
