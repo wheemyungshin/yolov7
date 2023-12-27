@@ -216,6 +216,17 @@ def train(hyp, opt, device, tb_writer=None):
     scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)
     # plot_lr_scheduler(optimizer, scheduler, epochs)
 
+    if opt.qat:
+        # The old 'fbgemm' is still available but 'x86' is the recommended default.
+        model.qconfig = torch.quantization.get_default_qat_qconfig('x86')
+         
+        with torch.no_grad():
+            model.fuse()
+
+        model = torch.quantization.prepare_qat(model, inplace=True)
+        
+        print('Qauntization-Aware-Training')
+
     # EMA
     ema = ModelEMA(model) if rank in [-1, 0] else None
 
@@ -322,14 +333,6 @@ def train(hyp, opt, device, tb_writer=None):
                 check_anchors(dataset, model=model, thr=hyp['anchor_t'], imgsz=imgsz)
             model.half().float()  # pre-reduce anchor precision
 
-    if opt.qat:        
-        #model.fuse()
-
-        # The old 'fbgemm' is still available but 'x86' is the recommended default.
-        model.qconfig = torch.quantization.get_default_qat_qconfig('x86')
-        
-        torch.quantization.prepare_qat(model, inplace=True)
-        print('Qauntization-Aware-Training')
 
     # DDP mode
     if cuda and rank != -1:
@@ -371,7 +374,6 @@ def train(hyp, opt, device, tb_writer=None):
                 f'Starting training for {epochs} epochs...')
     torch.save(model.float().state_dict(), wdir / 'init.pt')
 
-    
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         model.train()
 
@@ -519,10 +521,10 @@ def train(hyp, opt, device, tb_writer=None):
                                                   save_dir.glob('train*.jpg') if x.exists()]})
 
             if opt.qat:
-                if epoch > 3:
+                if epoch > 5:
                     # Freeze quantizer parameters
                     model.apply(torch.quantization.disable_observer)
-                if epoch > 2:
+                if epoch > 3:
                     # Freeze batch norm mean and variance estimates
                     model.apply(torch.nn.intrinsic.qat.freeze_bn_stats)
 
