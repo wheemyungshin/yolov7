@@ -216,6 +216,17 @@ def train(hyp, opt, device, tb_writer=None):
     scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)
     # plot_lr_scheduler(optimizer, scheduler, epochs)
 
+    if opt.qat:
+        # The old 'fbgemm' is still available but 'x86' is the recommended default.
+        model.qconfig = torch.quantization.get_default_qat_qconfig('x86')
+         
+        with torch.no_grad():
+            model.fuse()
+
+        model = torch.quantization.prepare_qat(model, inplace=True)
+        
+        print('Qauntization-Aware-Training')
+
     # EMA
     ema = ModelEMA(model) if rank in [-1, 0] else None
 
@@ -320,16 +331,9 @@ def train(hyp, opt, device, tb_writer=None):
             # Anchors
             if not opt.noautoanchor:
                 check_anchors(dataset, model=model, thr=hyp['anchor_t'], imgsz=imgsz)
-            model.half().float()  # pre-reduce anchor precision
+            if not opt.qat:
+                model.half().float()  # pre-reduce anchor precision
 
-    if opt.qat:        
-        #model.fuse()
-
-        # The old 'fbgemm' is still available but 'x86' is the recommended default.
-        model.qconfig = torch.quantization.get_default_qat_qconfig('x86')
-
-        model = torch.quantization.prepare_qat(model, inplace=True)
-        print('Qauntization-Aware-Training')
 
     # DDP mode
     if cuda and rank != -1:
@@ -371,7 +375,6 @@ def train(hyp, opt, device, tb_writer=None):
                 f'Starting training for {epochs} epochs...')
     torch.save(model.float().state_dict(), wdir / 'init.pt')
 
-    
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         model.train()
 
@@ -519,10 +522,10 @@ def train(hyp, opt, device, tb_writer=None):
                                                   save_dir.glob('train*.jpg') if x.exists()]})
 
             if opt.qat:
-                if epoch > 3:
+                if epoch > 5:
                     # Freeze quantizer parameters
                     model.apply(torch.quantization.disable_observer)
-                if epoch > 2:
+                if epoch > 3:
                     # Freeze batch norm mean and variance estimates
                     model.apply(torch.nn.intrinsic.qat.freeze_bn_stats)
 
@@ -553,7 +556,8 @@ def train(hyp, opt, device, tb_writer=None):
                                                  compute_loss=compute_loss,
                                                  is_coco=is_coco,
                                                  v5_metric=opt.v5_metric,
-                                                 opt_seg=opt.seg)
+                                                 opt_seg=opt.seg,
+                                                 half_precision=(not opt.qat))
 
             # Write
             with open(results_file, 'a') as f:
@@ -580,7 +584,17 @@ def train(hyp, opt, device, tb_writer=None):
 
             # Save model
             if (not opt.nosave) or (final_epoch and not opt.evolve):  # if save
-                ckpt = {'epoch': epoch,
+                if opt.qat:
+                    ckpt = {'epoch': epoch,
+                        'best_fitness': best_fitness,
+                        'training_results': results_file.read_text(),
+                        'model': deepcopy(model.module if is_parallel(model) else model).state_dict(),
+                        'ema': deepcopy(ema.ema).state_dict(),
+                        'updates': ema.updates,
+                        'optimizer': optimizer.state_dict(),
+                        'wandb_id': wandb_logger.wandb_run.id if wandb_logger.wandb else None}
+                else:
+                    ckpt = {'epoch': epoch,
                         'best_fitness': best_fitness,
                         'training_results': results_file.read_text(),
                         'model': deepcopy(model.module if is_parallel(model) else model).half().float().state_dict(),
@@ -621,7 +635,8 @@ def train(hyp, opt, device, tb_writer=None):
         logger.info('%g epochs completed in %.3f hours.\n' % (epoch - start_epoch + 1, (time.time() - t0) / 3600))
         if opt.data.endswith('coco.yaml') and nc == 80:  # if COCO
             for m in (last, best) if best.exists() else (last):  # speed, mAP tests
-                results, _, _ = test.test(opt.data,
+                if opt.qat:
+                    results, _, _ = test.test(opt.data,
                                           batch_size=batch_size * 2,
                                           imgsz=imgsz_test,
                                           conf_thres=0.001,
@@ -634,7 +649,24 @@ def train(hyp, opt, device, tb_writer=None):
                                           plots=False,
                                           is_coco=is_coco,
                                           v5_metric=opt.v5_metric,
-                                          opt_seg=opt.seg)
+                                          opt_seg=opt.seg,
+                                          half_precision=(not opt.qat))
+                else:
+                    results, _, _ = test.test(opt.data,
+                                          batch_size=batch_size * 2,
+                                          imgsz=imgsz_test,
+                                          conf_thres=0.001,
+                                          iou_thres=0.7,
+                                          model=attempt_load(m, device),
+                                          single_cls=opt.single_cls,
+                                          dataloader=testloader,
+                                          save_dir=save_dir,
+                                          save_json=True,
+                                          plots=False,
+                                          is_coco=is_coco,
+                                          v5_metric=opt.v5_metric,
+                                          opt_seg=opt.seg,
+                                          half_precision=(not opt.qat))
 
         # Strip optimizers
         final = best if best.exists() else last  # final model

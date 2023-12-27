@@ -56,8 +56,6 @@ if __name__ == '__main__':
     # Input
     img = torch.zeros(opt.batch_size, 3, *opt.img_size).to(device)  # image size(1,3,192,320) iDetection
 
-    print(model)
-    
     # Update model
     for k, m in model.named_modules():
         m._non_persistent_buffers_set = set()  # pytorch 1.6.0 compatibility
@@ -132,7 +130,6 @@ if __name__ == '__main__':
     except Exception as e:
         print('TorchScript-Lite export failure: %s' % e)
     '''
-
 
     # ONNX export
     import onnx
