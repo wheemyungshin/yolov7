@@ -294,8 +294,6 @@ class End2End_multihead(nn.Module):
             global_multi_class += self.multihead_matcher[head_num_i]
         return outputs
 
-
-
 def attempt_load(weights, map_location=None):
     # Loads an ensemble of models weights=[a,b,c] or a single model weights=[a] or weights=a
     model = Ensemble()

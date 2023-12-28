@@ -42,6 +42,19 @@ import shutil
 logger = logging.getLogger(__name__)
 
 
+class QuantizedModel(torch.nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model_fp32 = model
+        self.quant = torch.quantization.QuantStub()
+        self.dequant = torch.quantization.DeQuantStub()
+                                  
+    def forward(self, x):
+        x = self.quant(x)
+        x = self.model_fp32(x)
+        x = self.dequant(x)
+        return x
+
 def train(hyp, opt, device, tb_writer=None):
     print("device: ", device)
     logger.info(colorstr('hyperparameters: ') + ', '.join(f'{k}={v}' for k, v in hyp.items()))
@@ -115,6 +128,9 @@ def train(hyp, opt, device, tb_writer=None):
         model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors'), nm=nm).to(device)  # create
     with torch_distributed_zero_first(rank):
         check_dataset(data_dict)  # check
+
+    quantized_model = QuantizedModel(model)
+
     train_path = data_dict['train']
     test_path = data_dict['val']
 
@@ -585,6 +601,10 @@ def train(hyp, opt, device, tb_writer=None):
             # Save model
             if (not opt.nosave) or (final_epoch and not opt.evolve):  # if save
                 if opt.qat:
+                    #deq_model = deepcopy(model).cpu()
+                    #deq_model = torch.quantization.convert(deq_model, inplace=False)
+                    #deq_ema = deepcopy(ema.ema).cpu()
+                    #deq_ema = torch.quantization.convert(deq_ema, inplace=False)
                     ckpt = {'epoch': epoch,
                         'best_fitness': best_fitness,
                         'training_results': results_file.read_text(),
