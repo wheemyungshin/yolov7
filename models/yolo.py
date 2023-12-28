@@ -715,7 +715,7 @@ class Model(nn.Module):
         self.traced = False
         if isinstance(cfg, dict):
             self.yaml = cfg  # model dict
-        else:  # is *.yaml
+        else:  # is *.yamlW
             import yaml  # for torch hub
             self.yaml_file = Path(cfg).name
             with open(cfg) as f:
