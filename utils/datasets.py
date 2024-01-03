@@ -1893,7 +1893,10 @@ def load_image(self, index, ratio_maintain=True):
         h0, w0 = img.shape[:2]  # orig hw
         if ratio_maintain:
             if isinstance(self.img_size, tuple):
-                img = cv2.resize(img, (int(self.img_size[1]), int(self.img_size[0])), interpolation=cv2.INTER_LINEAR)
+                r = self.img_size[1] / max(h0, w0)  # resize image to img_size
+                if r != 1:  # always resize down, only resize up if training with augmentation
+                    interp = cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR
+                    img = cv2.resize(img, (int(w0 * r), int(h0 * r)), interpolation=interp)
             else:
                 r = self.img_size / max(h0, w0)  # resize image to img_size
                 if r != 1:  # always resize down, only resize up if training with augmentation
