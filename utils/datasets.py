@@ -149,7 +149,7 @@ def random_wave(img):
     return warped_img
 
 def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=False, cache=False, pad=0.0, rect=False, ratio_maintain=True,
-                      rank=-1, world_size=1, workers=8, image_weights=False, quad=False, prefix='', valid_idx=None, pose_data=None, load_seg=False):
+                      rank=-1, world_size=1, workers=8, image_weights=False, quad=False, prefix='', valid_idx=None, pose_data=None, load_seg=False, gray=False):
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache
     with torch_distributed_zero_first(rank):
         dataset = LoadImagesAndLabels(path, imgsz, batch_size,
@@ -165,7 +165,8 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
                                       prefix=prefix,
                                       valid_idx=valid_idx,
                                       pose_data=pose_data,
-                                      load_seg=load_seg)
+                                      load_seg=load_seg,
+                                      gray=gray)
 
     batch_size = min(batch_size, len(dataset))
     nw = min([os.cpu_count() // world_size, batch_size if batch_size > 1 else 0, workers])  # number of workers
@@ -465,7 +466,7 @@ def img2seg_paths(img_paths):
 
 class LoadImagesAndLabels(Dataset):  # for training/testing
     def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, ratio_maintain=True, image_weights=False,
-                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix='',valid_idx=None, pose_data=None, load_seg=False):
+                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix='',valid_idx=None, pose_data=None, load_seg=False, gray=False):
         self.img_size = img_size
         self.augment = augment
         self.hyp = hyp
@@ -479,6 +480,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             self.mosaic_border = [-img_size // 2, -img_size // 2]
         self.stride = stride
         self.path = path
+        self.gray = gray
         #self.albumentations = Albumentations() if augment else None
         
         if pose_data is not None:
@@ -1890,6 +1892,9 @@ def load_image(self, index, ratio_maintain=True):
         path = self.img_files[index]
         img = cv2.imread(path)  # BGR
         assert img is not None, 'Image Not Found ' + path
+        if self.gray:
+            img[:,:,1] = img[:,:,0]
+            img[:,:,2] = img[:,:,0]
         h0, w0 = img.shape[:2]  # orig hw
         if ratio_maintain:
             if isinstance(self.img_size, tuple):
