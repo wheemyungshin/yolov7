@@ -11,6 +11,13 @@ train: [
 /data/valid_ciga_data_cbf_for_training/pitta_1st.txt, # 2023
 /data/PITTA_2ND_ir_smoke_frames_after_inspection/train.txt, # 5555
 /data/valid_pitta_smoke_BFC2/train.txt, #3942
+
+/data/BFcellphone/auto_PITTA_2ND_divided_cellphone_yolov7-e6e_s384_after_inspection/train.txt, #6538
+/data/BFcellphone/auto_TANG_phones_yolov7-e6e_s384_after_inspection/train.txt, #2727
+
+/data/valid_phone_data/phonecalls_crawling_grounding_dino/train.txt, # 11517
+/data/valid_phone_data/roboflow_all/train.txt, # 1454
+/data/valid_phone_data/phonecalls_crawling2_auto/train.txt, # 5415
 ] 
 
 val: [/data/TANG_phones_not_included/train.txt] # 995
