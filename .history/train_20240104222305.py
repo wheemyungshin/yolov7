@@ -362,7 +362,7 @@ def train(hyp, opt, device, tb_writer=None):
     compute_loss = ComputeLoss(model)  # init loss class
     if opt.seg:
         compute_loss_seg = ComputeLossSegment(model)  # init loss class
-    logger.info(f'Image sizes {imgsz} train, {imgsz} test\n'
+    logger.info(f'Image sizes {imgsz} train, {imgsz_test} test\n'
                 f'Using {dataloader.num_workers} dataloader workers\n'
                 f'Logging results to {save_dir}\n'
                 f'Starting training for {epochs} epochs...')
@@ -539,7 +539,7 @@ def train(hyp, opt, device, tb_writer=None):
                 wandb_logger.current_epoch = epoch + 1
                 results, maps, times = test.test(data_dict,
                                                  batch_size=batch_size * 2,
-                                                 imgsz=imgsz,
+                                                 imgsz=imgsz_test,
                                                  model=ema.ema,
                                                  single_cls=opt.single_cls,
                                                  dataloader=testloader,
@@ -620,7 +620,7 @@ def train(hyp, opt, device, tb_writer=None):
             for m in (last, best) if best.exists() else (last):  # speed, mAP tests
                 results, _, _ = test.test(opt.data,
                                           batch_size=batch_size * 2,
-                                          imgsz=imgsz,
+                                          imgsz=imgsz_test,
                                           conf_thres=0.001,
                                           iou_thres=0.7,
                                           model=attempt_load(m, device).half(),

@@ -253,8 +253,10 @@ def train(hyp, opt, device, tb_writer=None):
     if isinstance(opt.img_size, list):
         imgsz = [check_img_size(x, gs) for x in opt.img_size]  # verify imgsz are gs-multiples
         imgsz = tuple(imgsz)
+        imgsz_test = max(imgsz[0], imgsz[1])
     else:
         imgsz = check_img_size(opt.img_size, gs)  # verify imgsz are gs-multiples
+        imgsz_test = imgsz
 
 
     # DP mode
@@ -300,7 +302,7 @@ def train(hyp, opt, device, tb_writer=None):
 
     # Process 0
     if rank in [-1, 0]:
-        testloader = create_dataloader(test_path, imgsz, batch_size * 2, gs, opt,  # testloader
+        testloader = create_dataloader(test_path, imgsz_test, batch_size * 2, gs, opt,  # testloader
                                        cache=opt.cache_images and not opt.notest, rect=True, rank=-1,
                                        world_size=opt.world_size, workers=opt.workers,
                                        pad=0.5, prefix=colorstr('val: '), valid_idx=valid_idx, load_seg=opt.seg, gray=opt.gray)[0]
@@ -362,7 +364,7 @@ def train(hyp, opt, device, tb_writer=None):
     compute_loss = ComputeLoss(model)  # init loss class
     if opt.seg:
         compute_loss_seg = ComputeLossSegment(model)  # init loss class
-    logger.info(f'Image sizes {imgsz} train, {imgsz} test\n'
+    logger.info(f'Image sizes {imgsz} train, {imgsz_test} test\n'
                 f'Using {dataloader.num_workers} dataloader workers\n'
                 f'Logging results to {save_dir}\n'
                 f'Starting training for {epochs} epochs...')
@@ -535,11 +537,11 @@ def train(hyp, opt, device, tb_writer=None):
             # mAP
             ema.update_attr(model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride', 'class_weights'])
             final_epoch = epoch + 1 == epochs
-            if (not opt.notest or final_epoch) and epoch % opt.test_ratio == 0:  # Calculate mAP
+            if not opt.notest or final_epoch:  # Calculate mAP
                 wandb_logger.current_epoch = epoch + 1
                 results, maps, times = test.test(data_dict,
                                                  batch_size=batch_size * 2,
-                                                 imgsz=imgsz,
+                                                 imgsz=imgsz_test,
                                                  model=ema.ema,
                                                  single_cls=opt.single_cls,
                                                  dataloader=testloader,
@@ -620,7 +622,7 @@ def train(hyp, opt, device, tb_writer=None):
             for m in (last, best) if best.exists() else (last):  # speed, mAP tests
                 results, _, _ = test.test(opt.data,
                                           batch_size=batch_size * 2,
-                                          imgsz=imgsz,
+                                          imgsz=imgsz_test,
                                           conf_thres=0.001,
                                           iou_thres=0.7,
                                           model=attempt_load(m, device).half(),
@@ -663,8 +665,7 @@ if __name__ == '__main__':
     parser.add_argument('--rect', action='store_true', help='rectangular training')
     parser.add_argument('--resume', nargs='?', const=True, default=False, help='resume most recent training')
     parser.add_argument('--nosave', action='store_true', help='only save final checkpoint')
-    parser.add_argument('--notest', action='store_true', help='only test final epoch')    
-    parser.add_argument('--test-ratio', type=int, default=1, help='test ratio')
+    parser.add_argument('--notest', action='store_true', help='only test final epoch')
     parser.add_argument('--noautoanchor', action='store_true', help='disable autoanchor check')
     parser.add_argument('--evolve', action='store_true', help='evolve hyperparameters')
     parser.add_argument('--bucket', type=str, default='', help='gsutil bucket')
@@ -716,11 +717,9 @@ if __name__ == '__main__':
         ckpt = opt.resume if isinstance(opt.resume, str) else get_latest_run()  # specified or most recent path
         assert os.path.isfile(ckpt), 'ERROR: --resume checkpoint does not exist'
         apriori = opt.global_rank, opt.local_rank
-        opt_gray = opt.gray
         with open(Path(ckpt).parent.parent / 'opt.yaml') as f:
             opt = argparse.Namespace(**yaml.load(f, Loader=yaml.SafeLoader))  # replace
         opt.cfg, opt.weights, opt.resume, opt.batch_size, opt.global_rank, opt.local_rank = opt.cfg, ckpt, True, opt.total_batch_size, *apriori  # reinstate
-        opt.gray = opt_gray
         logger.info('Resuming training from %s' % ckpt)
     else:
         # opt.hyp = opt.hyp or ('hyp.finetune.yaml' if opt.weights else 'hyp.scratch.yaml')

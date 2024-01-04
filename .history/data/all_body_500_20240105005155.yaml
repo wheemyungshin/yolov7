@@ -1,0 +1,14 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+/data/waymo_data_yolo_v2/val.txt #588
+]
+val: [/data/waymo_data_yolo_v2/val.txt]   # 588 images
+test: [/data/waymo_data_yolo_v2/val.txt]   # 588
+
+# number of classes
+nc: 1
+
+# class names
+names: ['person']
+
+valid_idx: [0]

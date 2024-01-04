@@ -1,0 +1,34 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+/data/wider_face_updated/train.txt,
+/data/coco_face_from_kpts_wholebody/train.txt,
+/data/coco_face_from_kpts_wholebody/val.txt,
+/data/crowd/train.txt,
+/data/crowd/val.txt,
+/data/MAFA_concat/train.txt,
+/data/MAFA_concat/val.txt,
+/data/roboflow_head/train.txt,
+/data/roboflow_head/valid.txt,
+/data/SCUT_HEAD_Part_B/train.txt,
+
+/data/smoke_data_BFC/train.txt, # 34493
+
+/data/valid_phone_data/phonecalls_crawling_grounding_dino/train.txt, # 11517
+/data/valid_phone_data/roboflow_all/train.txt, # 1454
+/data/valid_phone_data/phonecalls_crawling2_auto/train.txt, # 5415
+
+/data/AIHUB_CCTV_city_yolo_valid_crop_sampling/train_sampling.txt,
+/data/AIHUB_CCTV_city_yolo_valid_crop_sampling/val.txt, # 15000 + 8941
+/data/AIHUB_inside_camera_yolo/train.txt, # 6480
+/data/AIHUB_inside_camera_yolo/val.txt, # 3960
+]
+val: [/data/wider_face_updated/val.txt]   # 5884 images
+test: [/data/wider_face_updated/val.txt]   # 5884
+
+# number of classes
+nc: 1
+
+# class names
+names: ['person']
+
+valid_idx: [0]
