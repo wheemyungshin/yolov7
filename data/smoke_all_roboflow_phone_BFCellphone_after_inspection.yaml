@@ -31,4 +31,4 @@ nc: 3
 # class names
 names: ['person', 'face', 'cellphone']
 
-valid_idx: [0, 1, 2]
+valid_idx: [0, 1, 3]
