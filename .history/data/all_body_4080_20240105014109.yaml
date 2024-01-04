@@ -1,0 +1,14 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+/data/wider_face_updated/val.txt #4080
+]
+val: [/data/wider_face_updated/val.txt]   # 4080 images
+test: [/data/wider_face_updated/val.txt]   # 4080
+
+# number of classes
+nc: 1
+
+# class names
+names: ['person']
+
+valid_idx: [0]

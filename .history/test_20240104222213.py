@@ -68,9 +68,11 @@ def test(data,
         if isinstance(imgsz, list):
             imgsz = [check_img_size(x, gs) for x in imgsz]  # verify imgsz are gs-multiples
             imgsz = tuple(imgsz)
+            imgsz_test = max(imgsz[0], imgsz[1])
         else:
             imgsz = check_img_size(imgsz, gs)  # verify imgsz are gs-multiples
             imgsz = (imgsz, imgsz)
+            imgsz_test = imgsz
         
         if trace:
             model = TracedModel(model, device, imgsz)
@@ -401,7 +403,7 @@ def test(data,
             print(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
 
     # Print speeds
-    t = tuple(x / seen * 1E3 for x in (t0, t1, t0 + t1)) + (imgsz[0], imgsz[1], batch_size)  # tuple
+    t = tuple(x / seen * 1E3 for x in (t0, t1, t0 + t1)) + (imgsz, imgsz, batch_size)  # tuple
     if not training:
         print('Speed: %.1f/%.1f/%.1f ms inference/NMS/total per %gx%g image at batch-size %g' % t)
 
