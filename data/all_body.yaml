@@ -2,7 +2,7 @@
 train: [
 /data/wider_face_updated/train.txt,
 /data/wider_face_updated/val.txt, 
-/data/coco_head_from_kpts/train.txt,
+/data/coco_face_from_kpts_wholebody/train.txt,
 /data/crowd/train.txt,
 /data/crowd/val.txt,
 /data/MAFA_concat/train.txt,
@@ -22,8 +22,8 @@ train: [
 /data/AIHUB_inside_camera_yolo/train.txt, # 6480
 /data/AIHUB_inside_camera_yolo/val.txt, # 3960
 ]
-val: [/data/coco_head_from_kpts/val.txt]   # 5884 images
-test: [/data/coco_head_from_kpts/val.txt]   # 5884
+val: [/data/coco_face_from_kpts_wholebody/val.txt]   # 5884 images
+test: [/data/coco_face_from_kpts_wholebody/val.txt]   # 5884
 
 # number of classes
 nc: 1
