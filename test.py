@@ -103,7 +103,7 @@ def test(data,
             pad_ratio = 0.5
         
         dataloader = create_dataloader(data[task], imgsz, batch_size, gs, opt, pad=pad_ratio, rect=True,
-                                       prefix=colorstr(f'{task}: '), valid_idx=valid_idx, load_seg=opt_seg)[0]
+                                       prefix=colorstr(f'{task}: '), valid_idx=valid_idx, load_seg=opt_seg, ratio_maintain=False)[0]
     if v5_metric:
         print("Testing with YOLOv5 AP metric...")
     
