@@ -337,7 +337,6 @@ def train(hyp, opt, device, tb_writer=None):
                     # nn.MultiheadAttention incompatibility with DDP https://github.com/pytorch/pytorch/issues/26698
                     find_unused_parameters=True)
 
-
     # Model parameters
     hyp['box'] *= 3. / nl  # scale to layers
     hyp['cls'] *= nc / 80. * 3. / nl  # scale to classes and layers

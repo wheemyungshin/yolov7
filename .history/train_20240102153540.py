@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 
 
 def train(hyp, opt, device, tb_writer=None):
+    print("device: ", device)
     logger.info(colorstr('hyperparameters: ') + ', '.join(f'{k}={v}' for k, v in hyp.items()))
     save_dir, epochs, batch_size, total_batch_size, weights, rank, freeze = \
         Path(opt.save_dir), opt.epochs, opt.batch_size, opt.total_batch_size, opt.weights, opt.global_rank, opt.freeze
@@ -293,7 +294,7 @@ def train(hyp, opt, device, tb_writer=None):
                                             hyp=hyp, augment=True, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                             world_size=opt.world_size, workers=opt.workers,
                                             image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), 
-                                            valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg)
+                                            valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg, gray=opt.gray)
     mlc = np.concatenate(dataset.labels, 0)[:, 0].max()  # max label class
     nb = len(dataloader)  # number of batches
     if not opt.seg:
@@ -304,7 +305,7 @@ def train(hyp, opt, device, tb_writer=None):
         testloader = create_dataloader(test_path, imgsz_test, batch_size * 2, gs, opt,  # testloader
                                        cache=opt.cache_images and not opt.notest, rect=True, rank=-1,
                                        world_size=opt.world_size, workers=opt.workers,
-                                       pad=0.5, prefix=colorstr('val: '), valid_idx=valid_idx, load_seg=opt.seg)[0]
+                                       pad=0.5, prefix=colorstr('val: '), valid_idx=valid_idx, load_seg=opt.seg, gray=opt.gray)[0]
 
         if not opt.resume:
             labels = np.concatenate(dataset.labels, 0)
@@ -326,8 +327,8 @@ def train(hyp, opt, device, tb_writer=None):
 
         # The old 'fbgemm' is still available but 'x86' is the recommended default.
         model.qconfig = torch.quantization.get_default_qat_qconfig('x86')
-        
-        torch.quantization.prepare_qat(model, inplace=True)
+
+        model = torch.quantization.prepare_qat(model, inplace=True)
         print('Qauntization-Aware-Training')
 
     # DDP mode
@@ -335,7 +336,6 @@ def train(hyp, opt, device, tb_writer=None):
         model = DDP(model, device_ids=[opt.local_rank], output_device=opt.local_rank,
                     # nn.MultiheadAttention incompatibility with DDP https://github.com/pytorch/pytorch/issues/26698
                     find_unused_parameters=True)
-
 
     # Model parameters
     hyp['box'] *= 3. / nl  # scale to layers
@@ -397,7 +397,7 @@ def train(hyp, opt, device, tb_writer=None):
             dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, opt,
                                                     hyp=hyp, augment=False, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                                     world_size=opt.world_size, workers=opt.workers,
-                                                    image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg)
+                                                    image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg, gray=opt.gray)
             
             print("STOP DISTILLATION!")
             is_distill = False
@@ -413,7 +413,7 @@ def train(hyp, opt, device, tb_writer=None):
             dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, opt,
                                                     hyp=hyp, augment=False, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                                     world_size=opt.world_size, workers=opt.workers,
-                                                    image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg)
+                                                    image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg, gray=opt.gray)
 
         mloss = torch.zeros(4, device=device)  # mean losses
         if rank != -1:
@@ -697,6 +697,7 @@ if __name__ == '__main__':
     parser.add_argument('--qat', action='store_true', help='Quantization-Aware-Training')
     parser.add_argument('--seg', action='store_true', help='Segmentation-Training')
     parser.add_argument('--valid-segment-labels', nargs='+', type=int, default=[], help='labels to include when calculating segmentation loss')
+    parser.add_argument('--gray', action='store_true', help='Load all data as grayscale')
     opt = parser.parse_args()
 
     device = opt.device
