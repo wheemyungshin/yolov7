@@ -8,8 +8,8 @@ train: [/data/cityscapes/yolov7_det/train.txt, #2975
 /data/AIHUB_autodriving_daytime_city_yolo/val.txt, #1520
 /data/AIHUB_autodriving_night_city_yolo/train.txt, #12840
 /data/AIHUB_autodriving_night_city_yolo/val.txt, #1520
-/data/AIHUB_traffic_lights_seoul/train.txt, #16058
-/data/AIHUB_traffic_lights_seoul/val.txt, #2067
+/data/AIHUB_traffic_lights_sky/train.txt, #16058
+/data/AIHUB_traffic_lights_sky/val.txt, #2067
 /data/AIHUB_traffic_lights_seoul_sky/train.txt, #18137
 /data/AIHUB_traffic_lights_seoul_sky/val.txt, #2297
 ]
