@@ -69,8 +69,6 @@ def apply_brightness_contrast(input_img, brightness = 0, contrast = 0):
         
         buf = cv2.addWeighted(buf, alpha_b, buf, 0, gamma_b)
 
-    return buf
-    
 def check_boxes_overlap(box1, box2, margin=0):
     x1, y1, x2, y2 = box1
     x3, y3, x4, y4 = box2

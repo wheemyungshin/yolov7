@@ -46,6 +46,29 @@ for orientation in ExifTags.TAGS.keys():
     if ExifTags.TAGS[orientation] == 'Orientation':
         break
 
+def apply_brightness_contrast(input_img, brightness = 0, contrast = 0):
+    
+    if contrast != 0:
+        f = 131*(contrast + 127)/(127*(131-contrast))
+        alpha_c = f
+        gamma_c = 127*(1-f)
+        
+        buf = cv2.addWeighted(input_img, alpha_c, input_img, 0, gamma_c)
+    else:
+        buf = input_img.copy()
+
+    if brightness != 0:
+        if brightness > 0:
+            shadow = brightness
+            highlight = 255
+        else:
+            shadow = 0
+            highlight = 255 + brightness
+        alpha_b = (highlight - shadow)/255
+        gamma_b = shadow
+        
+        buf = cv2.addWeighted(buf, alpha_b, buf, 0, gamma_b)
+
 def check_boxes_overlap(box1, box2, margin=0):
     x1, y1, x2, y2 = box1
     x3, y3, x4, y4 = box2
@@ -149,7 +172,7 @@ def random_wave(img):
     return warped_img
 
 def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=False, cache=False, pad=0.0, rect=False, ratio_maintain=True,
-                      rank=-1, world_size=1, workers=8, image_weights=False, quad=False, prefix='', valid_idx=None, pose_data=None, load_seg=False):
+                      rank=-1, world_size=1, workers=8, image_weights=False, quad=False, prefix='', valid_idx=None, pose_data=None, load_seg=False, gray=False):
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache
     with torch_distributed_zero_first(rank):
         dataset = LoadImagesAndLabels(path, imgsz, batch_size,
@@ -165,11 +188,17 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
                                       prefix=prefix,
                                       valid_idx=valid_idx,
                                       pose_data=pose_data,
-                                      load_seg=load_seg)
+                                      load_seg=load_seg,
+                                      gray=gray)
 
     batch_size = min(batch_size, len(dataset))
     nw = min([os.cpu_count() // world_size, batch_size if batch_size > 1 else 0, workers])  # number of workers
-    sampler = torch.utils.data.distributed.DistributedSampler(dataset) if rank != -1 else None
+    if rank != -1:
+        sampler = torch.utils.data.distributed.DistributedSampler(dataset=dataset, shuffle=True)
+        is_shuffle = False
+    else:
+        sampler = None
+        is_shuffle = True
     loader = torch.utils.data.DataLoader if image_weights else InfiniteDataLoader
     # Use torch.utils.data.DataLoader() if dataset.properties will update during training else InfiniteDataLoader()
     dataloader = loader(dataset,
@@ -177,6 +206,7 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
                         num_workers=nw,
                         sampler=sampler,
                         pin_memory=True,
+                        shuffle=is_shuffle,
                         collate_fn=LoadImagesAndLabels.collate_fn4 if quad else LoadImagesAndLabels.collate_fn,)
     return dataloader, dataset
 
@@ -459,7 +489,7 @@ def img2seg_paths(img_paths):
 
 class LoadImagesAndLabels(Dataset):  # for training/testing
     def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, ratio_maintain=True, image_weights=False,
-                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix='',valid_idx=None, pose_data=None, load_seg=False):
+                 cache_images=False, single_cls=False, stride=32, pad=0.0, prefix='',valid_idx=None, pose_data=None, load_seg=False, gray=False):
         self.img_size = img_size
         self.augment = augment
         self.hyp = hyp
@@ -473,6 +503,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             self.mosaic_border = [-img_size // 2, -img_size // 2]
         self.stride = stride
         self.path = path
+        self.gray = gray
         #self.albumentations = Albumentations() if augment else None
         
         if pose_data is not None:
@@ -734,7 +765,17 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 if os.path.isfile(lb_file):
                     nf += 1  # label found
                     with open(lb_file, 'r') as f:
-                        l = [x.split() for x in f.read().strip().splitlines()]
+                        l = [x.split() for x in f.read().strip().splitlines()]       
+
+                        #fix label out of bouonds
+                        l_fix = []
+                        for x_line in l:
+                            line_fixed = [x_line[0]]
+                            for x_item in x_line[1:]:
+                                line_fixed.append(str(round(max(min(float(x_item),1),0),6)))
+                            l_fix.append(line_fixed)
+                        l = l_fix
+
                         if load_seg:  # is segment
                             if any([len(x) > 8 for x in l]):  # is segment
                                 classes = np.array([x[0] for x in l], dtype=np.float32)
@@ -903,6 +944,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             #img, labels = self.albumentations(img, labels)
 
             # Augment colorspace
+            if 'contrast' in hyp:
+                img = apply_brightness_contrast(img, brightness = 0, contrast = random.random()*(hyp['contrast'][1]-hyp['contrast'][0])+hyp['contrast'][0])
             augment_hsv(img, hgain=hyp['hsv_h'], sgain=hyp['hsv_s'], vgain=hyp['hsv_v'])
 
             # Apply cutouts
@@ -1874,8 +1917,23 @@ def load_image(self, index, ratio_maintain=True):
         path = self.img_files[index]
         img = cv2.imread(path)  # BGR
         assert img is not None, 'Image Not Found ' + path
+        if self.gray:
+            img[:,:,1] = img[:,:,0]
+            img[:,:,2] = img[:,:,0]
         h0, w0 = img.shape[:2]  # orig hw
         if ratio_maintain:
+            if isinstance(self.img_size, tuple):
+                r = self.img_size[1] / max(h0, w0)  # resize image to img_size
+                if r != 1:  # always resize down, only resize up if training with augmentation
+                    interp = cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR
+                    img = cv2.resize(img, (int(w0 * r), int(h0 * r)), interpolation=interp)
+            else:
+                r = self.img_size / max(h0, w0)  # resize image to img_size
+                if r != 1:  # always resize down, only resize up if training with augmentation
+                    interp = cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR
+                    img = cv2.resize(img, (int(w0 * r), int(h0 * r)), interpolation=interp)
+            return img, (h0, w0), img.shape[:2]  # img, hw_original, hw_resized
+        else:
             if isinstance(self.img_size, tuple):
                 img = cv2.resize(img, (int(self.img_size[1]), int(self.img_size[0])), interpolation=cv2.INTER_LINEAR)
             else:
@@ -1884,19 +1942,16 @@ def load_image(self, index, ratio_maintain=True):
                     interp = cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR
                     img = cv2.resize(img, (int(w0 * r), int(h0 * r)), interpolation=interp)
             return img, (h0, w0), img.shape[:2]  # img, hw_original, hw_resized
-        else:
-            interp = cv2.INTER_AREA if not self.augment else cv2.INTER_LINEAR
-            if isinstance(self.img_size, tuple):
-                img = cv2.resize(img, (int(self.img_size[1]), int(self.img_size[0])), interpolation=interp)
-            else:
-                img = cv2.resize(img, (int(self.img_size), int(self.img_size)), interpolation=interp)
-            return img, (h0, w0), img.shape[:2]  # img, hw_original, hw_resized
     else:
         return self.imgs[index], self.img_hw0[index], self.img_hw[index]  # img, hw_original, hw_resized
 
 
 def augment_hsv(img, hgain=0.5, sgain=0.5, vgain=0.5):
-    r = np.random.uniform(-1, 1, 3) * [hgain, sgain, vgain] + 1  # random gains
+    if isinstance(vgain, float):
+        r = np.random.uniform(-1, 1, 3) * [hgain, sgain, vgain] + 1  # random gains
+    else:
+        r = np.random.uniform(-1, 1, 3) * [hgain, sgain, 0] + 1  # random gains
+        r[2]=r[2]+(random.random()*(vgain[1]-vgain[0])+vgain[0])
     hue, sat, val = cv2.split(cv2.cvtColor(img, cv2.COLOR_BGR2HSV))
     dtype = img.dtype  # uint8
 
