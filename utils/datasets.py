@@ -48,6 +48,15 @@ for orientation in ExifTags.TAGS.keys():
 
 def apply_brightness_contrast(input_img, brightness = 0, contrast = 0):
     
+    if contrast != 0:
+        f = 131*(contrast + 127)/(127*(131-contrast))
+        alpha_c = f
+        gamma_c = 127*(1-f)
+        
+        buf = cv2.addWeighted(input_img, alpha_c, input_img, 0, gamma_c)
+    else:
+        buf = input_img.copy()
+
     if brightness != 0:
         if brightness > 0:
             shadow = brightness
@@ -58,18 +67,7 @@ def apply_brightness_contrast(input_img, brightness = 0, contrast = 0):
         alpha_b = (highlight - shadow)/255
         gamma_b = shadow
         
-        buf = cv2.addWeighted(input_img, alpha_b, input_img, 0, gamma_b)
-    else:
-        buf = input_img.copy()
-    
-    if contrast != 0:
-        f = 131*(contrast + 127)/(127*(131-contrast))
-        alpha_c = f
-        gamma_c = 127*(1-f)
-        
-        buf = cv2.addWeighted(buf, alpha_c, buf, 0, gamma_c)
-
-    return buf
+        buf = cv2.addWeighted(buf, alpha_b, buf, 0, gamma_b)
 
 def check_boxes_overlap(box1, box2, margin=0):
     x1, y1, x2, y2 = box1
