@@ -4,14 +4,15 @@ train: [
 /data/crowd/train.txt,
 /data/crowd/val.txt,
 
-/data/valid_phone_data/phonecalls_crawling_grounding_dino/train.txt, # 11517
-/data/valid_phone_data/roboflow_all/train.txt, # 1454
-/data/valid_phone_data/phonecalls_crawling2_auto/train.txt, # 5415
-
 /data/AIHUB_CCTV_city_yolo_valid_crop_sampling/train_sampling.txt,
 /data/AIHUB_CCTV_city_yolo_valid_crop_sampling/val.txt, # 15000 + 8941
 /data/AIHUB_inside_camera_yolo/train.txt, # 6480
 /data/AIHUB_inside_camera_yolo/val.txt, # 3960
+
+/data/valid_phone_data/phonecalls_crawling_grounding_dino/train.txt, # 11517
+/data/valid_phone_data/roboflow_all/train.txt, # 1454
+/data/valid_phone_data/phonecalls_crawling2_auto/train.txt, # 5415
+
 ]
 val: [/data/wider_face_updated/val.txt]   # 5884 images
 test: [/data/wider_face_updated/val.txt]   # 5884
