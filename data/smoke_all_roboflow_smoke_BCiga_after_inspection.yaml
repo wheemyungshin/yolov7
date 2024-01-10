@@ -13,24 +13,15 @@ train: [
 /data/valid_pitta_smoke_BFC2/train.txt, #3942
 
 /data/roboflow_smoke_after_inspection/train.txt, # 76469 -> 75793
-
-/data/BFcellphone/auto_PITTA_2ND_divided_cellphone_yolov7-e6e_s384_after_inspection/train.txt, #6538
-/data/BFcellphone/auto_TANG_phones_yolov7-e6e_s384_after_inspection/train.txt, #2727
-
-/data/valid_phone_data/phonecalls_crawling_grounding_dino/train.txt, # 11517
-/data/valid_phone_data/roboflow_all/train.txt, # 1454
-/data/valid_phone_data/phonecalls_crawling2_auto/train.txt, # 5415
-
-/data/roboflow_phone_after_inspection/train.txt, # 33518 -> 28873
 ] 
 
 val: [/data/TANG_phones_not_included/train.txt] # 995
 test: [/data/TANG_phones_not_included/train.txt] # 995
 
 # number of classes
-nc: 4
+nc: 2
 
 # class names
-names: ['person', 'face', 'smoke', 'cellphone']
+names: ['person', 'smoke']
 
-valid_idx: [0, 1, 2, 3]
+valid_idx: [0, 2]
