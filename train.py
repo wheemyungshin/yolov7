@@ -301,9 +301,9 @@ def train(hyp, opt, device, tb_writer=None):
     # Process 0
     if rank in [-1, 0]:
         testloader = create_dataloader(test_path, imgsz, batch_size * 2, gs, opt,  # testloader
-                                       cache=opt.cache_images and not opt.notest, rect=True, rank=-1,
+                                       cache=opt.cache_images and not opt.notest, rect=opt.rect, rank=-1,
                                        world_size=opt.world_size, workers=opt.workers,
-                                       pad=0.5, prefix=colorstr('val: '), valid_idx=valid_idx, load_seg=opt.seg, gray=opt.gray)[0]
+                                       prefix=colorstr('val: '), valid_idx=valid_idx, load_seg=opt.seg, gray=opt.gray)[0]
 
         if not opt.resume:
             labels = np.concatenate(dataset.labels, 0)
