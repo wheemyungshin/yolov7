@@ -203,7 +203,7 @@ def detect(save_img=False):
                     # Write results
                     for *xyxy, conf, cls in reversed(det[:, :6]):
                         if len(opt.valid_segment_labels) > 0:
-                            if cls in opt.valid_segment_labels:
+                            if cls-1 in opt.valid_segment_labels:
                                 continue
                         if save_txt:  # Write to file
                             xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
