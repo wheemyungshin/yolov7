@@ -80,9 +80,15 @@ def detect(save_img=False):
     if opt.seg:
         if len(opt.valid_segment_labels) > 0:
             nm = len(opt.valid_segment_labels)+1
+            seg_colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(max(opt.valid_segment_labels)+1)]
+            seg_colors[13] = [100, 10, 10]
+            seg_colors[14] = [100, 255, 255]
+            seg_colors[15] = [255, 255, 100]
+            seg_colors[16] = [225, 225, 225]
+            seg_colors[17] = [255, 100, 255]
         else:
             nm = len(names)+1
-        seg_colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(nm)]
+            seg_colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(nm)]
 
     # Run inference
     if device.type != 'cpu':
@@ -187,7 +193,8 @@ def detect(save_img=False):
                             np.save(os.path.join(save_dir, 'mask_npy', p.name.split('.')[0]+'_'+'0'*(6-len(str(frame)))+str(frame)), image_masks)
 
                         vis_mask = im0.copy()
-                        for image_mask_idx in range(1, nm):
+                        
+                        for image_mask_idx in opt.valid_segment_labels:
                             vis_mask[image_masks==image_mask_idx] = np.array(seg_colors[image_mask_idx])
                         alpha = 0.5
                         im0 = cv2.addWeighted(im0, alpha, vis_mask, 1 - alpha, 0)
@@ -195,8 +202,9 @@ def detect(save_img=False):
                     
                     # Write results
                     for *xyxy, conf, cls in reversed(det[:, :6]):
-                        if cls in opt.valid_segment_labels:
-                            continue
+                        if len(opt.valid_segment_labels) > 0:
+                            if cls in opt.valid_segment_labels:
+                                continue
                         if save_txt:  # Write to file
                             xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
                             line = (cls, *xywh, conf) if opt.save_conf else (cls, *xywh)  # label format

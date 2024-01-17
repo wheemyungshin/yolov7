@@ -64,14 +64,14 @@ def test(data,
         # Load model
         model = attempt_load(weights, map_location=device)  # load FP32 model
         gs = max(int(model.stride.max()), 32)  # grid size (max stride)
-        imgsz = check_img_size(imgsz, s=gs)  # check img_size
-        if isinstance(imgsz, list):
+        if len(imgsz) == 2:
             imgsz = [check_img_size(x, gs) for x in imgsz]  # verify imgsz are gs-multiples
             imgsz = tuple(imgsz)
         else:
-            imgsz = check_img_size(imgsz, gs)  # verify imgsz are gs-multiples
-            imgsz = (imgsz, imgsz)
+            imgsz = check_img_size(imgsz[0], gs)  # verify imgsz are gs-multiples
+            imgsz = tuple([imgsz, imgsz])
         
+        print(imgsz)
         if trace:
             model = TracedModel(model, device, imgsz)
 
@@ -102,13 +102,8 @@ def test(data,
         task = opt.task if opt.task in ('train', 'val', 'test') else 'val'  # path to train/val/test images
         
         valid_idx = data.get('valid_idx', None)
-
-        if opt_seg:
-            pad_ratio = 0.0
-        else:
-            pad_ratio = 0.5
         
-        dataloader = create_dataloader(data[task], imgsz, batch_size, gs, opt, pad=pad_ratio, rect=True,
+        dataloader = create_dataloader(data[task], imgsz, batch_size, gs, opt, rect=False,
                                        prefix=colorstr(f'{task}: '), valid_idx=valid_idx, load_seg=opt_seg, ratio_maintain=True)[0]
     if v5_metric:
         print("Testing with YOLOv5 AP metric...")

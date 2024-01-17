@@ -3,6 +3,10 @@ train: [
 /data/wider_face_updated/train.txt,
 /data/crowd/train.txt,
 /data/crowd/val.txt,
+/data/MAFA_concat/train.txt,
+/data/MAFA_concat/val.txt,
+
+/data/smoke_data_BFC/train.txt,
 
 /data/AIHUB_CCTV_city_yolo_valid_crop_sampling/train_sampling.txt,
 /data/AIHUB_CCTV_city_yolo_valid_crop_sampling/val.txt, # 15000 + 8941

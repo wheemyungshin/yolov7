@@ -190,7 +190,7 @@ def detect(save_img=False):
 
                         vis_mask = im0.copy()
                         for image_mask_idx in range(1, nm):
-                            if image_mask_idx in [13, 14, 15]:
+                            if image_mask_idx in opt.valid_segment_labels:#[13, 14, 15]:
                                 vis_mask[image_masks==image_mask_idx] = np.array(seg_colors[image_mask_idx])
                         alpha = 0.5
                         im0 = cv2.addWeighted(im0, alpha, vis_mask, 1 - alpha, 0)
@@ -198,8 +198,8 @@ def detect(save_img=False):
                     
                     # Write results
                     for *xyxy, conf, cls in reversed(det[:, :6]):
-                        if cls in opt.valid_segment_labels:
-                            continue
+                        #if cls not in opt.valid_segment_labels:
+                        #    continue
                         if save_txt:  # Write to file
                             xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
                             line = (cls, *xywh, conf) if opt.save_conf else (cls, *xywh)  # label format

@@ -1,0 +1,29 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+/data/AIHUB_traffic_lights_autolabeled/train.txt, #16058
+/data/AIHUB_traffic_lights_autolabeled/val.txt, #2067
+/data/AIHUB_traffic_lights_seoul_autolabeled/train.txt, #18137
+/data/AIHUB_traffic_lights_seoul_autolabeled/val.txt, #2297
+]
+val: [/data/cityscapes/yolov7_det/val.txt] #500
+test: [/data/cityscapes/yolov7_det/val.txt] #500
+
+# number of classes
+nc: 12
+
+# class names
+names: ['fence',
+    'guard rail',
+    'traffic light',
+    'traffic sign',
+    'person',
+    'rider',
+    'car',
+    'truck',
+    'bus',
+    'train',
+    'motorcycle',
+    'bicycle'
+]
+    
+valid_idx: [0, 1, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13]
