@@ -1,6 +1,6 @@
 # train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
 train: [
-/data/all_body_fine_bigger.txt # 82706
+/data/all_body_fine_bigger.txt # 129304
 ]
 val: [/data/wider_face_updated/val.txt]   # 5884 images
 test: [/data/wider_face_updated/val.txt]   # 5884
