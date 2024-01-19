@@ -149,9 +149,7 @@ def detect(save_img=False):
         patch_stride_y = int((img.shape[2]-margin) / patch_num[0])
 
         if quadrant == -1:
-            if opt.no_total:
-                pred_concat = None
-            else:
+            if not opt.no_total:
                 pred = model(full_img, augment=opt.augment)[0]
                 pred[0, :, 0] = pred[0, :, 0]*(img.shape[3]/full_img.shape[3])
                 pred[0, :, 1] = pred[0, :, 1]*(img.shape[2]/full_img.shape[2])
@@ -180,10 +178,7 @@ def detect(save_img=False):
                     pred[0, :, 0] = pred[0, :, 0] + x1
                     pred[0, :, 1] = pred[0, :, 1] + y1
                     
-                    if opt.no_total and pred_concat is None:
-                        pred_concat = pred
-                    else:
-                        pred_concat = torch.cat((pred_concat, pred), 1)
+                    pred_concat = torch.cat((pred_concat, pred), 1)
             pred = pred_concat
         else:
             x_i = quadrant % patch_num[1]

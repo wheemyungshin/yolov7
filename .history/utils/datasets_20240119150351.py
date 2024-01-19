@@ -697,14 +697,12 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         total_merge_label_num = 0
         for merge_label_chunk in merge_label:
             total_merge_label_num+=len(merge_label_chunk)
-        
         if len(merge_label) > 0:
             for x in self.labels:
                 for merge_label_idx, merge_label_chunk in enumerate(merge_label):
-                    x[np.isin(x[:, 0], np.array(merge_label_chunk)), 0] = merge_label_idx - total_merge_label_num
-            
-            for x in self.labels:
-                x[:, 0] += total_merge_label_num
+                    print("Bef: ", x)
+                    x[np.isin(x[:, 0], np.array(merge_label_chunk)), 0] = merge_label_idx
+                    print("Aft: ", x)
 
         if single_cls:
             for x in self.labels:

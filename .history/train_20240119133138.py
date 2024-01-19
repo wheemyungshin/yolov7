@@ -84,12 +84,6 @@ def train(hyp, opt, device, tb_writer=None):
     names = ['item'] if opt.single_cls and len(data_dict['names']) != 1 else data_dict['names']  # class names
     assert len(names) == nc, '%g names found for nc=%g dataset in %s' % (len(names), nc, opt.data)  # check
 
-    print(opt.merge_label)
-    if len(opt.merge_label) > 0:
-        nc = len(opt.merge_label)
-        names = [str(n_num) for n_num in range(len(opt.merge_label))]
-
-
     # Model
     if opt.seg:
         if len(opt.valid_segment_labels) > 0:
@@ -703,8 +697,6 @@ if __name__ == '__main__':
     parser.add_argument('--seg', action='store_true', help='Segmentation-Training')
     parser.add_argument('--valid-segment-labels', nargs='+', type=int, default=[], help='labels to include when calculating segmentation loss')
     parser.add_argument('--gray', action='store_true', help='Load all data as grayscale')
-    parser.add_argument('--merge-label', type=int, nargs='+', action='append', default=[], help='list of merge label list chunk. --merge-label 0 1 --merge-label 2 3 4')
-    
     opt = parser.parse_args()
 
     device = opt.device

@@ -15,6 +15,8 @@ train: [
 /data/valid_phone_data/roboflow_all/train.txt, # 1454
 /data/valid_phone_data/phonecalls_crawling2_auto/train.txt, # 5415
 
+/data/AIHUB_CCTV_city_yolo_valid_crop_sampling/train_sampling.txt,
+/data/AIHUB_CCTV_city_yolo_valid_crop_sampling/val.txt, # 15000 + 8941
 /data/AIHUB_inside_camera_yolo/train.txt, # 6480
 /data/AIHUB_inside_camera_yolo/val.txt, # 3960
 
@@ -35,9 +37,9 @@ val: [/data/wider_face_updated/val.txt]
 test: [/data/wider_face_updated/val.txt]
 
 # number of classes
-nc: 2
+nc: 6
 
 # class names
-names: ['person', 'person_from_ADAS']
+names: ['person', 'person_from_ADAS', 'car', 'truck', 'bus', 'motorcycle', 'bicycle']
 
-valid_idx: [0, 6]
+valid_idx: [0, 6, 8, 9, 10, 12, 13]

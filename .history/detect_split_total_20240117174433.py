@@ -149,15 +149,12 @@ def detect(save_img=False):
         patch_stride_y = int((img.shape[2]-margin) / patch_num[0])
 
         if quadrant == -1:
-            if opt.no_total:
-                pred_concat = None
-            else:
-                pred = model(full_img, augment=opt.augment)[0]
-                pred[0, :, 0] = pred[0, :, 0]*(img.shape[3]/full_img.shape[3])
-                pred[0, :, 1] = pred[0, :, 1]*(img.shape[2]/full_img.shape[2])
-                pred[0, :, 2] = pred[0, :, 2]*(img.shape[3]/full_img.shape[3])
-                pred[0, :, 3] = pred[0, :, 3]*(img.shape[2]/full_img.shape[2])
-                pred_concat = pred
+            pred = model(full_img, augment=opt.augment)[0]
+            pred[0, :, 0] = pred[0, :, 0]*(img.shape[3]/full_img.shape[3])
+            pred[0, :, 1] = pred[0, :, 1]*(img.shape[2]/full_img.shape[2])
+            pred[0, :, 2] = pred[0, :, 2]*(img.shape[3]/full_img.shape[3])
+            pred[0, :, 3] = pred[0, :, 3]*(img.shape[2]/full_img.shape[2])
+            pred_concat = pred
             for y_i in range(patch_num[0]):
                 for x_i in range(patch_num[1]):
                     x1 = check_img_size(x_i * patch_stride_x, 64)
@@ -176,14 +173,31 @@ def detect(save_img=False):
                         pred = pred[:, pred[0, :, 1]-pred[0, :, 3]/2 > margin/4]
                     if y_i != patch_num[0]-1:
                         pred = pred[:, pred[0, :, 1]+pred[0, :, 3]/2 < patch.shape[2]-margin/4]
+                    '''
+                    #is_body = pred[0, :, -2] * pred[0, :, -3] > opt.conf_thres
+                    #is_face = pred[0, :, -1] * pred[0, :, -3] > opt.conf_thres
+                    is_body = pred[0, :, -2] > pred[0, :, -1]
+                    is_face = pred[0, :, -2] <= pred[0, :, -1]
+
+                    if x_i != 0:
+                        pred_face = pred[:, is_face][:, pred[0, is_face, 0]-pred[0, is_face, 2]/2 > margin/4]
+                        pred_body = pred[:, is_body][:, pred[0, is_body, 0]-pred[0, is_body, 2]/2 > margin]                        
+                    if x_i != patch_num[1]-1:
+                        pred_face = pred[:, is_face][:, pred[0, is_face, 0]+pred[0, is_face, 2]/2 < patch.shape[3]-margin/4]
+                        pred_body = pred[:, is_body][:, pred[0, is_body, 0]+pred[0, is_body, 2]/2 < patch.shape[3]-margin]
+                    if y_i != 0:
+                        pred_face = pred[:, is_face][:, pred[0, is_face, 1]-pred[0, is_face, 3]/2 > margin/4]
+                        pred_body = pred[:, is_body][:, pred[0, is_body, 1]-pred[0, is_body, 3]/2 > margin]
+                    if y_i != patch_num[0]-1:
+                        pred_face = pred[:, is_face][:, pred[0, is_face, 1]-pred[0, is_face, 3]/2 < patch.shape[2]-margin/4]
+                        pred_body = pred[:, is_body][:, pred[0, is_body, 1]-pred[0, is_body, 3]/2 < patch.shape[2]-margin]
+                    pred = torch.cat((pred_face, pred_body), 1)                    
+                    '''
 
                     pred[0, :, 0] = pred[0, :, 0] + x1
                     pred[0, :, 1] = pred[0, :, 1] + y1
                     
-                    if opt.no_total and pred_concat is None:
-                        pred_concat = pred
-                    else:
-                        pred_concat = torch.cat((pred_concat, pred), 1)
+                    pred_concat = torch.cat((pred_concat, pred), 1)
             pred = pred_concat
         else:
             x_i = quadrant % patch_num[1]

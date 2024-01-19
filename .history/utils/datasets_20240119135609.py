@@ -692,19 +692,10 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 hand_img = cv2.imread(os.path.join(hyp.get('render_hand', None)[0], file), cv2.IMREAD_UNCHANGED)
                 self.hand_imgs.append(hand_img)
 
-        #recursive 하게 동작함. 출발 라벨과 도착 라벨이 겹치는 경우 주의!
-        print(merge_label)
-        total_merge_label_num = 0
-        for merge_label_chunk in merge_label:
-            total_merge_label_num+=len(merge_label_chunk)
-        
         if len(merge_label) > 0:
-            for x in self.labels:
-                for merge_label_idx, merge_label_chunk in enumerate(merge_label):
-                    x[np.isin(x[:, 0], np.array(merge_label_chunk)), 0] = merge_label_idx - total_merge_label_num
-            
-            for x in self.labels:
-                x[:, 0] += total_merge_label_num
+            for merge_label_idx, merge_label_chunk in enumerate(merge_label):
+                for x in self.labels:
+                    x[torch.isin(x[:, 0], torch.tensor(merge_label_chunk)), 0] = merge_label_idx
 
         if single_cls:
             for x in self.labels:
