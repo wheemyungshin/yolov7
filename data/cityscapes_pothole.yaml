@@ -2,6 +2,9 @@
 train: [
 /data/AIHUB_bicycle_obstacle_potholes_autolabeled/train.txt, 
 /data/AIHUB_bicycle_obstacle_potholes_autolabeled/val.txt, 
+/data/AIHUB_obstacle_pothole_seoul_autolabeled_after_inspection/train.txt, 
+/data/AIHUB_obstacle_pothole_seoul_autolabeled_after_inspection/val.txt, 
+
 ]
 val: [/data/cityscapes/yolov7_det/val.txt] #500
 test: [/data/cityscapes/yolov7_det/val.txt] #500
