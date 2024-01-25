@@ -50,8 +50,12 @@ def detect(save_img=False):
     stride = int(model.stride.max())  # model stride
     #imgsz = check_img_size(imgsz, s=stride)  # check img_size
 
+    square_size = min(opt.img_size)
+
     if trace:
-        if len(opt.img_size)==2:
+        if opt.square:
+            model = TracedModel(model, device, tuple([square_size, square_size]))
+        elif len(opt.img_size)==2:
             model = TracedModel(model, device, tuple(opt.img_size))
         elif len(opt.img_size)==1:
             model = TracedModel(model, device, tuple([opt.img_size[0], opt.img_size[0]]))
@@ -91,10 +95,16 @@ def detect(save_img=False):
             seg_colors = [[random.randint(0, 255) for _ in range(3)] for _ in range(nm)]
 
     # Run inference
-    if device.type != 'cpu':
-        model(torch.zeros(1, 3, imgsz[0], imgsz[1]).to(device).type_as(next(model.parameters())))  # run once
-    old_img_w = imgsz[1]
-    old_img_h = imgsz[0]
+    if opt.square:
+        if device.type != 'cpu':
+            model(torch.zeros(1, 3, square_size, square_size).to(device).type_as(next(model.parameters())))  # run once
+        old_img_w = square_size
+        old_img_h = square_size
+    else:
+        if device.type != 'cpu':
+            model(torch.zeros(1, 3, imgsz[0], imgsz[1]).to(device).type_as(next(model.parameters())))  # run once
+        old_img_w = imgsz[1]
+        old_img_h = imgsz[0]
     old_img_b = 1
 
     jdict = []
@@ -105,6 +115,13 @@ def detect(save_img=False):
 
     t0 = time.time()
     for path, img, im0s, vid_cap in dataset:
+        if opt.square:
+            if img.shape[1] == square_size:
+                square_crop_margin = int((img.shape[2] - square_size) / 2)
+                img = img[:, :, square_crop_margin : square_crop_margin+square_size]
+            elif img.shape[2] == square_size:
+                square_crop_margin = int((img.shape[1] - square_size) / 2)
+                img = img[:, square_crop_margin : square_crop_margin+square_size, :]
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
@@ -148,6 +165,14 @@ def detect(save_img=False):
             else:
                 p, s, im0, frame = path, '', im0s, getattr(dataset, 'frame', 0)            
 
+            short_side = min(im0.shape[0], im0.shape[1])
+            if opt.square:
+                if im0.shape[0] == short_side:
+                    square_crop_margin = int((im0.shape[1] - short_side) / 2)
+                    im0 = im0[:, square_crop_margin : square_crop_margin+short_side, :]
+                elif im0.shape[1] == short_side:
+                    square_crop_margin = int((im0.shape[0] - short_side) / 2)
+                    im0 = im0[square_crop_margin : square_crop_margin+short_side, :, :]
             clean_im0 = im0.copy()
 
             if opt.frame_ratio <= 0:
@@ -273,10 +298,13 @@ def detect(save_img=False):
                             if vid_cap:  # video
                                 fps = vid_cap.get(cv2.CAP_PROP_FPS)
                                 w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                                h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                                h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))                                
                             else:  # stream
                                 fps, w, h = 30, im0.shape[1], im0.shape[0]
                                 save_path += '.mp4'
+                            if opt.square:
+                                w = min(w, h)
+                                h = min(w, h)
                             vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                         if opt.save_frame:
                             print(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0]))
@@ -336,6 +364,7 @@ if __name__ == '__main__':
     parser.add_argument('--seg', action='store_true', help='Segmentation-Training')
     parser.add_argument('--save-npy', action='store_true', help='save npy files')
     parser.add_argument('--valid-segment-labels', nargs='+', type=int, default=[], help='labels to include when calculating segmentation loss')
+    parser.add_argument('--square', action='store_true', help='do square cut for input')
     opt = parser.parse_args()
     print(opt)
     #check_requirements(exclude=('pycocotools', 'thop'))
