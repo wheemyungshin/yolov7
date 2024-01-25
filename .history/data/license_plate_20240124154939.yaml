@@ -9,7 +9,6 @@ train: [
 /data/data_license_plate/license_plate_waymo_data_yolo_v2_val/train.txt] # 588
 val: [/data/data_license_plate/license_plate_cityscapes_val/train.txt] # 500
 test: [/data/data_license_plate/license_plate_cityscapes_val/train.txt] # 500
-#total 30487
 
 # number of classes
 nc: 13
