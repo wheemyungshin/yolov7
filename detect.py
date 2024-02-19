@@ -160,20 +160,6 @@ def detect(save_img=False):
 
         # Process detections
         for i, det in enumerate(pred):  # detections per image
-            if opt.corner_strict :
-                corner_margin = 10
-                not_corner_idx = (det[:, 0] > corner_margin) * (det[:, 2] < img.shape[3] - corner_margin)
-                det1 = det[not_corner_idx]
-                det2 = []#det[torch.logical_not(not_corner_idx)*(det[:, 4] > (1+opt.conf_thres)/2)]
-                if len(det1) > 0 and len(det2) > 0:
-                    det = torch.cat((det1, det2), 0)
-                elif len(det1) > 0:
-                    det = det1
-                elif len(det2) > 0:
-                    det = det2
-                else:
-                    det = torch.from_numpy(np.array([]))
-                
             if webcam:  # batch_size >= 1
                 p, s, im0, frame = path[i], '%g: ' % i, im0s[i].copy(), dataset.count
             else:
@@ -379,7 +365,6 @@ if __name__ == '__main__':
     parser.add_argument('--save-npy', action='store_true', help='save npy files')
     parser.add_argument('--valid-segment-labels', nargs='+', type=int, default=[], help='labels to include when calculating segmentation loss')
     parser.add_argument('--square', action='store_true', help='do square cut for input')
-    parser.add_argument('--corner-strict', action='store_true', help='do strict filtering for boxes on corner')
     
     opt = parser.parse_args()
     print(opt)
