@@ -122,6 +122,12 @@ def test(data,
     seen = 0
     confusion_matrix = ConfusionMatrix(nc=nc)
     names = {k: v for k, v in enumerate(model.names if hasattr(model, 'names') else model.module.names)}
+    
+    print(opt.merge_label)
+    if len(opt.merge_label) > 0:
+        nc = len(opt.merge_label)
+        names = [str(n_num) for n_num in range(len(opt.merge_label))]
+        
     gt_colors = [[random.randint(0, 255), random.randint(0, 255), 255] for _ in names]
     pred_colors = [[255, random.randint(0, 255), random.randint(0, 255)] for _ in names]
     coco91class = coco80_to_coco91_class()
@@ -386,6 +392,8 @@ def test(data,
             tbox = xywh2xyxy(labels[:, 1:5])
             tbox = scale_coords(img.shape[2:], tbox, im0.shape)
             for label_idx, xyxy in enumerate(tbox):  # [[  cls,  x,  y,  w,  h], ... ]
+                print(label_idx)
+                print(int(labels[label_idx, 0]))
                 label = f'{names[int(labels[label_idx, 0])]}'
                 plot_one_box(xyxy, im0, label=label, color=gt_colors[int(cls)], line_thickness=1)
 

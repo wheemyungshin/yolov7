@@ -1,0 +1,21 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+/data/bdd100k/train.txt, #69863
+/data/bdd100k/val.txt, #10000
+]
+val: [
+/data/bdd100k/train.txt, #69863
+/data/bdd100k/val.txt, #10000
+]
+test: [
+/data/bdd100k/train.txt, #69863
+/data/bdd100k/val.txt, #10000
+]
+
+# number of classes
+nc: 7
+
+# class names
+names: ['person', 'person_from_ADAS', 'car', 'truck', 'bus', 'motorcycle', 'bicycle']
+
+valid_idx: [0, 6, 8, 9, 10, 12, 13]

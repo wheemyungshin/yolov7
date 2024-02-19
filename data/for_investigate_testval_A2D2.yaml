@@ -1,0 +1,18 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+/data/A2D2_det_with_seg/train.txt, # 11000
+]
+val: [
+/data/A2D2_det_with_seg/train.txt, # 11000
+]
+test: [
+/data/A2D2_det_with_seg/train.txt, # 11000
+]
+
+# number of classes
+nc: 7
+
+# class names
+names: ['person', 'person_from_ADAS', 'car', 'truck', 'bus', 'motorcycle', 'bicycle']
+
+valid_idx: [0, 6, 8, 9, 10, 12, 13]
