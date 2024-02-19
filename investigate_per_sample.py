@@ -15,10 +15,11 @@ from utils.general import coco80_to_coco91_class, check_dataset, check_file, che
     box_iou, non_max_suppression, scale_coords, xyxy2xywh, xywh2xyxy, set_logging, increment_path, colorstr, non_max_suppression_seg, \
     mask_iou, masks_iou, process_semantic_mask
 from utils.metrics import ap_per_class, ConfusionMatrix
-from utils.plots import plot_images, output_to_target, plot_study_txt
+from utils.plots import plot_images, output_to_target, plot_study_txt, plot_one_box
 from utils.torch_utils import select_device, time_synchronized, TracedModel
 from collections import defaultdict
 import cv2
+import random
 
 
 def test(data,
@@ -47,8 +48,7 @@ def test(data,
          person_only=False,
          opt_size_division=False,
          opt_seg=False,
-         valid_cls_idx=[],
-         merge_label=[]):
+         valid_cls_idx=[]):
     # Initialize/load model and set device
     training = model is not None
     if training:  # called by train.py
@@ -75,6 +75,16 @@ def test(data,
         print(imgsz)
         if trace:
             model = TracedModel(model, device, imgsz)
+    
+    os.makedirs('save_dir_per_map', exist_ok=True)
+    save_dir_per_map = os.path.join('save_dir_per_map', os.path.basename(data).split('.yaml')[0])
+    os.makedirs(save_dir_per_map, exist_ok=True)
+    hard_labels_f = open(os.path.join(save_dir_per_map, 'hard_samples.txt'), 'w') 
+    easy_labels_f = open(os.path.join(save_dir_per_map, 'easy_samples.txt'), 'w') 
+    if opt.save_vis:
+        os.makedirs(os.path.join(save_dir_per_map, 'vis_images'), exist_ok=True)
+        
+
 
     # Half
     half = device.type != 'cpu' and half_precision  # half precision only supported on CUDA
@@ -89,7 +99,7 @@ def test(data,
             data = yaml.load(f, Loader=yaml.SafeLoader)
     check_dataset(data)  # check
     nc = 1 if single_cls else int(data['nc'])  # number of classes
-    iouv = torch.linspace(0.5, 0.95, 10).to(device)  # iou vector for mAP@0.5:0.95
+    iouv = torch.linspace(0.3, 0.95, 14).to(device)  # iou vector for mAP@0.5:0.95
     niou = iouv.numel()
 
     # Logging
@@ -112,9 +122,11 @@ def test(data,
     seen = 0
     confusion_matrix = ConfusionMatrix(nc=nc)
     names = {k: v for k, v in enumerate(model.names if hasattr(model, 'names') else model.module.names)}
+    gt_colors = [[random.randint(0, 255), random.randint(0, 255), 255] for _ in names]
+    pred_colors = [[255, random.randint(0, 255), random.randint(0, 255)] for _ in names]
     coco91class = coco80_to_coco91_class()
-    s = ('%20s' + '%12s' * 6) % ('Class', 'Images', 'Labels', 'P', 'R', 'mAP@.5', 'mAP@.5:.95')
-    p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
+    s = ('%20s' + '%12s' * 6) % ('Class', 'Images', 'Labels', 'P', 'R', 'mAP@.3', 'mAP@.3:.95')
+    p, r, f1, mp, mr, map30, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
     loss = torch.zeros(3, device=device)
     jdict, ap, ap_class, wandb_images = [], [], [], []
     if opt_size_division:
@@ -122,13 +134,10 @@ def test(data,
     else:
         size_stats = None
     stats = []
-
-    if len(merge_label) > 0:
-        nc = len(merge_label)
-        names = [str(n_num) for n_num in range(len(merge_label))]
-
     miou = [[] for _ in range(nc)]
     for batch_i, (img, targets, paths, shapes, masks) in enumerate(tqdm(dataloader, desc=s)):
+        
+        stats_per_sample = []
         '''
         if len(valid_cls_idx) > 0:
             valid_target_idx = []
@@ -138,7 +147,7 @@ def test(data,
             targets = targets[valid_target_idx]
             masks = masks[valid_target_idx]
         '''
-
+        #im0 = img.clone().detach().numpy()
         img = img.to(device, non_blocking=True)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
@@ -347,8 +356,54 @@ def test(data,
                     size_stats[size_division_].append((correct_size_division_, conf_size_division_, class_size_division_,
                             [tcls[i] for i, is_size in enumerate(size_division==size_division_) if is_size]))
             
-            stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls))
+            if len(tcls) > 0:
+                stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls))
+                stats_per_sample.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls))
 
+        stats_per_sample = [np.concatenate(x, 0) for x in zip(*stats_per_sample)]  # to numpy
+        if len(stats_per_sample) and stats_per_sample[0].any():
+            p_s, r_s, ap_s, f1_s, ap_class_s = ap_per_class(*stats_per_sample, plot=False, v5_metric=False, save_dir=save_dir, names=names)
+            ap50_s, ap_s = ap_s[:, 0], ap_s.mean(1)  # AP@0.5, AP@0.5:0.95
+            mp_s, mr_s, map30_s, map_s = p_s.mean(), r_s.mean(), ap50_s.mean(), ap_s.mean()
+        else:
+            map30_s = 0
+        
+        relative_image_path = str(path.resolve()).replace('/data/', './')
+        print(relative_image_path, " : ", map30_s)
+
+        if map30_s < opt.hard_map_thres:
+            hard_labels_f.write(relative_image_path)
+            hard_labels_f.write('\n')
+        else:
+            easy_labels_f.write(relative_image_path)
+            easy_labels_f.write('\n')
+        
+        if opt.save_vis:
+            save_path_per_map = os.path.join(save_dir_per_map, 'vis_images', (5-len(str(int(round(map30_s,4)*10000))))*'0'+str(int(round(map30_s,4)*10000))+'_'+str(path.resolve()).split('/')[-1])    
+            im0 = cv2.imread(str(path.resolve()))
+            im0 = cv2.resize(im0, (width, height))
+
+            tbox = xywh2xyxy(labels[:, 1:5])
+            tbox = scale_coords(img.shape[2:], tbox, im0.shape)
+            for label_idx, xyxy in enumerate(tbox):  # [[  cls,  x,  y,  w,  h], ... ]
+                label = f'{names[int(labels[label_idx, 0])]}'
+                plot_one_box(xyxy, im0, label=label, color=gt_colors[int(cls)], line_thickness=1)
+
+            for si, det in enumerate(out):
+                #tbox = xywh2xyxy(labels[:, 1:5])
+                #scale_coords(img[si].shape[1:], tbox, shapes[si][0], shapes[si][1])  # native-space labels
+                #for label_idx, xyxy in enumerate(tbox):  # [[  cls,  x,  y,  w,  h], ... ]
+                #    label = f'{int(names[int(labels[label_idx, 0])])}'
+                #    plot_one_box(xyxy, im0, label=label, color=gt_colors[int(cls)], line_thickness=1)
+
+
+                scale_coords(img.shape[2:], det[:, :4], im0.shape)
+                for *xyxy, conf, cls in reversed(det[:, :6]):
+                    if conf > opt.conf_thres:
+                        label = f'{names[int(cls)]} {conf:.2f}'
+                        plot_one_box(xyxy, im0, label=label, color=pred_colors[int(cls)], line_thickness=1)
+            cv2.imwrite(save_path_per_map, im0)
+            
 
         # Plot images
         if plots and batch_i < 3:
@@ -361,39 +416,39 @@ def test(data,
     # Compute statistics
     if opt_size_division:
         for size_division_ in ['small', 'medium', 'large']:
-            print(size_division_+"          Class      Images      Labels           P           R      mAP@.5  mAP@.5:.95")
+            print(size_division_+"          Class      Images      Labels           P           R      mAP@.3  mAP@.3:.95")
             size_stats_ = size_stats[size_division_]
             size_stats_ = [np.concatenate(x, 0) for x in zip(*size_stats_)]  # to numpy
             if len(size_stats_) and size_stats_[0].any():
                 p, r, ap, f1, ap_class = ap_per_class(*size_stats_, plot=plots, v5_metric=v5_metric, save_dir=save_dir, names=names)
                 ap50, ap = ap[:, 0], ap.mean(1)  # AP@0.5, AP@0.5:0.95
-                mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
+                mp, mr, map30, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
                 nt = np.bincount(size_stats_[3].astype(np.int64), minlength=nc)  # number of targets per class
             else:
                 nt = torch.zeros(1)
 
             # Print results
             pf = '%20s' + '%12i' * 2 + '%12.3g' * 4  # print format
-            print(pf % ('all', seen, nt.sum(), mp, mr, map50, map))
+            print(pf % ('all', seen, nt.sum(), mp, mr, map30, map))
 
             # Print results per class
             if (verbose or (not training)) and nc > 1 and len(size_stats_):
                 for i, c in enumerate(ap_class):
                     print(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
-        print("all size       Class      Images      Labels           P           R      mAP@.5  mAP@.5:.95")
+        print("all size       Class      Images      Labels           P           R      mAP@.3  mAP@.3:.95")
 
     stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
     if len(stats) and stats[0].any():
         p, r, ap, f1, ap_class = ap_per_class(*stats, plot=plots, v5_metric=v5_metric, save_dir=save_dir, names=names)
         ap50, ap = ap[:, 0], ap.mean(1)  # AP@0.5, AP@0.5:0.95
-        mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
+        mp, mr, map30, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
         nt = np.bincount(stats[3].astype(np.int64), minlength=nc)  # number of targets per class
     else:
         nt = torch.zeros(1)
 
     # Print results
     pf = '%20s' + '%12i' * 2 + '%12.3g' * 4  # print format
-    print(pf % ('all', seen, nt.sum(), mp, mr, map50, map))
+    print(pf % ('all', seen, nt.sum(), mp, mr, map30, map))
 
     # Print results per class
     if (verbose or (not training)) and nc > 1 and len(stats):
@@ -435,9 +490,12 @@ def test(data,
             eval.evaluate()
             eval.accumulate()
             eval.summarize()
-            map, map50 = eval.stats[:2]  # update results (mAP@0.5:0.95, mAP@0.5)
+            map, map30 = eval.stats[:2]  # update results (mAP@0.5:0.95, mAP@0.5)
         except Exception as e:
             print(f'pycocotools unable to run: {e}')
+
+    hard_labels_f.close()
+    easy_labels_f.close()
 
     # Return results
     model.float()  # for training
@@ -452,7 +510,7 @@ def test(data,
         for c, iou in enumerate(miou):
             if len(iou) > 0:
                 print(names[c] , " : ", sum(iou)/len(iou))
-    return (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t
+    return (mp, mr, map30, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t
 
 
 if __name__ == '__main__':
@@ -471,6 +529,7 @@ if __name__ == '__main__':
     parser.add_argument('--save-txt', action='store_true', help='save results to *.txt')
     parser.add_argument('--save-hybrid', action='store_true', help='save label+prediction hybrid results to *.txt')
     parser.add_argument('--save-conf', action='store_true', help='save confidences in --save-txt labels')
+    parser.add_argument('--save-vis', action='store_true', help='save confidences in --save-txt labels')
     parser.add_argument('--save-json', action='store_true', help='save a cocoapi-compatible JSON results file')
     parser.add_argument('--project', default='runs/test', help='save to project/name')
     parser.add_argument('--name', default='exp', help='save to project/name')
@@ -483,6 +542,7 @@ if __name__ == '__main__':
     parser.add_argument('--seg', action='store_true', help='Segmentation-Training')
     parser.add_argument('--valid-cls-idx', nargs='+', type=int, default=[], help='labels to include when calculating mAP')
     parser.add_argument('--merge-label', type=int, nargs='+', action='append', default=[], help='list of merge label list chunk. --merge-label 0 1 --merge-label 2 3 4')
+    parser.add_argument('--hard-map-thres', type=float, default=0.5, help='samples with mAP under this value will be listed as hard samples')
     opt = parser.parse_args()
     opt.save_json |= opt.data.endswith('coco.yaml')
     opt.data = check_file(opt.data)  # check file
@@ -508,8 +568,7 @@ if __name__ == '__main__':
              person_only=opt.person_only,
              opt_size_division=opt.size_division,
              opt_seg=opt.seg,
-             valid_cls_idx=opt.valid_cls_idx,
-             merge_label=opt.merge_label
+             valid_cls_idx=opt.valid_cls_idx
              )
 
     elif opt.task == 'speed':  # speed benchmarks
