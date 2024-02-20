@@ -80,7 +80,6 @@ def detect(save_img=False):
 
     # Get names and colors
     names = model.module.names if hasattr(model, 'module') else model.names
-    names = ['drone']
     colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
     if opt.seg:
         if len(opt.valid_segment_labels) > 0:
@@ -236,12 +235,6 @@ def detect(save_img=False):
                             line = (cls, *xywh, conf) if opt.save_conf else (cls, *xywh)  # label format
                             with open(txt_path + '.txt', 'a') as f:
                                 f.write(('%g ' * len(line)).rstrip() % line + '\n')
-
-
-                        xyxy[0] = xyxy[0] - 3
-                        xyxy[1] = xyxy[1] - 3
-                        xyxy[2] = xyxy[2] + 3
-                        xyxy[3] = xyxy[3] + 3
 
                         if save_img or view_img:  # Add bbox to image
                             size = (xyxy[2]-xyxy[0])*(xyxy[3]-xyxy[1])

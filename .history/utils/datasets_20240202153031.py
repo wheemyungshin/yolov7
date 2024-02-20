@@ -2638,42 +2638,23 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     P[2, 0] = random.uniform(-perspective, perspective)  # x perspective (about y)
     P[2, 1] = random.uniform(-perspective, perspective)  # y perspective (about x)
 
+    min_label_size = 64
+
+    target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
+    np.min(target_sizes)
+    print((targets[:, 3] - targets[:, 1]))
+    print((targets[:, 4] - targets[:, 2]))
+    print(target_sizes)
+    print(np.min(target_sizes))
+
     # Rotation and Scale
     R = np.eye(3)
     a = random.uniform(-degrees, degrees)
     # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
-
-    '''
-    min_label_size_limit = 12
-
-    target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
-    min_label_size = np.min(target_sizes)
-        
-    if min_label_size < min_label_size_limit**2:
-        natural_min_scale = min_label_size_limit / min_label_size**0.5
-    else:
-        natural_min_scale = None
-    '''
-
-    #print((height, width))
-    #print("min_label_size_limit**2: ", min_label_size_limit**2)
-    #print("min_label_size: ", min_label_size)
-    #print("natural_min_scale: ", natural_min_scale)
-    
-    natural_min_scale = None
-
     if isinstance(scale, float):
-        if natural_min_scale is None:
-            s = random.uniform(1 - scale, 1.1 + scale)
-        else:
-            s = random.uniform(natural_min_scale, natural_min_scale + scale)
+        s = random.uniform(1 - scale, 1.1 + scale)
     else:
-        if natural_min_scale is None:
-            s = random.uniform(1 + scale[0], 1.1 + scale[1])
-        else:
-            s = random.uniform(natural_min_scale, natural_min_scale+0.1)
-    
-
+        s = random.uniform(1 + scale[0], 1.1 + scale[1])
     # s = 2 ** random.uniform(-scale, scale)
     R[:2] = cv2.getRotationMatrix2D(angle=a, center=(0, 0), scale=s)
 

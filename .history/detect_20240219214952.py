@@ -237,12 +237,6 @@ def detect(save_img=False):
                             with open(txt_path + '.txt', 'a') as f:
                                 f.write(('%g ' * len(line)).rstrip() % line + '\n')
 
-
-                        xyxy[0] = xyxy[0] - 3
-                        xyxy[1] = xyxy[1] - 3
-                        xyxy[2] = xyxy[2] + 3
-                        xyxy[3] = xyxy[3] + 3
-
                         if save_img or view_img:  # Add bbox to image
                             size = (xyxy[2]-xyxy[0])*(xyxy[3]-xyxy[1])
                             label = f'{names[int(cls)]} {conf:.2f} {size}'
