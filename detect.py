@@ -160,7 +160,6 @@ def detect(save_img=False):
 
         # Process detections
         for i, det in enumerate(pred):  # detections per image
-            print(det.shape)
             if webcam:  # batch_size >= 1
                 p, s, im0, frame = path[i], '%g: ' % i, im0s[i].copy(), dataset.count
             else:
@@ -366,6 +365,7 @@ if __name__ == '__main__':
     parser.add_argument('--save-npy', action='store_true', help='save npy files')
     parser.add_argument('--valid-segment-labels', nargs='+', type=int, default=[], help='labels to include when calculating segmentation loss')
     parser.add_argument('--square', action='store_true', help='do square cut for input')
+    
     opt = parser.parse_args()
     print(opt)
     #check_requirements(exclude=('pycocotools', 'thop'))
