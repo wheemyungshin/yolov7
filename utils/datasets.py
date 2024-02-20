@@ -29,7 +29,7 @@ from torchvision.utils import save_image
 from torchvision.ops import roi_pool, roi_align, ps_roi_pool, ps_roi_align
 
 from utils.general import check_requirements, xyxy2xywh, xywh2xyxy, xywhn2xyxy, xyn2xy, pose_xyn2xy, segment2box, segments2boxes, \
-    resample_segments, clean_str
+    resample_segments, clean_str, make_divisible
 from utils.torch_utils import torch_distributed_zero_first
 
 from collections import defaultdict
@@ -2591,7 +2591,11 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
     # Resize and pad image while meeting stride-multiple constraints
     shape = img.shape[:2]  # current shape [height, width]
     if isinstance(new_shape, int):
-        new_shape = (new_shape, new_shape)
+        if shape[0] < shape[1]:
+            new_shape = (new_shape * (shape[0]/shape[1]), new_shape)            
+        else:
+            new_shape = (new_shape, new_shape * (shape[1]/shape[0]))
+        new_shape = (make_divisible(new_shape[0], stride), make_divisible(new_shape[1], stride))
 
     # Scale ratio (new / old)
     r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
