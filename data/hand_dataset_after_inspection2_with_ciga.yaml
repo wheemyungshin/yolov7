@@ -2,16 +2,15 @@
 train: [
 /data/hand_dataset_after_inspection2/train.txt, # 37369
 /data/hand/train.txt, # 20667
-
 ] 
 
 val: [/data/hand/val.txt] # 2676
 test: [/data/hand/val.txt] # 2676
 
 # number of classes
-nc: 1
+nc: 2
 
 # class names
-names: ['hand']
+names: ['ciga', 'hand']
 
-valid_idx: [4]
+valid_idx: [2,4]

@@ -14,4 +14,4 @@ nc: 1
 # class names
 names: ['hand']
 
-valid_idx: [4]
+valid_idx: [0]

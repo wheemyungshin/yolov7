@@ -1,9 +1,11 @@
 # train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
 train: [
+<<<<<<< HEAD
+=======
 /data/coco_face_from_kpts_wholebody/train.txt, # 56673
 /data/coco_face_from_kpts_wholebody/val.txt, # 2355
 /data/MAFA_concat/train.txt, # 25876
-
+>>>>>>> d060c6aa75bb6ada51fec01597dbdf07b911178c
 /data/smoke_data_BFC/train.txt, # 34493
 /data/valid_ciga_data_cbf_for_training/tang.txt, # 3423
 /data/valid_ciga_data_cbf_for_training/ncap.txt, # 967

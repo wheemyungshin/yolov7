@@ -98,7 +98,7 @@ class ORT_NMS(torch.autograd.Function):
         batch = scores.shape[0]
         num_det = random.randint(0, 100)
         batches = torch.randint(0, batch, (num_det,)).sort()[0].to(device)
-        idxs = torch.arange(0, 0 + num_det).to(device)
+        idxs = torch.arange(100, 100 + num_det).to(device)
         zeros = torch.zeros((num_det,), dtype=torch.int64).to(device)
         selected_indices = torch.cat([batches[None], zeros[None], idxs[None]], 0).T.contiguous()
         selected_indices = selected_indices.to(torch.int64)
@@ -196,6 +196,7 @@ class ONNX_ORT(nn.Module):
         selected_categories = category_id[X, Y, :].float()
         selected_scores = max_score[X, Y, :]
         X = X.unsqueeze(1).float()
+        print(torch.cat([X, selected_boxes, selected_categories, selected_scores], 1).shape)
         return torch.cat([X, selected_boxes, selected_categories, selected_scores], 1)
 
 
