@@ -379,30 +379,31 @@ def test(data,
             easy_labels_f.write('\n')
         
         if opt.save_vis:
-            save_path_per_map = os.path.join(save_dir_per_map, 'vis_images', (5-len(str(int(round(map30_s,4)*10000))))*'0'+str(int(round(map30_s,4)*10000))+'_'+str(path.resolve()).split('/')[-1])    
-            im0 = cv2.imread(str(path.resolve()))
-            im0 = cv2.resize(im0, (width, height))
+            if random.random() < 0.1:
+                save_path_per_map = os.path.join(save_dir_per_map, 'vis_images', (5-len(str(int(round(map30_s,4)*10000))))*'0'+str(int(round(map30_s,4)*10000))+'_'+str(path.resolve()).split('/')[-1])    
+                im0 = cv2.imread(str(path.resolve()))
+                im0 = cv2.resize(im0, (width, height))
 
-            tbox = xywh2xyxy(labels[:, 1:5])
-            tbox = scale_coords(img.shape[2:], tbox, im0.shape)
-            for label_idx, xyxy in enumerate(tbox):  # [[  cls,  x,  y,  w,  h], ... ]
-                label = f'{names[int(labels[label_idx, 0])]}'
-                plot_one_box(xyxy, im0, label=label, color=gt_colors[int(cls)], line_thickness=1)
+                tbox = xywh2xyxy(labels[:, 1:5])
+                tbox = scale_coords(img.shape[2:], tbox, im0.shape)
+                for label_idx, xyxy in enumerate(tbox):  # [[  cls,  x,  y,  w,  h], ... ]
+                    label = f'{names[int(labels[label_idx, 0])]}'
+                    plot_one_box(xyxy, im0, label=label, color=gt_colors[int(cls)], line_thickness=1)
 
-            for si, det in enumerate(out):
-                #tbox = xywh2xyxy(labels[:, 1:5])
-                #scale_coords(img[si].shape[1:], tbox, shapes[si][0], shapes[si][1])  # native-space labels
-                #for label_idx, xyxy in enumerate(tbox):  # [[  cls,  x,  y,  w,  h], ... ]
-                #    label = f'{int(names[int(labels[label_idx, 0])])}'
-                #    plot_one_box(xyxy, im0, label=label, color=gt_colors[int(cls)], line_thickness=1)
+                for si, det in enumerate(out):
+                    #tbox = xywh2xyxy(labels[:, 1:5])
+                    #scale_coords(img[si].shape[1:], tbox, shapes[si][0], shapes[si][1])  # native-space labels
+                    #for label_idx, xyxy in enumerate(tbox):  # [[  cls,  x,  y,  w,  h], ... ]
+                    #    label = f'{int(names[int(labels[label_idx, 0])])}'
+                    #    plot_one_box(xyxy, im0, label=label, color=gt_colors[int(cls)], line_thickness=1)
 
 
-                scale_coords(img.shape[2:], det[:, :4], im0.shape)
-                for *xyxy, conf, cls in reversed(det[:, :6]):
-                    if conf > opt.conf_thres:
-                        label = f'{names[int(cls)]} {conf:.2f}'
-                        plot_one_box(xyxy, im0, label=label, color=pred_colors[int(cls)], line_thickness=1)
-            cv2.imwrite(save_path_per_map, im0)
+                    scale_coords(img.shape[2:], det[:, :4], im0.shape)
+                    for *xyxy, conf, cls in reversed(det[:, :6]):
+                        if conf > opt.conf_thres:
+                            label = f'{names[int(cls)]} {conf:.2f}'
+                            plot_one_box(xyxy, im0, label=label, color=pred_colors[int(cls)], line_thickness=1)
+                cv2.imwrite(save_path_per_map, im0)
             
 
         # Plot images
