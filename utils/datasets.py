@@ -2595,7 +2595,7 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
             new_shape = (new_shape * (shape[0]/shape[1]), new_shape)            
         else:
             new_shape = (new_shape, new_shape * (shape[1]/shape[0]))
-        new_shape = (make_divisible(new_shape[0], stride), make_divisible(new_shape[1], stride))
+        new_shape = (max(make_divisible(new_shape[0], stride), stride), max(make_divisible(new_shape[1], stride), stride))
 
     # Scale ratio (new / old)
     r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
