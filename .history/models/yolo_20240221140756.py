@@ -1093,6 +1093,7 @@ class Model(nn.Module):
             elif isinstance(m, (IDetect, IAuxDetect)) and not isinstance(m, ISegment):
                 m.fuse()
                 m.forward = m.fuseforward
+            '''
             elif type(m) is Shuffle_Block:
                 if hasattr(m, 'branch1'):
                     re_branch1 = nn.Sequential(
@@ -1129,6 +1130,7 @@ class Model(nn.Module):
                     # pdb.set_trace()
                     m.branch2 = re_branch2
                     # print(m.branch2)
+            '''
         self.info()
         return self
 
@@ -1346,6 +1348,11 @@ def parse_model(d, ch, nm):  # model_dict, input_channels(3)
                      ST2CSPA, ST2CSPB, ST2CSPC]:
                 args.insert(2, n)  # number of repeats
                 n = 1
+        elif m in [Shuffle_Like_Block, Shuffle_Block, DWConvblock, StemBlock, InvertedResidualBlock]:
+            c1, c2 = ch[f], args[0]
+            if c2 != no:  # if not output
+                c2 = make_divisible(c2 * gw, 8)
+            args = [c1, c2, *args[1:]]
         elif m is nn.BatchNorm2d:
             args = [ch[f]]
         elif m is Concat:

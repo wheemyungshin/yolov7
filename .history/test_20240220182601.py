@@ -47,7 +47,8 @@ def test(data,
          person_only=False,
          opt_size_division=False,
          opt_seg=False,
-         valid_cls_idx=[]):
+         valid_cls_idx=[],
+         merge_label=[]):
     # Initialize/load model and set device
     training = model is not None
     if training:  # called by train.py
@@ -64,16 +65,14 @@ def test(data,
         # Load model
         model = attempt_load(weights, map_location=device)  # load FP32 model
         gs = max(int(model.stride.max()), 32)  # grid size (max stride)
-        imgsz = check_img_size(imgsz, s=gs)  # check img_size
-        if isinstance(imgsz, list):
+        if len(imgsz) == 2:
             imgsz = [check_img_size(x, gs) for x in imgsz]  # verify imgsz are gs-multiples
             imgsz = tuple(imgsz)
-            imgsz_test = max(imgsz[0], imgsz[1])
         else:
-            imgsz = check_img_size(imgsz, gs)  # verify imgsz are gs-multiples
-            imgsz = (imgsz, imgsz)
-            imgsz_test = imgsz
+            imgsz = check_img_size(imgsz[0], gs)  # verify imgsz are gs-multiples
+            imgsz = tuple([imgsz, imgsz])
         
+        print(imgsz)
         if trace:
             model = TracedModel(model, device, imgsz)
 
@@ -100,18 +99,13 @@ def test(data,
     # Dataloader
     if not training:
         if device.type != 'cpu':
-            model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))  # run once
+            model(torch.zeros(1, 3, imgsz[0], imgsz[1]).to(device).type_as(next(model.parameters())))  # run once
         task = opt.task if opt.task in ('train', 'val', 'test') else 'val'  # path to train/val/test images
         
         valid_idx = data.get('valid_idx', None)
-
-        if opt_seg:
-            pad_ratio = 0.0
-        else:
-            pad_ratio = 0.5
         
-        dataloader = create_dataloader(data[task], (imgsz, imgsz), batch_size, gs, opt, pad=pad_ratio, rect=True,
-                                       prefix=colorstr(f'{task}: '), valid_idx=valid_idx, load_seg=opt_seg, ratio_maintain=False)[0]
+        dataloader = create_dataloader(data[task], imgsz, batch_size, gs, opt, rect=False,
+                                       prefix=colorstr(f'{task}: '), valid_idx=valid_idx, load_seg=opt_seg, ratio_maintain=True)[0]
     if v5_metric:
         print("Testing with YOLOv5 AP metric...")
     
@@ -128,6 +122,10 @@ def test(data,
     else:
         size_stats = None
     stats = []
+
+    if len(merge_label) > 0:
+        nc = len(merge_label)
+        names = [str(n_num) for n_num in range(len(merge_label))]
 
     miou = [[] for _ in range(nc)]
     for batch_i, (img, targets, paths, shapes, masks) in enumerate(tqdm(dataloader, desc=s)):
@@ -186,9 +184,9 @@ def test(data,
 
             size_division = []
             for label in labels:
-                if label[3]*label[4] < 32*32:
+                if label[3]*label[4] < 16*16:
                     size_division_ = 'small'
-                elif 32*32 <= label[3]*label[4] < 96*96:
+                elif 16*16 <= label[3]*label[4] < 32*32:
                     size_division_ = 'medium'
                 else:
                     size_division_ = 'large'
@@ -252,7 +250,7 @@ def test(data,
                 if nl:
                     if opt_size_division:
                         for size_division_ in ['small', 'medium', 'large']:
-                            size_stats[size_division_].append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls[size_division==size_division_]))
+                            size_stats[size_division_].append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), np.array(tcls)[size_division==size_division_]))
                     stats.append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls))
                 continue
             
@@ -403,7 +401,7 @@ def test(data,
             print(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
 
     # Print speeds
-    t = tuple(x / seen * 1E3 for x in (t0, t1, t0 + t1)) + (imgsz, imgsz, batch_size)  # tuple
+    t = tuple(x / seen * 1E3 for x in (t0, t1, t0 + t1)) + (imgsz[0], imgsz[1], batch_size)  # tuple
     if not training:
         print('Speed: %.1f/%.1f/%.1f ms inference/NMS/total per %gx%g image at batch-size %g' % t)
 
@@ -484,6 +482,7 @@ if __name__ == '__main__':
     parser.add_argument('--size-division', action='store_true', help='show mAP for small, medium and large objects, respectively')
     parser.add_argument('--seg', action='store_true', help='Segmentation-Training')
     parser.add_argument('--valid-cls-idx', nargs='+', type=int, default=[], help='labels to include when calculating mAP')
+    parser.add_argument('--merge-label', type=int, nargs='+', action='append', default=[], help='list of merge label list chunk. --merge-label 0 1 --merge-label 2 3 4')
     opt = parser.parse_args()
     opt.save_json |= opt.data.endswith('coco.yaml')
     opt.data = check_file(opt.data)  # check file
@@ -509,7 +508,8 @@ if __name__ == '__main__':
              person_only=opt.person_only,
              opt_size_division=opt.size_division,
              opt_seg=opt.seg,
-             valid_cls_idx=opt.valid_cls_idx
+             valid_cls_idx=opt.valid_cls_idx,
+             merge_label=opt.merge_label
              )
 
     elif opt.task == 'speed':  # speed benchmarks

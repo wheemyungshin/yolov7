@@ -184,9 +184,9 @@ def test(data,
 
             size_division = []
             for label in labels:
-                if label[3]*label[4] < 32*32:
+                if label[3]*label[4] < 16*16:
                     size_division_ = 'small'
-                elif 32*32 <= label[3]*label[4] < 96*96:
+                elif 16*16 <= label[3]*label[4] < 32*32:
                     size_division_ = 'medium'
                 else:
                     size_division_ = 'large'
@@ -250,7 +250,7 @@ def test(data,
                 if nl:
                     if opt_size_division:
                         for size_division_ in ['small', 'medium', 'large']:
-                            size_stats[size_division_].append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls[size_division==size_division_]))
+                            size_stats[size_division_].append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), np.array(tcls)[size_division==size_division_]))
                     stats.append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls))
                 continue
             

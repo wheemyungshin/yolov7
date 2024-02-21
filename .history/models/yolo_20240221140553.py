@@ -1093,7 +1093,6 @@ class Model(nn.Module):
             elif isinstance(m, (IDetect, IAuxDetect)) and not isinstance(m, ISegment):
                 m.fuse()
                 m.forward = m.fuseforward
-            '''
             elif type(m) is Shuffle_Block:
                 if hasattr(m, 'branch1'):
                     re_branch1 = nn.Sequential(
@@ -1130,7 +1129,6 @@ class Model(nn.Module):
                     # pdb.set_trace()
                     m.branch2 = re_branch2
                     # print(m.branch2)
-            '''
         self.info()
         return self
 
