@@ -2647,35 +2647,48 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     a = random.uniform(-degrees, degrees)
     # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
 
-    '''
-    min_label_size_limit = 12
-
+    min_label_size_limit = 8
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
-    min_label_size = np.min(target_sizes)
-        
-    if min_label_size < min_label_size_limit**2:
+    min_label_size = np.min(target_sizes)        
+    if 0 < min_label_size < min_label_size_limit**2:
         natural_min_scale = min_label_size_limit / min_label_size**0.5
     else:
         natural_min_scale = None
-    '''
-
-    #print((height, width))
-    #print("min_label_size_limit**2: ", min_label_size_limit**2)
-    #print("min_label_size: ", min_label_size)
-    #print("natural_min_scale: ", natural_min_scale)
-    
-    natural_min_scale = None
+    max_label_size_limit = 64
+    target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
+    max_label_size = np.max(target_sizes)        
+    if max_label_size_limit**2 < max_label_size:
+        natural_max_scale = max_label_size_limit / max_label_size**0.5
+    else:
+        natural_max_scale = None
+    if natural_min_scale is not None and natural_max_scale is not None:
+        if natural_min_scale > natural_max_scale :
+            temp_val = natural_max_scale
+            natural_max_scale = natural_min_scale
+            natural_min_scale = temp_val
+        
+    #natural_min_scale = None
+    #natural_max_scale = None
 
     if isinstance(scale, float):
-        if natural_min_scale is None:
+        if natural_min_scale is None and natural_max_scale is None:
             s = random.uniform(1 - scale, 1.1 + scale)
-        else:
+        elif natural_max_scale is None:
             s = random.uniform(natural_min_scale, natural_min_scale + scale)
-    else:
-        if natural_min_scale is None:
-            s = random.uniform(1 + scale[0], 1.1 + scale[1])
+        elif natural_min_scale is None:
+            s = random.uniform(natural_max_scale - scale, natural_max_scale)
         else:
-            s = random.uniform(natural_min_scale, natural_min_scale+0.1)
+            s = random.uniform(natural_min_scale, natural_max_scale)
+
+    else:
+        if natural_min_scale is None and natural_max_scale is None:
+            s = random.uniform(1 + scale[0], 1.1 + scale[1])
+        elif natural_max_scale is None:
+            s = random.uniform(natural_min_scale, natural_min_scale + 0.1)
+        elif natural_min_scale is None:
+            s = random.uniform(natural_max_scale - 0.1, natural_max_scale)
+        else:
+            s = random.uniform(natural_min_scale, natural_max_scale)
     
 
     # s = 2 ** random.uniform(-scale, scale)
@@ -2741,7 +2754,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             new[:, [1, 3]] = new[:, [1, 3]].clip(0, height)
             
         # filter candidates
-        i = box_candidates(box1=targets[:, 1:5].T * s, box2=new.T, area_thr=0.2)# 0.01 if use_segments else 0.10)
+        i = box_candidates(box1=targets[:, 1:5].T * s, box2=new.T, area_thr=0.3)# 0.01 if use_segments else 0.10)
         targets = targets[i]
         targets[:, 1:5] = new[i]
 
