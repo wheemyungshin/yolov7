@@ -147,7 +147,12 @@ def detect(save_img=False):
             pred, out = model(img, augment=opt.augment)
             proto = out[1]
         else:
-            pred = model(img, augment=opt.augment)[0]
+            pred, out = model(img, augment=opt.augment)
+            if opt.objcam:
+                obj1 = (out[0][0, :, :, :, 4]).sigmoid().cpu().numpy()*255/3
+                obj2 = (out[1][0, :, :, :, 4]).sigmoid().cpu().numpy()*255/3
+                obj3 = (out[2][0, :, :, :, 4]).sigmoid().cpu().numpy()*255/3
+
         t2 = time_synchronized()
 
         pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
@@ -157,7 +162,7 @@ def detect(save_img=False):
         # Apply Classifier
         if classify:
             pred = apply_classifier(pred, modelc, img, im0s)
-
+            
         # Process detections
         for i, det in enumerate(pred):  # detections per image
             if webcam:  # batch_size >= 1
@@ -174,6 +179,16 @@ def detect(save_img=False):
                     square_crop_margin = int((im0.shape[0] - short_side) / 2)
                     im0 = im0[square_crop_margin : square_crop_margin+short_side, :, :]
             clean_im0 = im0.copy()
+
+            if opt.objcam:
+                alpha = 0.4
+                view_cam = im0.copy()
+                obj1 = cv2.resize(np.transpose(obj1, (1,2,0)).astype(np.uint8), (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
+                obj2 = cv2.resize(np.transpose(obj2, (1,2,0)).astype(np.uint8), (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
+                obj3 = cv2.resize(np.transpose(obj3, (1,2,0)).astype(np.uint8), (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
+                
+                view_cam = obj1 + obj2 + obj3
+                im0 = cv2.addWeighted(im0, alpha, view_cam, 1 - alpha, 0)
 
             if opt.frame_ratio <= 0:
                 frame_ratio = fps
@@ -198,7 +213,7 @@ def detect(save_img=False):
                     # Print results
                     for c in det[:, 5].unique():
                         n = (det[:, 5] == c).sum()  # detections per class
-                        s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
+                        s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string                        
                                             
                     # Mask plotting ----------------------------------------------------------------------------------------
                     if opt.seg:
@@ -365,6 +380,8 @@ if __name__ == '__main__':
     parser.add_argument('--save-npy', action='store_true', help='save npy files')
     parser.add_argument('--valid-segment-labels', nargs='+', type=int, default=[], help='labels to include when calculating segmentation loss')
     parser.add_argument('--square', action='store_true', help='do square cut for input')
+    parser.add_argument('--objcam', action='store_true', help='visualize extracted objectness scores.')
+    
     
     opt = parser.parse_args()
     print(opt)
