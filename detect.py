@@ -251,6 +251,12 @@ def detect(save_img=False):
                             with open(txt_path + '.txt', 'a') as f:
                                 f.write(('%g ' * len(line)).rstrip() % line + '\n')
 
+
+                        xyxy[0] = xyxy[0] - 3
+                        xyxy[1] = xyxy[1] - 3
+                        xyxy[2] = xyxy[2] + 3
+                        xyxy[3] = xyxy[3] + 3
+
                         if save_img or view_img:  # Add bbox to image
                             size = (xyxy[2]-xyxy[0])*(xyxy[3]-xyxy[1])
                             label = f'{names[int(cls)]} {conf:.2f} {size}'
@@ -380,9 +386,12 @@ if __name__ == '__main__':
     parser.add_argument('--save-npy', action='store_true', help='save npy files')
     parser.add_argument('--valid-segment-labels', nargs='+', type=int, default=[], help='labels to include when calculating segmentation loss')
     parser.add_argument('--square', action='store_true', help='do square cut for input')
+<<<<<<< HEAD
     parser.add_argument('--objcam', action='store_true', help='visualize extracted objectness scores.')
     
     
+=======
+>>>>>>> acaf19ac9ad0d8c3c172676b79209946175825a7
     opt = parser.parse_args()
     print(opt)
     #check_requirements(exclude=('pycocotools', 'thop'))

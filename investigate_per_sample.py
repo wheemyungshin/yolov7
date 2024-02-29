@@ -68,13 +68,14 @@ def test(data,
         if len(imgsz) == 2:
             imgsz = [check_img_size(x, gs) for x in imgsz]  # verify imgsz are gs-multiples
             imgsz = tuple(imgsz)
+            imgsz_tuple = imgsz
         else:
             imgsz = check_img_size(imgsz[0], gs)  # verify imgsz are gs-multiples
-            imgsz = tuple([imgsz, imgsz])
+            imgsz_tuple = tuple([imgsz, imgsz])
         
-        print(imgsz)
+        print("imgsz :", imgsz)
         if trace:
-            model = TracedModel(model, device, imgsz)
+            model = TracedModel(model, device, imgsz_tuple)
     
     os.makedirs('save_dir_per_map', exist_ok=True)
     save_dir_per_map = os.path.join('save_dir_per_map', os.path.basename(data).split('.yaml')[0])
@@ -109,7 +110,7 @@ def test(data,
     # Dataloader
     if not training:
         if device.type != 'cpu':
-            model(torch.zeros(1, 3, imgsz[0], imgsz[1]).to(device).type_as(next(model.parameters())))  # run once
+            model(torch.zeros(1, 3, imgsz_tuple[0], imgsz_tuple[1]).to(device).type_as(next(model.parameters())))  # run once
         task = opt.task if opt.task in ('train', 'val', 'test') else 'val'  # path to train/val/test images
         
         valid_idx = data.get('valid_idx', None)
@@ -153,7 +154,7 @@ def test(data,
             targets = targets[valid_target_idx]
             masks = masks[valid_target_idx]
         '''
-        #im0 = img.clone().detach().numpy()
+        im0 = np.ascontiguousarray(np.transpose(img.clone().detach().numpy()[0], (1, 2, 0))[:,:,::-1], dtype=np.uint8)
         img = img.to(device, non_blocking=True)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
@@ -393,8 +394,9 @@ def test(data,
         if opt.save_vis:
             if random.random() < 0.1:
                 save_path_per_map = os.path.join(save_dir_per_map, 'vis_images', (5-len(str(int(round(map30_s,4)*10000))))*'0'+str(int(round(map30_s,4)*10000))+'_'+str(path.resolve()).split('/')[-1])    
-                im0 = cv2.imread(str(path.resolve()))
-                im0 = cv2.resize(im0, (width, height))
+                #im0 = cv2.imread(str(path.resolve()))
+                #im0 = cv2.resize(im0, (width, height))
+                print(im0.shape)
 
                 tbox = xywh2xyxy(labels[:, 1:5])
                 tbox = scale_coords(img.shape[2:], tbox, im0.shape)
@@ -469,7 +471,7 @@ def test(data,
             print(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
 
     # Print speeds
-    t = tuple(x / seen * 1E3 for x in (t0, t1, t0 + t1)) + (imgsz[0], imgsz[1], batch_size)  # tuple
+    t = tuple(x / seen * 1E3 for x in (t0, t1, t0 + t1)) + (imgsz_tuple[0], imgsz_tuple[1], batch_size)  # tuple
     if not training:
         print('Speed: %.1f/%.1f/%.1f ms inference/NMS/total per %gx%g image at batch-size %g' % t)
 
