@@ -160,6 +160,12 @@ if __name__ == '__main__':
                 'output': {0: 'batch'},
             }
         dynamic_axes.update(output_axes)
+    elif opt.end2end and opt.max_wh is not None:
+        opt.batch_size = 'batch'
+        dynamic_axes = {
+            'output': {0: 'batch'},
+        }
+
     if opt.grid:
         if opt.end2end:
             print('\nStarting export end2end onnx model for %s...' % 'TensorRT' if opt.max_wh is None else 'onnxruntime')

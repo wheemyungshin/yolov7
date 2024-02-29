@@ -1,0 +1,15 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+/data/all_body_fine_bigger_not_too_big_no_ADAS_hard_samples.txt, # 92303
+/data/bdd100k_hard_samples.txt, # 36868
+]
+val: [/data/wider_face_updated/val.txt]
+test: [/data/wider_face_updated/val.txt]
+
+# number of classes
+nc: 6
+
+# class names
+names: ['person', 'person_from_ADAS', 'rider', 'car', 'truck', 'bus']
+
+valid_idx: [0, 6, 7, 8, 9, 10]
