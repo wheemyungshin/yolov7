@@ -7,7 +7,7 @@ val: [
 ]
 test: [
 /data/all_body_fine_bigger_not_too_big.txt, # 92303
-]
+] # 59765 / 41543
 
 # number of classes
 nc: 1
