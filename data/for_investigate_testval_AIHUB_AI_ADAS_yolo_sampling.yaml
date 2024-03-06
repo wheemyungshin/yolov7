@@ -6,13 +6,13 @@ val: [
 /data/AIHUB_AI_ADAS_yolo_sampling/train.txt, # 10433
 ]
 test: [
-/data/AIHUB_AI_ADAS_yolo_sampling/train.txt, # 10433
-]
+/data/AIHUB_AI_ADAS_yolo_sampling/train.txt, # 10433 / 994
+] # 5425 / 5008
 
 # number of classes
-nc: 7
+nc: 6
 
 # class names
-names: ['person', 'person_from_ADAS', 'car', 'truck', 'bus', 'motorcycle', 'bicycle']
+names: ['person', 'car', 'truck', 'bus', 'motorcycle', 'bicycle']
 
-valid_idx: [0, 6, 8, 9, 10, 12, 13]
+valid_idx: [6, 8, 9, 10, 12, 13]

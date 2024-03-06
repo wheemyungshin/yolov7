@@ -174,6 +174,7 @@ def test(data,
 
             # Run NMS
             targets[:, 2:] *= torch.Tensor([width, height, width, height]).to(device)  # to pixels
+            
             lb = [targets[targets[:, 0] == i, 1:] for i in range(nb)] if save_hybrid else []  # for autolabelling
             t = time_synchronized()
             #if opt_seg:
@@ -191,8 +192,13 @@ def test(data,
             if not compute_loss and opt_seg:
                 #masks = process_mask(proto[i], det[:, 6:], det[:, :4], img.shape[2:], upsample=True)
                 seg_pred = process_semantic_mask(proto[si], pred[:, 6:], pred[:, :6], img.shape[2:], upsample=True)
-            labels = targets[targets[:, 0] == si, 1:]            
+            labels = targets[targets[:, 0] == si, 1:]
             #print(labels) # [[  cls,  x,  y,  w,  h], ... ]
+
+            
+            #labels = labels[(labels[:, 3] > opt.gt_min_size_thres)*(labels[:, 4] > opt.gt_min_size_thres)]
+            labels = labels[(labels[:, 3] > (opt.gt_min_size_thres)/2)*(labels[:, 4] > opt.gt_min_size_thres)]
+
             nl = len(labels)
             tcls = labels[:, 0].tolist() if nl else []  # target class
             path = Path(paths[si])
@@ -469,15 +475,6 @@ def test(data,
     if not training:
         print('Speed: %.1f/%.1f/%.1f ms inference/NMS/total per %gx%g image at batch-size %g' % t)
 
-    # Plots
-    if plots:
-        confusion_matrix.plot(save_dir=save_dir, names=list(names.values()))
-        if wandb_logger and wandb_logger.wandb:
-            val_batches = [wandb_logger.wandb.Image(str(f), caption=f.name) for f in sorted(save_dir.glob('test*.jpg'))]
-            wandb_logger.log({"Validation": val_batches})
-    if wandb_images:
-        wandb_logger.log({"Bounding Box Debugger/Images": wandb_images})
-
     # Save JSON
     if save_json and len(jdict):
         w = Path(weights[0] if isinstance(weights, list) else weights).stem if weights is not None else ''  # weights
@@ -552,6 +549,7 @@ if __name__ == '__main__':
     parser.add_argument('--valid-cls-idx', nargs='+', type=int, default=[], help='labels to include when calculating mAP')
     parser.add_argument('--merge-label', type=int, nargs='+', action='append', default=[], help='list of merge label list chunk. --merge-label 0 1 --merge-label 2 3 4')
     parser.add_argument('--hard-map-thres', type=float, default=0.5, help='samples with mAP under this value will be listed as hard samples')
+    parser.add_argument('--gt-min-size-thres', type=int, default=0, help='GT boxes under this value will be ignored')
     opt = parser.parse_args()
     opt.save_json |= opt.data.endswith('coco.yaml')
     opt.data = check_file(opt.data)  # check file
