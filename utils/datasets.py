@@ -694,17 +694,19 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         #recursive 하게 동작함. 출발 라벨과 도착 라벨이 겹치는 경우 주의!
         print(merge_label)
-        total_merge_label_num = 0
-        for merge_label_chunk in merge_label:
-            total_merge_label_num+=len(merge_label_chunk)
         
         if len(merge_label) > 0:
             for x in self.labels:
                 for merge_label_idx, merge_label_chunk in enumerate(merge_label):
-                    x[np.isin(x[:, 0], np.array(merge_label_chunk)), 0] = merge_label_idx - total_merge_label_num
-            
+                    x[np.isin(x[:, 0], np.array(merge_label_chunk)), 0] = merge_label_idx - 100
+
+            labels_new = []
             for x in self.labels:
-                x[:, 0] += total_merge_label_num
+                labels_new.append(x[x[:, 0] < 0])
+            self.labels = labels_new
+
+            for x in self.labels:
+                x[:, 0] += 100
 
         if single_cls:
             for x in self.labels:

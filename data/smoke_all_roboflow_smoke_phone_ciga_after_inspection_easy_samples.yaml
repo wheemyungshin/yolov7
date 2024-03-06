@@ -1,0 +1,16 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+/data/smoke_all_roboflow_smoke_Ciga_only_after_inspection_valset_easy_samples.txt, # 28818
+/data/smoke_all_roboflow_phone_Cellphone_after_inspection_map50easy_samples.txt # 16631
+] 
+
+val: [/data/valid_ciga_data_cbf_for_training/ncap.txt] # 967
+test: [/data/valid_ciga_data_cbf_for_training/ncap.txt] # 967
+
+# number of classes
+nc: 3
+
+# class names
+names: ['face', 'smoke', 'cellphone']
+
+valid_idx: [1, 2, 3]

@@ -52,39 +52,6 @@ class ReOrg(nn.Module):
     def forward(self, x):  # x(b,c,w,h) -> y(b,4c,w/2,h/2)
         return torch.cat([x[..., ::2, ::2], x[..., 1::2, ::2], x[..., ::2, 1::2], x[..., 1::2, 1::2]], 1)
 
-class Merge(nn.Module):
-    def __init__(self,ch=()):
-        super(Merge, self).__init__()
-    def forward(self, x):
-        
-        return [x[0],x[1],x[2]]
-class Refine(nn.Module):
-    def __init__(self, c2, k, s, ch):  # ch_in, ch_out, kernel, stride, padding, groups
-        super(Refine, self).__init__()
-        self.refine = nn.ModuleList()
-        for c in ch:
-            self.refine.append(Conv(c, c2, k, s))
-    def forward(self, x):
-        for i, f in enumerate(x):
-            if i == 0:
-                r = self.refine[i](f)
-            else:
-                r_p = self.refine[i](f)
-                r_p = F.interpolate(r_p, r.size()[2:], mode="bilinear", align_corners=False)
-                r = r + r_p
-        return r
-class Proto(nn.Module):
-    # YOLOv5 mask Proto module for segmentation models
-    def __init__(self, c1, c_=256, c2=32):  # ch_in, number of protos, number of masks
-        super().__init__()
-        self.cv1 = Conv(c1, c_, k=3)
-        #self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
-        self.cv2 = Conv(c_, c_, k=3)
-        self.cv3 = Conv(c_, c2)
-
-    def forward(self, x):
-        return self.cv3(self.cv2(self.cv1(x)))
-        #return self.cv3(self.cv2(self.upsample(self.cv1(x))))
 
 class Concat(nn.Module):
     def __init__(self, dimension=1):
@@ -286,32 +253,6 @@ class Ghost(nn.Module):
 
     def forward(self, x):
         return self.conv(x) + self.shortcut(x)
-
-class Hswish(nn.Module):
-    def __init__(self, inplace=True):
-        super(Hswish, self).__init__()
-        self.relu = nn.ReLU6(inplace=inplace)
-
-    def forward(self, x):
-        return self.relu(x + 3) / 6
-
-
-class SELayer(nn.Module):
-    def __init__(self, channel, reduction=4):
-        super(SELayer, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.fc = nn.Sequential(
-            nn.Linear(channel, channel // reduction),
-            nn.ReLU(inplace=True),
-            nn.Linear(channel // reduction, channel),
-            Hswish())
-
-    def forward(self, x):
-        b, c, _, _ = x.size()
-        y = self.avg_pool(x)
-        y = y.view(b, c)
-        y = self.fc(y).view(b, c, 1, 1)
-        return x * y
 
 ##### end of basic #####
 
@@ -1004,7 +945,6 @@ class Shuffle_Like_Block(nn.Module):
         return out
 
 ##### end of HAI #####
-
 
 ##### transformer #####
 
@@ -2282,154 +2222,3 @@ class ST2CSPC(nn.Module):
         return self.cv4(torch.cat((y1, y2), dim=1))
 
 ##### end of swin transformer v2 #####   
-
-# yolov7-lite
-def channel_shuffle(x, groups):
-    batchsize, num_channels, height, width = x.shape
-    channels_per_group = num_channels // groups
-
-    # reshape
-    x = x.view(batchsize, groups,
-               channels_per_group, height, width)
-
-    x = torch.transpose(x, 1, 2).contiguous()
-
-    # flatten
-    x = x.view(batchsize, -1, height, width)
-
-    return x
-    
-class conv_bn_relu_maxpool(nn.Module):
-    def __init__(self, c1, c2):  # ch_in, ch_out
-        super(conv_bn_relu_maxpool, self).__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(c1, c2, kernel_size=3, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(c2),
-            nn.ReLU(inplace=True),
-        )
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False)
-
-    def forward(self, x):
-        return self.maxpool(self.conv(x))
-
-class Shuffle_Block(nn.Module):
-    def __init__(self, inp, oup, stride):
-        super(Shuffle_Block, self).__init__()
-
-        if not (1 <= stride <= 3):
-            raise ValueError('illegal stride value')
-        self.stride = stride
-
-        branch_features = oup // 2
-        assert (self.stride != 1) or (inp == branch_features << 1)
-
-        if self.stride > 1:
-            self.branch1 = nn.Sequential(
-                self.depthwise_conv(inp, inp, kernel_size=3, stride=self.stride, padding=1),
-                nn.BatchNorm2d(inp),
-                nn.Conv2d(inp, branch_features, kernel_size=1, stride=1, padding=0, bias=False),
-                nn.BatchNorm2d(branch_features),
-                nn.ReLU(inplace=True),
-            )
-
-        self.branch2 = nn.Sequential(
-            nn.Conv2d(inp if (self.stride > 1) else branch_features,
-                      branch_features, kernel_size=1, stride=1, padding=0, bias=False),
-            nn.BatchNorm2d(branch_features),
-            nn.ReLU(inplace=True),
-            self.depthwise_conv(branch_features, branch_features, kernel_size=3, stride=self.stride, padding=1),
-            nn.BatchNorm2d(branch_features),
-            nn.Conv2d(branch_features, branch_features, kernel_size=1, stride=1, padding=0, bias=False),
-            nn.BatchNorm2d(branch_features),
-            nn.ReLU(inplace=True),
-        )
-
-    @staticmethod
-    def depthwise_conv(i, o, kernel_size, stride=1, padding=0, bias=False):
-        return nn.Conv2d(i, o, kernel_size, stride, padding, bias=bias, groups=i)
-
-    def forward(self, x):
-        if self.stride == 1:
-            x1, x2 = x.chunk(2, dim=1)
-            out = torch.cat((x1, self.branch2(x2)), dim=1)
-        else:
-            out = torch.cat((self.branch1(x), self.branch2(x)), dim=1)
-
-        out = channel_shuffle(out, 2)
-
-        return out
-
-class mobilev3_bneck(nn.Module):
-    def __init__(self, inp, oup, hidden_dim, kernel_size, stride, use_se, use_hs):
-        super(mobilev3_bneck, self).__init__()
-        assert stride in [1, 2]
-
-        self.identity = stride == 1 and inp == oup
-
-        if inp == hidden_dim:
-            self.conv = nn.Sequential(
-                # dw
-                nn.Conv2d(hidden_dim, hidden_dim, kernel_size, stride, (kernel_size - 1) // 2, groups=hidden_dim,
-                          bias=False),
-                nn.BatchNorm2d(hidden_dim),
-                Hswish() if use_hs else nn.ReLU(inplace=True),
-                # Squeeze-and-Excite
-                SELayer(hidden_dim) if use_se else nn.Sequential(),
-                # pw-linear
-                nn.Conv2d(hidden_dim, oup, 1, 1, 0, bias=False),
-                nn.BatchNorm2d(oup),
-            )
-        else:
-            self.conv = nn.Sequential(
-                nn.Conv2d(inp, hidden_dim, 1, 1, 0, bias=False),
-                nn.BatchNorm2d(hidden_dim),
-                Hswish() if use_hs else nn.ReLU(inplace=True),
-                nn.Conv2d(hidden_dim, hidden_dim, kernel_size, stride, (kernel_size - 1) // 2, groups=hidden_dim,
-                          bias=False),
-                nn.BatchNorm2d(hidden_dim),
-                # Squeeze-and-Excite
-                SELayer(hidden_dim) if use_se else nn.Sequential(),
-                Hswish() if use_hs else nn.ReLU(inplace=True),
-                # pw-linear
-                nn.Conv2d(hidden_dim, oup, 1, 1, 0, bias=False),
-                nn.BatchNorm2d(oup),
-            )
-
-    def forward(self, x):
-        y = self.conv(x)
-        if self.identity:
-            return x + y
-        else:
-            return y
-
-
-class DWConvblock(nn.Module):
-    "Depthwise conv + Pointwise conv"
-
-    def __init__(self, in_channels, out_channels, k, s):
-        super(DWConvblock, self).__init__()
-        self.p = k // 2
-        self.conv1 = nn.Conv2d(in_channels, in_channels, kernel_size=k, stride=s, padding=self.p, groups=in_channels,
-                               bias=False)
-        self.bn1 = nn.BatchNorm2d(in_channels)
-        self.conv2 = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=False)
-        self.bn2 = nn.BatchNorm2d(out_channels)
-
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = F.relu(x)
-        x = self.conv2(x)
-        x = self.bn2(x)
-        x = F.relu(x)
-        return x
-
-class ADD(nn.Module):
-    # Stortcut a list of tensors along dimension
-    def __init__(self, alpha=0.5):
-        super(ADD, self).__init__()
-        self.a = alpha
-
-    def forward(self, x):
-        x1, x2 = x[0], x[1]
-        return torch.add(x1, x2, alpha=self.a)

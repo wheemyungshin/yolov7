@@ -9,7 +9,7 @@ import torch
 from models.common import *
 from models.experimental import *
 from utils.autoanchor import check_anchor_order
-from utils.general import bbox_iou, make_divisible, check_file, set_logging
+from utils.general import make_divisible, check_file, set_logging
 from utils.torch_utils import time_synchronized, fuse_conv_and_bn, model_info, scale_img, initialize_weights, \
     select_device, copy_attr
 from utils.loss import SigmoidBin
@@ -19,116 +19,6 @@ try:
 except ImportError:
     thop = None
 
-def masked_softmax(x, dim=2):
-    weight = torch.sum((x != 0), dim=dim, keepdim=True)
-    x[x == 0] = -float("inf")
-    return torch.softmax(x, dim=dim) * weight
-
-def dist2(tensor_a, tensor_b, attention_mask=None, channel_attention_mask=None):
-    diff = (tensor_a - tensor_b) ** 2
-    if attention_mask is not None:
-        diff = diff * attention_mask
-    if channel_attention_mask is not None:
-        diff = diff * channel_attention_mask
-    diff = torch.sum(diff) ** 0.5
-    return diff
-
-def pairwise_dist2(tensor_a, tensor_b, attention_mask=None, channel_attention_mask=None):
-    patch_num = tensor_a.shape[3]
-
-    diff = (tensor_a - tensor_b) ** 2
-    diff = diff * attention_mask
-    diff = diff * channel_attention_mask
-    
-    diff = diff.permute(3, 0, 1, 2)
-    diff = diff.view(patch_num,-1)
-    diff = torch.sum(torch.sum(diff, dim=1) ** 0.5)
-
-    return diff
-
-class NonLocalBlockND(nn.Module):
-    def __init__(self, in_channels, inter_channels=None, dimension=2, sub_sample=True, bn_layer=True, downsample_stride=2):
-        super(NonLocalBlockND, self).__init__()
-
-        assert dimension in [1, 2, 3]
-
-        self.dimension = dimension
-        self.sub_sample = sub_sample
-
-        self.in_channels = in_channels
-        self.inter_channels = inter_channels
-
-        if self.inter_channels is None:
-            self.inter_channels = in_channels // 2
-            if self.inter_channels == 0:
-                self.inter_channels = 1
-
-        if dimension == 3:
-            conv_nd = nn.Conv3d
-            max_pool_layer = nn.MaxPool3d(kernel_size=(1, 2, 2))
-            bn = nn.BatchNorm3d
-        elif dimension == 2:
-            conv_nd = nn.Conv2d
-            max_pool_layer = nn.MaxPool2d(kernel_size=(downsample_stride, downsample_stride))
-            bn = nn.BatchNorm2d
-        else:
-            conv_nd = nn.Conv1d
-            max_pool_layer = nn.MaxPool1d(kernel_size=(2))
-            bn = nn.BatchNorm1d
-
-        self.g = conv_nd(in_channels=self.in_channels, out_channels=self.inter_channels,
-                         kernel_size=1, stride=1, padding=0)
-
-        if bn_layer:
-            self.W = nn.Sequential(
-                conv_nd(in_channels=self.inter_channels, out_channels=self.in_channels,
-                        kernel_size=1, stride=1, padding=0),
-                bn(self.in_channels)
-            )
-            nn.init.constant_(self.W[1].weight, 0)
-            nn.init.constant_(self.W[1].bias, 0)
-        else:
-            self.W = conv_nd(in_channels=self.inter_channels, out_channels=self.in_channels,
-                             kernel_size=1, stride=1, padding=0)
-            nn.init.constant_(self.W.weight, 0)
-            nn.init.constant_(self.W.bias, 0)
-
-        self.theta = conv_nd(in_channels=self.in_channels, out_channels=self.inter_channels,
-                             kernel_size=1, stride=1, padding=0)
-
-        self.phi = conv_nd(in_channels=self.in_channels, out_channels=self.inter_channels,
-                           kernel_size=1, stride=1, padding=0)
-
-        if sub_sample:
-            self.g = nn.Sequential(self.g, max_pool_layer)
-            self.phi = nn.Sequential(self.phi, max_pool_layer)
-
-    def forward(self, x):
-        '''
-        :param x: (b, c, t, h, w)
-        :
-        :
-        '''
-
-        batch_size = x.size(0)  #   2 , 256 , 300 , 300
-
-        g_x = self.g(x).view(batch_size, self.inter_channels, -1)   #   2 , 128 , 150 x 150
-        g_x = g_x.permute(0, 2, 1)                                  #   2 , 150 x 150, 128
-
-        theta_x = self.theta(x).view(batch_size, self.inter_channels, -1)   #   2 , 128 , 300 x 300
-        theta_x = theta_x.permute(0, 2, 1)                                  #   2 , 300 x 300 , 128
-        phi_x = self.phi(x).view(batch_size, self.inter_channels, -1)       #   2 , 128 , 150 x 150
-        f = torch.matmul(theta_x, phi_x)    #   2 , 300x300 , 150x150
-        N = f.size(-1)  #   150 x 150
-        f_div_C = f / N #   2 , 300x300, 150x150
-
-        y = torch.matmul(f_div_C, g_x)  #   2, 300x300, 128
-        y = y.permute(0, 2, 1).contiguous() #   2, 128, 300x300
-        y = y.view(batch_size, self.inter_channels, *x.size()[2:])
-        W_y = self.W(y)
-        z = W_y + x
-
-        return z
 
 class Detect(nn.Module):
     stride = None  # strides computed during build
@@ -316,100 +206,6 @@ class IDetect(nn.Module):
         box @= convert_matrix                          
         return (box, score)
 
-class Segment(Detect):
-    # YOLOv5 Segment head for segmentation models
-    def __init__(self, nc=80, anchors=(), ch=(), nm=None):
-        super().__init__(nc, anchors, ch)
-        if nm is not None:
-            self.nm = nm
-        else:
-            self.nm = nc + 1 #32  # number of masks
-        self.npr = 256  # number of protos
-        self.no = 5 + nc# + self.nm  # number of outputs per anchor
-        self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.na, 1) for x in ch)  # output conv
-        self.proto = Proto(ch[0], self.npr, self.nm)  # protos
-        self.detect = Detect.forward
-
-    def forward(self, x):
-        p = self.proto(x[0])
-        x = self.detect(self, x)
-        return (x, p) if self.training else (x[0], p) #if self.export else (x[0], (x[1], p))
-
-
-class ISegment(IDetect):
-    # YOLOR Segment head for segmentation models
-    def __init__(self, nc=80, anchors=(), ch=(), nm=None):
-        super().__init__(nc, anchors, ch)
-        if nm is not None:
-            self.nm = nm
-        else:
-            self.nm = nc + 1 #32  # number of masks
-        self.npr = 256  # number of protos
-        self.no = 5 + nc# + self.nm  # number of outputs per anchor
-        #self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.na, 1) for x in ch)  # output conv
-        #self.im = nn.ModuleList(ImplicitM(self.no * self.na) for _ in ch)
-        self.protos = nn.ModuleList(Proto(x, self.npr, self.nm) for x in ch)  # protos
-        self.detect = IDetect.forward
-        
-        self.ia_seg = nn.ModuleList(ImplicitA(x) for x in ch)
-
-    def forward(self, x):
-        x_origin = x.copy()
-        x = self.detect(self, x)
-        
-        leading_shape = (x_origin[0].shape[2], x_origin[0].shape[3])
-        proto_outputs = []
-        for x_i in range(len(x_origin)):
-            p_input = self.ia_seg[x_i](x_origin[x_i])  # conv
-            p = self.protos[x_i](p_input)
-            p = F.interpolate(p, leading_shape, mode="nearest")
-            proto_outputs.append(torch.unsqueeze(p, 0))
-        proto_output = torch.sum(torch.cat(proto_outputs, 0), dim=0, keepdim=False)
-            
-        return (x, proto_output) if self.training else (x[0], proto_output) if self.export else (x[0], (x[1], proto_output))
-'''
-class ISegment(nn.Module): # no dependency on detect
-    stride = None  # strides computed during build
-    export = False  # onnx export
-    end2end = False
-    include_nms = False
-    concat = False
-
-    def __init__(self, nc=80, anchors=(), ch=(), nm=None):
-        super(ISegment, self).__init__()
-        if nm is not None:
-            self.nm = nm
-        else:
-            self.nm = nc + 1 #32  # number of masks
-        self.npr = 256  # number of protos
-        self.nc = nc  # number of classes
-        self.no = 5 + nc# + self.nm  # number of outputs per anchor
-        self.nl = len(anchors)  # number of detection layers
-        self.na = len(anchors[0]) // 2  # number of anchors
-        self.grid = [torch.zeros(1)] * self.nl  # init grid
-        a = torch.tensor(anchors).float().view(self.nl, -1, 2)
-        self.register_buffer('anchors', a)  # shape(nl,na,2)
-        self.register_buffer('anchor_grid', a.clone().view(self.nl, 1, -1, 1, 1, 2))  # shape(nl,1,na,1,1,2)
-        #self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.na, 1) for x in ch)  # output conv
-        #self.im = nn.ModuleList(ImplicitM(self.no * self.na) for _ in ch)
-        self.protos = nn.ModuleList(Proto(x, self.npr, self.nm) for x in ch)  # protos
-        
-        self.ia_seg = nn.ModuleList(ImplicitA(x) for x in ch)
-
-    def forward(self, x):
-        x_origin = x
-        
-        leading_shape = (x_origin[0].shape[2], x_origin[0].shape[3])
-        proto_outputs = []
-        for x_i in range(len(x_origin)):
-            p_input = self.ia_seg[x_i](x_origin[x_i])  # conv
-            p = self.protos[x_i](p_input)
-            p = F.interpolate(p, leading_shape, mode="nearest")
-            proto_outputs.append(torch.unsqueeze(p, 0))
-        proto_output = torch.sum(torch.cat(proto_outputs, 0), dim=0, keepdim=False)
-            
-        return (None, proto_output) if self.training else (None, proto_output) if self.export else (None, (x[1], proto_output))
-'''
 
 class IKeypoint(nn.Module):
     stride = None  # strides computed during build
@@ -710,12 +506,12 @@ class IBin(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, cfg='yolor-csp-c.yaml', ch=3, nc=None, anchors=None, nm=None):  # model, input channels, number of classes
+    def __init__(self, cfg='yolor-csp-c.yaml', ch=3, nc=None, anchors=None):  # model, input channels, number of classes
         super(Model, self).__init__()
         self.traced = False
         if isinstance(cfg, dict):
             self.yaml = cfg  # model dict
-        else:  # is *.yamlW
+        else:  # is *.yaml
             import yaml  # for torch hub
             self.yaml_file = Path(cfg).name
             with open(cfg) as f:
@@ -729,20 +525,13 @@ class Model(nn.Module):
         if anchors:
             logger.info(f'Overriding model.yaml anchors with anchors={anchors}')
             self.yaml['anchors'] = round(anchors)  # override yaml value
-        self.model, self.save = parse_model(deepcopy(self.yaml), ch=[ch], nm=nm)  # model, savelist
+        self.model, self.save = parse_model(deepcopy(self.yaml), ch=[ch])  # model, savelist
         self.names = [str(i) for i in range(self.yaml['nc'])]  # default names
         # print([x.shape for x in self.forward(torch.zeros(1, ch, 64, 64))])
 
         # Build strides, anchors
         m = self.model[-1]  # Detect()
-        if isinstance(m, Segment):
-            s = 256  # 2x min stride
-            m.stride = torch.tensor([s / x[0].shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
-            check_anchor_order(m)
-            m.anchors /= m.stride.view(-1, 1, 1)
-            self.stride = m.stride
-            self._initialize_biases()  # only run once
-        elif isinstance(m, Detect):
+        if isinstance(m, Detect):
             s = 256  # 2x min stride
             m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
             check_anchor_order(m)
@@ -750,24 +539,7 @@ class Model(nn.Module):
             self.stride = m.stride
             self._initialize_biases()  # only run once
             # print('Strides: %s' % m.stride.tolist())
-        '''
-        if isinstance(m, ISegment):
-            s = 256  # 2x min stride
-            m.stride = torch.tensor([s / x[0].shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))[1]])  # forward
-            self.stride = m.stride
-            check_anchor_order(m)
-            m.anchors /= m.stride.view(-1, 1, 1)
-            # print('Strides: %s' % m.stride.tolist())
-        '''
-        if isinstance(m, ISegment):
-            s = 256  # 2x min stride
-            m.stride = torch.tensor([s / x[0].shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))[0]])  # forward
-            check_anchor_order(m)
-            m.anchors /= m.stride.view(-1, 1, 1)
-            self.stride = m.stride
-            self._initialize_biases()  # only run once
-            # print('Strides: %s' % m.stride.tolist())
-        elif isinstance(m, IDetect):
+        if isinstance(m, IDetect):
             s = 256  # 2x min stride
             m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))])  # forward
             check_anchor_order(m)
@@ -805,77 +577,10 @@ class Model(nn.Module):
         initialize_weights(self)
         self.info()
         logger.info('')
-        
-        self.channel_wise_adaptation = nn.ModuleList([
-            nn.Linear(128, 256),
-            nn.Linear(256, 512),
-            nn.Linear(512, 1024)
-        ])
-        
-        self.spatial_wise_adaptation = nn.ModuleList([
-            nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1),
-            nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1),
-            nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1)
-        ])
 
-        '''
-        self.local_mask_adaptation_layers = nn.ModuleList([
-            nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0)
-        ])
-
-        self.global_mask_adaptation_layers = nn.ModuleList([
-            nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0)
-        ])
-        '''
-
-        self.adaptation_layers = nn.ModuleList([
-            nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0)
-        ])
-
-        self.non_local_adaptation = nn.ModuleList([
-            nn.Conv2d(128, 256, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(256, 512, kernel_size=1, stride=1, padding=0),
-            nn.Conv2d(512, 1024, kernel_size=1, stride=1, padding=0)
-        ])
-
-        self.norm = [
-            nn.BatchNorm2d(256, affine=False),
-            nn.BatchNorm2d(512, affine=False),
-            nn.BatchNorm2d(1024, affine=False)
-        ]
-        
-        self.normal_init(self.channel_wise_adaptation, 0, 0.0001, True)
-        self.normal_init(self.spatial_wise_adaptation, 0, 0.0001, True)
-        self.normal_init(self.adaptation_layers, 0, 0.0001, True)
-        self.normal_init(self.non_local_adaptation, 0, 0.0001, True)
-        #self.normal_init(self.channel_wise_adaptation, 0, 0.0001, True)
-        #self.normal_init(self.spatial_wise_adaptation, 0, 0.0001, True)
-        #self.normal_init(self.adaptation_layers, 0, 0.0001, True)
-        #self.normal_init(self.non_local_adaptation, 0, 0.0001, True)
-        #self.normal_init(self.local_mask_adaptation_layers, 0, 0.0001, True)
-        #self.normal_init(self.global_mask_adaptation_layers, 0, 0.0001, True)
-    
-    def normal_init(self, layers, mean, stddev, truncated=False):
-        """
-        weight initalizer: truncated normal and random normal.
-        """
-        for m in layers:
-            # x is a parameter
-            if truncated:
-                m.weight.data.normal_().fmod_(2).mul_(stddev).add_(mean)  # not a perfect approximation
-            else:
-                m.weight.data.normal_(mean, stddev)
-                m.bias.data.zero_()
-
-    def forward(self, x, augment=False, profile=False, get_feature=False, t_info=None):
-        img_size = x.shape[-2:]  # height, width
+    def forward(self, x, augment=False, profile=False):
         if augment:
+            img_size = x.shape[-2:]  # height, width
             s = [1, 0.83, 0.67]  # scales
             f = [None, 3, None]  # flips (2-ud, 3-lr)
             y = []  # outputs
@@ -891,97 +596,10 @@ class Model(nn.Module):
                 y.append(yi)
             return torch.cat(y, 1), None  # augmented inference, train
         else:
-            if t_info is not None:
-                t_pred = t_info[0]
-                t_feats = t_info[1]
-                pred, features = self.forward_once(x, profile, get_feature=True)
-                device = features[0].device
+            return self.forward_once(x, profile)  # single-scale inference, train
 
-                #for _i in range(len(features)):
-                #    print("S: ", features[_i].size())
-                #    print("T: ", t_feats[_i].size())
-
-                #t = 0.1
-                tau = 1.0
-                kd_feat_loss, kd_channel_loss, kd_spatial_loss = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
-                total_masks = []
-
-                for _i in range(len(features)):
-                    adap_norm = self.norm[_i].to(device)
-                    s_feat = self.adaptation_layers[_i](features[_i])
-                    s_feat = adap_norm(s_feat)
-                    t_feat = adap_norm(t_feats[_i])
-                    
-                    N, C, H, W = s_feat.shape
-                    # normalize in channel diemension
-                    softmax_pred_T = F.softmax(t_feat.view(-1, W * H) / tau,
-                                            dim=1)  # [N*C, H*W]
-
-                    logsoftmax = torch.nn.LogSoftmax(dim=1)
-                    kd_feat_loss += torch.sum(
-                        softmax_pred_T * logsoftmax(t_feat.view(-1, W * H) / tau) -
-                        softmax_pred_T * logsoftmax(s_feat.view(-1, W * H) / tau)) * (
-                            tau**2) / (C * N) * 0.1
-                
-                kd_loss = kd_feat_loss
-                kd_loss_items = kd_feat_loss
-
-                return pred, kd_loss, kd_loss_items
-
-
-                # feature distillation by using attention mask
-                '''
-                for _i in range(len(features)):
-                    # Global part
-                    t_global_attention_mask = self.generate_attention_mask(t_feats[_i], features[0].size(0), t, type="spatial")
-                    s_global_attention_mask = self.generate_attention_mask(features[_i], features[0].size(0), t, type="spatial")
-                    c_t_global_attention_mask = self.generate_attention_mask(t_feats[_i], features[0].size(0), t, type="channel")
-                    c_s_global_attention_mask = self.generate_attention_mask(features[_i], features[0].size(0), t, type="channel")
-                    #c_s_global_attention_mask = self.generate_attention_mask(self.global_mask_adaptation_layers[_i](features[_i]), features[0].size(0), t, type="channel")
-                    
-                    sum_global_attention_mask = (t_global_attention_mask + s_global_attention_mask) / 2
-                    sum_global_attention_mask = sum_global_attention_mask.detach()
-
-                    # Local part
-                    local_kd_feat_loss, local_kd_channel_loss, local_mask = self.calculate_local_attention_loss(t_feats[_i], features[_i], _i)
-                    
-                    # making final feature mask using in feature distillation
-                    c_sum_global_attention_mask = (c_t_global_attention_mask + c_s_global_attention_mask) / 2
-                    c_sum_global_attention_mask = c_sum_global_attention_mask.detach()
-
-                    # feature loss by using teacher feature and student feature
-                    global_kd_feat_loss = dist2(t_feats[_i], self.adaptation_layers[_i](features[_i]), attention_mask=sum_global_attention_mask,
-                                        channel_attention_mask=c_sum_global_attention_mask)
-
-                    kd_feat_loss += (local_kd_feat_loss + global_kd_feat_loss) / 2
-
-                    # original torch L2 loss & using this for channel kd loss
-                    kd_channel_loss += torch.dist(torch.mean(t_feats[_i], [2, 3]),
-                                                self.channel_wise_adaptation[_i](torch.mean(features[_i], [2, 3]))) + local_kd_channel_loss
-                    
-                    # spatial kd loss
-                    t_spatial_pool = torch.mean(t_feats[_i], [1]).view(t_feats[_i].size(0), 1, t_feats[_i].size(2),
-                                                                    t_feats[_i].size(3))
-                    s_spatial_pool = torch.mean(features[_i], [1]).view(t_feats[_i].size(0), 1, t_feats[_i].size(2),
-                                                                t_feats[_i].size(3))
-                    kd_spatial_loss += torch.dist(t_spatial_pool, self.spatial_wise_adaptation[_i](s_spatial_pool))
-
-                kd_feat_loss *= 4e-8 * 6
-                kd_channel_loss *= 1e-5 * 3
-                kd_spatial_loss *= 3e-5 * 6
-                kd_loss = kd_feat_loss + kd_channel_loss + kd_spatial_loss
-                kd_loss_items = torch.cat((kd_feat_loss, kd_channel_loss, kd_spatial_loss)).detach()
-
-                return pred, kd_loss, kd_loss_items
-                '''
-            else:
-                return self.forward_once(x, profile, get_feature)  # single-scale inference, train
-
-    def forward_once(self, x, profile=False, get_feature=False):
+    def forward_once(self, x, profile=False):
         y, dt = [], []  # outputs
-        if get_feature:
-            features = []
-
         for m in self.model:
             if m.f != -1:  # if not from previous layer
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
@@ -990,11 +608,11 @@ class Model(nn.Module):
                 self.traced=False
 
             if self.traced:
-                if isinstance(m, Detect) or isinstance(m, IDetect) or isinstance(m, IAuxDetect) or isinstance(m, IKeypoint) or isinstance(m, Segment) or isinstance(m, ISegment):
+                if isinstance(m, Detect) or isinstance(m, IDetect) or isinstance(m, IAuxDetect) or isinstance(m, IKeypoint):
                     break
 
             if profile:
-                c = isinstance(m, (Detect, IDetect, IAuxDetect, IBin, Segment, ISegment))
+                c = isinstance(m, (Detect, IDetect, IAuxDetect, IBin))
                 o = thop.profile(m, inputs=(x.copy() if c else x,), verbose=False)[0] / 1E9 * 2 if thop else 0  # FLOPS
                 for _ in range(10):
                     m(x.copy() if c else x)
@@ -1003,19 +621,14 @@ class Model(nn.Module):
                     m(x.copy() if c else x)
                 dt.append((time_synchronized() - t) * 100)
                 print('%10.1f%10.0f%10.1fms %-40s' % (o, m.np, dt[-1], m.type))
-            x = m(x)  # run
 
+            x = m(x)  # run
+            
             y.append(x if m.i in self.save else None)  # save output
-            if m.i in self.model[-1].f and get_feature and len(features) < 3:#distill features after the last repconv
-                features.append(x)
 
         if profile:
             print('%.1fms total' % sum(dt))
-            
-        if get_feature:
-            return x, features
-        else:
-            return x
+        return x
 
     def _initialize_biases(self, cf=None):  # initialize biases into Detect(), cf is class frequency
         # https://arxiv.org/abs/1708.02002 section 3.3
@@ -1090,47 +703,9 @@ class Model(nn.Module):
                 m.conv = fuse_conv_and_bn(m.conv, m.bn)  # update conv
                 delattr(m, 'bn')  # remove batchnorm
                 m.forward = m.fuseforward  # update forward
-            elif isinstance(m, (IDetect, IAuxDetect)) and not isinstance(m, ISegment):
+            elif isinstance(m, (IDetect, IAuxDetect)):
                 m.fuse()
                 m.forward = m.fuseforward
-            '''
-            elif type(m) is Shuffle_Block:
-                if hasattr(m, 'branch1'):
-                    re_branch1 = nn.Sequential(
-                        nn.Conv2d(m.branch1[0].in_channels, m.branch1[0].out_channels,
-                                  kernel_size=m.branch1[0].kernel_size, stride=m.branch1[0].stride,
-                                  padding=m.branch1[0].padding, groups=m.branch1[0].groups),
-                        nn.Conv2d(m.branch1[2].in_channels, m.branch1[2].out_channels,
-                                  kernel_size=m.branch1[2].kernel_size, stride=m.branch1[2].stride,
-                                  padding=m.branch1[2].padding, bias=False),
-                        nn.ReLU(inplace=True),
-                    )
-                    re_branch1[0] = fuse_conv_and_bn(m.branch1[0], m.branch1[1])
-                    re_branch1[1] = fuse_conv_and_bn(m.branch1[2], m.branch1[3])
-                    # pdb.set_trace()
-                    # print(m.branch1[0])
-                    m.branch1 = re_branch1
-                if hasattr(m, 'branch2'):
-                    re_branch2 = nn.Sequential(
-                        nn.Conv2d(m.branch2[0].in_channels, m.branch2[0].out_channels,
-                                  kernel_size=m.branch2[0].kernel_size, stride=m.branch2[0].stride,
-                                  padding=m.branch2[0].padding, groups=m.branch2[0].groups),
-                        nn.ReLU(inplace=True),
-                        nn.Conv2d(m.branch2[3].in_channels, m.branch2[3].out_channels,
-                                  kernel_size=m.branch2[3].kernel_size, stride=m.branch2[3].stride,
-                                  padding=m.branch2[3].padding, bias=False),
-                        nn.Conv2d(m.branch2[5].in_channels, m.branch2[5].out_channels,
-                                  kernel_size=m.branch2[5].kernel_size, stride=m.branch2[5].stride,
-                                  padding=m.branch2[5].padding, groups=m.branch2[5].groups),
-                        nn.ReLU(inplace=True),
-                    )
-                    re_branch2[0] = fuse_conv_and_bn(m.branch2[0], m.branch2[1])
-                    re_branch2[2] = fuse_conv_and_bn(m.branch2[3], m.branch2[4])
-                    re_branch2[3] = fuse_conv_and_bn(m.branch2[5], m.branch2[6])
-                    # pdb.set_trace()
-                    m.branch2 = re_branch2
-                    # print(m.branch2)
-            '''
         self.info()
         return self
 
@@ -1157,152 +732,8 @@ class Model(nn.Module):
     def info(self, verbose=False, img_size=640):  # print model information
         model_info(self, verbose, img_size)
 
-    def generate_attention_mask(self, feature, batch_size, t, type="spatial"):
-        if type=="spatial":
-            attention_mask = torch.mean(torch.abs(feature), [1], keepdim=True) # B x 1 x H x W
-        elif type=="channel":
-            attention_mask = torch.mean(torch.abs(feature), [2, 3], keepdim=True) # B x 256 x 1 x 1
-        else:
-            raise NameError
-        
-        size = attention_mask.size()  
-        attention_mask = attention_mask.view(batch_size, -1)
 
-        if type=="spatial":
-            attention_mask = torch.softmax(attention_mask / t, dim=1) * size[2] * size[3]
-        elif type=="channel":
-            attention_mask = torch.softmax(attention_mask / t, dim=1) * feature.size(1)
-        else:
-            raise NameError
-        
-        attention_mask = attention_mask.view(size)
-        return attention_mask
-
-    def calculate_local_attention_loss(self, t_feature, s_feature, index, patch_size=7):
-        t = 0.1
-        batch_size = t_feature.size(0)
-        f_size = t_feature.size()
-        s_f_size = s_feature.size()
-        adap_s_feature = self.adaptation_layers[index](s_feature)
-        
-        if f_size[2] % patch_size == 0:
-            height_num = f_size[2] // patch_size
-            height_pad = 0
-        else:
-            height_num = (f_size[2] // patch_size) + 1
-            height_pad = patch_size - (f_size[2] % patch_size)
-            
-        if f_size[3] % patch_size == 0:
-            width_num = f_size[3] // patch_size
-            width_pad = 0
-        else:
-            width_num = (f_size[3] // patch_size) + 1
-            width_pad = patch_size - (f_size[3] % patch_size)
-        
-        if height_num == 0:
-            height_num = 1
-        if width_num == 0:
-            width_num = 1
-        patch_num = height_num * width_num
-
-        # channel attention mask (B x 256 x 1 x patch_num)
-        t_channel_attention_mask = F.avg_pool2d(t_feature.abs(), (patch_size, patch_size), stride=patch_size, ceil_mode=True)     # B x 256 x H/7 x W/7
-        t_channel_attention_mask = t_channel_attention_mask.view(batch_size, f_size[1], patch_num)                          # B x 256 x patch_num
-        t_channel_attention_mask = torch.softmax(t_channel_attention_mask / t, dim=1) * f_size[1]
-        t_channel_attention_mask = t_channel_attention_mask.unsqueeze(2)
-        
-        #s_channel_attention_mask = F.avg_pool2d(self.local_mask_adaptation_layers[index](s_feature).abs(), (patch_size, patch_size), stride=patch_size, ceil_mode=True)
-        s_channel_attention_mask = F.avg_pool2d(s_feature.abs(), (patch_size, patch_size), stride=patch_size, ceil_mode=True)
-        s_channel_attention_mask = s_channel_attention_mask.view(batch_size, f_size[1], patch_num)
-        s_channel_attention_mask = torch.softmax(s_channel_attention_mask / t, dim=1) * f_size[1]
-        s_channel_attention_mask = s_channel_attention_mask.unsqueeze(2)
-        
-        # get channel attention for channel distillation loss
-        t_channel_attention = F.avg_pool2d(t_feature, (patch_size, patch_size), stride=patch_size, ceil_mode=True)
-        s_channel_attention = F.avg_pool2d(s_feature, (patch_size, patch_size), stride=patch_size, ceil_mode=True)
-        
-        # PAD INPUT (value = 0.0)
-        t_feature = F.pad(t_feature, (0, width_pad, 0, height_pad))
-        s_feature = F.pad(s_feature, (0, width_pad, 0, height_pad))
-        adap_s_feature = F.pad(adap_s_feature, (0, width_pad, 0, height_pad))
-        
-        # divide input by patches (B x 256 x (7x7) x patch_num)
-        t_feature = F.unfold(t_feature, patch_size, stride=patch_size)
-        t_feature = t_feature.view(batch_size, f_size[1], patch_size*patch_size, patch_num)
-                
-        s_feature = F.unfold(s_feature, patch_size, stride=patch_size)
-        s_feature = s_feature.view(batch_size, s_f_size[1], patch_size*patch_size, patch_num)
-
-        adap_s_feature = F.unfold(adap_s_feature, patch_size, stride=patch_size)
-        adap_s_feature = adap_s_feature.view(batch_size, f_size[1], patch_size*patch_size, patch_num)
-        
-        # spatial attention mask (B x 1 x (7x7) x patch_num)
-        t_spatial_attention_mask = torch.mean(torch.abs(t_feature), [1], keepdim=True)
-        t_spatial_attention_mask = masked_softmax(t_spatial_attention_mask / t, dim=2)
-        
-        s_spatial_attention_mask = torch.mean(torch.abs(s_feature), [1], keepdim=True)
-        s_spatial_attention_mask = masked_softmax(s_spatial_attention_mask / t, dim=2)
-        
-        sum_spatial_attention_mask = (t_spatial_attention_mask + s_spatial_attention_mask) / 2
-        sum_spatial_attention_mask = sum_spatial_attention_mask.detach()
-                
-        sum_channel_attention_mask = (t_channel_attention_mask + s_channel_attention_mask) / 2
-        sum_channel_attention_mask = sum_channel_attention_mask.detach()
-        
-        # kd feature loss
-        kd_feat_loss = pairwise_dist2(t_feature, adap_s_feature, attention_mask=sum_spatial_attention_mask, 
-                                            channel_attention_mask=sum_channel_attention_mask)
-        
-        # attention loss (after experiment have to fix)     B x C x h/7 x w/7
-        t_channel_attention = t_channel_attention.view(batch_size, f_size[1], patch_num).permute(2,0,1)
-        s_channel_attention = s_channel_attention.view(batch_size, s_f_size[1], patch_num).permute(2,0,1)
-        
-        # B x patch_num x 256
-        s_channel_attention = self.channel_wise_adaptation[index](s_channel_attention)
-        
-        t_channel_attention = t_channel_attention.view(patch_num, -1)
-        s_channel_attention = s_channel_attention.view(patch_num, -1)
-        
-        pdist = nn.PairwiseDistance(p=2)
-        kd_channel_loss = torch.mean(pdist(t_channel_attention, s_channel_attention))
-        # Origin size
-        sum_spatial_attention_mask = F.fold(sum_spatial_attention_mask.squeeze(1), (f_size[2] + height_pad, f_size[3] + width_pad), patch_size, stride=patch_size)
-        sum_spatial_attention_mask = sum_spatial_attention_mask[:,:,:f_size[2], :f_size[3]].detach()
-        
-        return kd_feat_loss, kd_channel_loss, sum_spatial_attention_mask
-
-class DetectPostPart(nn.Module):
-    def __init__(self,na,nc,nl,anchors,stride,anchor_grid, grid, no):
-        super(DetectPostPart, self).__init__()
-        self.na = na
-        self.nc = nc
-        self.nl = nl
-        self.anchors = anchors
-        self.stride = stride
-        self.anchor_grid = anchor_grid
-        self.grid = grid
-        self.no = no
-    @staticmethod
-    def _make_grid(nx=20, ny=20):
-        yv, xv = torch.meshgrid([torch.arange(ny), torch.arange(nx)])
-        return torch.stack((xv, yv), 2).view((1, 1, ny, nx, 2)).float()
-    
-    def forward(self, x):
-        z = []
-        for i in range(self.nl):
-            bs, _, ny, nx, _  = x[i].shape
-            # print(x[i].shape)
-            if self.grid[i].shape[2:4] != x[i].shape[2:4]:
-                self.grid[i] = self._make_grid(nx, ny).to(x[i].device)
-            y = x[i].sigmoid()
-            y[..., 0:2] = (y[..., 0:2] * 2. - 0.5 + self.grid[i]) * self.stride[i]  # xy
-            y[..., 2:4] = (y[..., 2:4] * 2) ** 2 * self.anchor_grid[i]  # wh
-
-            z.append(y.view(bs, -1, self.no))      
-        
-        return (torch.cat(z,1), x)
-
-def parse_model(d, ch, nm):  # model_dict, input_channels(3)
+def parse_model(d, ch):  # model_dict, input_channels(3)
     logger.info('\n%3s%18s%3s%10s  %-40s%-30s' % ('', 'from', 'n', 'params', 'module', 'arguments'))
     anchors, nc, gd, gw = d['anchors'], d['nc'], d['depth_multiple'], d['width_multiple']
     na = (len(anchors[0]) // 2) if isinstance(anchors, list) else anchors  # number of anchors
@@ -1328,9 +759,7 @@ def parse_model(d, ch, nm):  # model_dict, input_channels(3)
                  RepResX, RepResXCSPA, RepResXCSPB, RepResXCSPC, 
                  Ghost, GhostCSPA, GhostCSPB, GhostCSPC,
                  SwinTransformerBlock, STCSPA, STCSPB, STCSPC,
-                 SwinTransformer2Block, ST2CSPA, ST2CSPB, ST2CSPC,
-                 conv_bn_relu_maxpool, Shuffle_Block, DWConvblock, Hswish, SELayer, mobilev3_bneck]:
-            print(m)
+                 SwinTransformer2Block, ST2CSPA, ST2CSPB, ST2CSPC]:
             c1, c2 = ch[f], args[0]
             if c2 != no:  # if not output
                 c2 = make_divisible(c2 * gw, 8)
@@ -1353,6 +782,8 @@ def parse_model(d, ch, nm):  # model_dict, input_channels(3)
             if c2 != no:  # if not output
                 c2 = make_divisible(c2 * gw, 8)
             args = [c1, c2, *args[1:]]
+        elif m is ADD:
+            c2 = sum([ch[x] for x in f])//2
         elif m is nn.BatchNorm2d:
             args = [ch[f]]
         elif m is Concat:
@@ -1363,14 +794,10 @@ def parse_model(d, ch, nm):  # model_dict, input_channels(3)
             c2 = ch[f[0]]
         elif m is Foldcut:
             c2 = ch[f] // 2
-        elif m is ADD:
-            c2 = sum([ch[x] for x in f])//2
-        elif m in [Detect, IDetect, IAuxDetect, IBin, IKeypoint, Segment, ISegment]:
+        elif m in [Detect, IDetect, IAuxDetect, IBin, IKeypoint]:
             args.append([ch[x] for x in f])
             if isinstance(args[1], int):  # number of anchors
                 args[1] = [list(range(args[1] * 2))] * len(f)
-            if m in [Segment, ISegment]:
-                args.append(nm)
         elif m is ReOrg:
             c2 = ch[f] * 4
         elif m is Contract:
