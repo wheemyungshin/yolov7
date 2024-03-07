@@ -386,12 +386,8 @@ if __name__ == '__main__':
     parser.add_argument('--save-npy', action='store_true', help='save npy files')
     parser.add_argument('--valid-segment-labels', nargs='+', type=int, default=[], help='labels to include when calculating segmentation loss')
     parser.add_argument('--square', action='store_true', help='do square cut for input')
-<<<<<<< HEAD
     parser.add_argument('--objcam', action='store_true', help='visualize extracted objectness scores.')
     
-    
-=======
->>>>>>> acaf19ac9ad0d8c3c172676b79209946175825a7
     opt = parser.parse_args()
     print(opt)
     #check_requirements(exclude=('pycocotools', 'thop'))

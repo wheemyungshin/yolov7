@@ -36,6 +36,7 @@ from utils.loss import ComputeLoss, ComputeLossOTA
 from utils.plots import plot_images, plot_labels, plot_results, plot_evolution
 from utils.torch_utils import ModelEMA, select_device, intersect_dicts, torch_distributed_zero_first, is_parallel
 from utils.wandb_logging.wandb_utils import WandbLogger, check_wandb_resume
+import collections
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +101,14 @@ def train(hyp, opt, device, tb_writer=None):
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
         model = Model(opt.cfg or ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get('anchors'), multi_head_num=len(multihead_matcher)).to(device)  # create
         exclude = ['anchor'] if not (opt.load_head_weight) and not opt.resume else []  # exclude keys
-        state_dict = ckpt['model'].float().state_dict()  # to FP32
+
+        if type(ckpt['model']) is Model:
+            state_dict = ckpt['model'].float().state_dict()  # to FP32
+        elif type(ckpt['model']) is collections.OrderedDict:
+            state_dict = ckpt['model']  # to FP32
+        else:
+            assert (type(ckpt['model']) is Model or type(ckpt['model']) is collections.OrderedDict), "Invalid model types to load"
+
         state_dict = intersect_dicts(state_dict, model.state_dict(), exclude=exclude)  # intersect
         model.load_state_dict(state_dict, strict=False)  # load
         logger.info('Transferred %g/%g items from %s' % (len(state_dict), len(model.state_dict()), weights))  # report
@@ -333,7 +341,8 @@ def train(hyp, opt, device, tb_writer=None):
                 f'Using {dataloader.num_workers} dataloader workers\n'
                 f'Logging results to {save_dir}\n'
                 f'Starting training for {epochs} epochs...')
-    torch.save(model, wdir / 'init.pt')
+    torch.save(model.float().state_dict(), wdir / 'init.pt')
+
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         model.train()
 
@@ -387,7 +396,7 @@ def train(hyp, opt, device, tb_writer=None):
             pbar = tqdm(pbar, total=nb)  # progress bar
         optimizer.zero_grad()
 
-        for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
+        for i, (imgs, targets, paths, _, masks) in pbar: # batch -------------------------------------------------------------
             ni = i + nb * epoch  # number integrated batches (since train start)
             imgs = imgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
             #print(imgs.shape)
@@ -537,7 +546,7 @@ def train(hyp, opt, device, tb_writer=None):
                 ckpt = {'epoch': epoch,
                         'best_fitness': best_fitness,
                         'training_results': results_file.read_text(),
-                        'model': deepcopy(model.module if is_parallel(model) else model).half(),
+                        'model': deepcopy(model.module if is_parallel(model) else model).half().float().state_dict(),
                         'ema': deepcopy(ema.ema).half(),
                         'updates': ema.updates,
                         'optimizer': optimizer.state_dict(),
@@ -650,6 +659,8 @@ if __name__ == '__main__':
     parser.add_argument('--close-data-generation', type=int, default=300, help='stop mosaic augmentation and distillation')
     parser.add_argument('--load-head-weight', action='store_true', help='Load head weights as well, when using pretrained model')
     parser.add_argument('--trainable-heads', nargs='+', type=int, default=list(range(80)), help='train target heads: Watch out the class indexing')
+    parser.add_argument('--merge-label', type=int, nargs='+', action='append', default=[], help='list of merge label list chunk. --merge-label 0 1 --merge-label 2 3 4')
+    
     opt = parser.parse_args()
 
     # Set DDP variables

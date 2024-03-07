@@ -66,7 +66,12 @@ def detect(save_img=False):
         dataset = LoadImages(source, img_size=imgsz, stride=stride)
 
     # Get names and colors
-    names = model.module.names if hasattr(model, 'module') else model.names
+    #names = model.module.names if hasattr(model, 'module') else model.names
+    
+    nc = 0
+    for matched_multi_class_num in multihead_matcher:
+        nc+=matched_multi_class_num
+    names = [str(cls_id) for cls_id in range(nc)]
     colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
 
     # Run inference
@@ -112,7 +117,7 @@ def detect(save_img=False):
         global_multi_class = 0
         for multi_head_i, pred in enumerate(preds):
             pred = pred[0]
-            print(multi_head_i, " : ", pred)
+            print(multi_head_i, " : ", pred.shape)
 
             # Apply NMS
             pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=None, agnostic=opt.agnostic_nms)
@@ -176,7 +181,7 @@ def detect(save_img=False):
 
                         if save_img or view_img:  # Add bbox to image
                             label = f'{names[int(cls)]} {conf:.2f}'
-                            plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
+                            plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
                         
                         if opt.save_json:
                             if dataset.mode == 'image':
