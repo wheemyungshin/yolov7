@@ -1936,6 +1936,7 @@ def load_image(self, index, ratio_maintain=True):
         img = cv2.imread(path)  # BGR
         assert img is not None, 'Image Not Found ' + path
         if self.gray:
+            #img = np.mean(img, -1, keepdims=True)
             img[:,:,1] = img[:,:,0]
             img[:,:,2] = img[:,:,0]
         h0, w0 = img.shape[:2]  # orig hw
@@ -2647,23 +2648,16 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     a = random.uniform(-degrees, degrees)
     # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
 
-<<<<<<< HEAD
-    min_label_size_limit = 8
-=======
-    '''
     min_label_size_limit = 32
->>>>>>> 48be185b99e4addc2ae5e290cf90fad7022e12a5
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
     min_label_size = np.min(target_sizes)        
     if 0 < min_label_size < min_label_size_limit**2:
         natural_min_scale = min_label_size_limit / min_label_size**0.5
     else:
         natural_min_scale = None
-<<<<<<< HEAD
+        
+    '''
     max_label_size_limit = 64
-=======
-    max_label_size_limit = 256
->>>>>>> 48be185b99e4addc2ae5e290cf90fad7022e12a5
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
     max_label_size = np.max(target_sizes)        
     if max_label_size_limit**2 < max_label_size:
@@ -2675,16 +2669,10 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             temp_val = natural_max_scale
             natural_max_scale = natural_min_scale
             natural_min_scale = temp_val
-<<<<<<< HEAD
+    '''
         
     #natural_min_scale = None
-    #natural_max_scale = None
-=======
-    '''
-
-    natural_min_scale = None
     natural_max_scale = None
->>>>>>> 48be185b99e4addc2ae5e290cf90fad7022e12a5
 
     if isinstance(scale, float):
         if natural_min_scale is None and natural_max_scale is None:
@@ -2705,10 +2693,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             s = random.uniform(natural_max_scale - 0.1, natural_max_scale)
         else:
             s = random.uniform(natural_min_scale, natural_max_scale)
-<<<<<<< HEAD
     
-=======
->>>>>>> 48be185b99e4addc2ae5e290cf90fad7022e12a5
 
     # s = 2 ** random.uniform(-scale, scale)
     R[:2] = cv2.getRotationMatrix2D(angle=a, center=(0, 0), scale=s)
