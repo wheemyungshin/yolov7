@@ -691,20 +691,28 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             for file in hand_files :
                 hand_img = cv2.imread(os.path.join(hyp.get('render_hand', None)[0], file), cv2.IMREAD_UNCHANGED)
                 self.hand_imgs.append(hand_img)
+                
+        if hyp is not None and hyp.get('render_vehicle', None) is not None:
+            self.vehicle_imgs = []
+            vehicle_files = os.listdir(hyp.get('render_vehicle', None)[0])
+            for file in vehicle_files :
+                self.vehicle_imgs.append(os.path.join(hyp.get('render_vehicle', None)[0], file))
 
         #recursive 하게 동작함. 출발 라벨과 도착 라벨이 겹치는 경우 주의!
         print(merge_label)
-        total_merge_label_num = 0
-        for merge_label_chunk in merge_label:
-            total_merge_label_num+=len(merge_label_chunk)
         
         if len(merge_label) > 0:
             for x in self.labels:
                 for merge_label_idx, merge_label_chunk in enumerate(merge_label):
-                    x[np.isin(x[:, 0], np.array(merge_label_chunk)), 0] = merge_label_idx - total_merge_label_num
-            
+                    x[np.isin(x[:, 0], np.array(merge_label_chunk)), 0] = merge_label_idx - 100
+
+            labels_new = []
             for x in self.labels:
-                x[:, 0] += total_merge_label_num
+                labels_new.append(x[x[:, 0] < 0])
+            self.labels = labels_new
+
+            for x in self.labels:
+                x[:, 0] += 100
 
         if single_cls:
             for x in self.labels:
@@ -1586,6 +1594,70 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         img[hand_img_position_y:hand_img_position_y+hand_img.shape[0], hand_img_position_x:hand_img_position_x+hand_img.shape[1]] = img_crop
 
 
+        if hyp is not None and random.random() < hyp.get('render_vehicle', ['', 0.0])[1]:
+            num_of_vehicle_img = [1,6]
+            num_of_vehicle = random.randint(num_of_vehicle_img[0], num_of_vehicle_img[1])
+            for idx in range(num_of_vehicle) :
+                vehicle_filename = self.vehicle_imgs[random.randint(0, len(self.vehicle_imgs) - 1)]
+                vehicle_img = cv2.imread(vehicle_filename, cv2.IMREAD_UNCHANGED)
+                render_point = [int(str_point)/10000 for str_point in vehicle_filename.split('_axis_')[-1][:19].split('_')]
+                random_scale = random.randint(16, 320)
+                vehicle_img = cv2.resize(vehicle_img, (random_scale, random_scale), interpolation=cv2.INTER_LINEAR)
+
+                temp_h, temp_w, _ = vehicle_img.shape
+                p_x1 = int(render_point[0] * temp_w)
+                p_y1 = int(render_point[1] * temp_h)
+                p_x2 = int(render_point[2] * temp_w)
+                p_y2 = int(render_point[3] * temp_h)
+                
+                '''
+                try:
+                    for idx_x in range(vehicle_img.shape[1]) :
+                        for idx_y in range(vehicle_img.shape[0]) :
+
+                            color_sum = np.sum(vehicle_img[idx_y][idx_x][0:3])
+
+                            if color_sum > 10 :
+                                vehicle_img[idx_y][idx_x][0] = min(int(color_sum * b),255)
+                                vehicle_img[idx_y][idx_x][1] = min(int(color_sum * g),255)
+                                vehicle_img[idx_y][idx_x][2] = min(int(color_sum * r),255)
+                except:
+                    vehicle_img = vehicle_img
+                '''
+
+                # vehicle 위치 랜덤하게 지정
+                if img.shape[1]-temp_w > 0 and img.shape[0]-temp_h > 0:
+                    vehicle_img_position_x = random.randint(0, img.shape[1]-temp_w)
+                    vehicle_img_position_y = random.randint(0, img.shape[0]-temp_h)
+
+                    img_crop = img[vehicle_img_position_y:vehicle_img_position_y+temp_h, vehicle_img_position_x:vehicle_img_position_x+temp_w]
+                    img_crop_origin = img_crop
+                    img_crop = cv2.cvtColor(img_crop, cv2.COLOR_BGR2BGRA)                            
+                    
+                    vehicle_img_pillow = Image.fromarray(vehicle_img)
+                    img_crop_pillow = Image.fromarray(img_crop)
+                    blended_pillow = Image.alpha_composite(img_crop_pillow, vehicle_img_pillow)
+                    blended_img=np.array(blended_pillow)
+
+                    blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
+                    blended_img = cv2.addWeighted(blended_img, 0.8, img_crop_origin, 0.2, 0)
+                    img[vehicle_img_position_y:vehicle_img_position_y+temp_h, vehicle_img_position_x:vehicle_img_position_x+temp_w] = blended_img
+
+                    min_x = p_x1 + vehicle_img_position_x
+                    min_y = p_y1 + vehicle_img_position_y
+                    max_x = p_x2 + vehicle_img_position_x
+                    max_y = p_y2 + vehicle_img_position_y
+                    new_label = np.array([[1, min_x, min_y, max_x, max_y]])
+                    new_segment = np.array([
+                        [min_x, min_y], 
+                        [max_x, min_y],  
+                        [max_x, max_y],
+                        [min_x, max_y]
+                        ])
+                    
+                    labels = np.append(labels, new_label, axis=0)  
+                    segments.append(new_segment)
+        
         if hyp is not None and (hyp.get('ciga_cutout', None) is not None or hyp.get('cellphone_cutout', None) is not None):
             nL = len(labels)  # number of labels
             if nL:
@@ -2648,35 +2720,49 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
 
     '''
-    min_label_size_limit = 12
-
+    min_label_size_limit = 32
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
-    min_label_size = np.min(target_sizes)
-        
-    if min_label_size < min_label_size_limit**2:
+    min_label_size = np.min(target_sizes)        
+    if 0 < min_label_size < min_label_size_limit**2:
         natural_min_scale = min_label_size_limit / min_label_size**0.5
     else:
         natural_min_scale = None
+    max_label_size_limit = 256
+    target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
+    max_label_size = np.max(target_sizes)        
+    if max_label_size_limit**2 < max_label_size:
+        natural_max_scale = max_label_size_limit / max_label_size**0.5
+    else:
+        natural_max_scale = None
+    if natural_min_scale is not None and natural_max_scale is not None:
+        if natural_min_scale > natural_max_scale :
+            temp_val = natural_max_scale
+            natural_max_scale = natural_min_scale
+            natural_min_scale = temp_val
     '''
 
-    #print((height, width))
-    #print("min_label_size_limit**2: ", min_label_size_limit**2)
-    #print("min_label_size: ", min_label_size)
-    #print("natural_min_scale: ", natural_min_scale)
-    
     natural_min_scale = None
+    natural_max_scale = None
 
     if isinstance(scale, float):
-        if natural_min_scale is None:
+        if natural_min_scale is None and natural_max_scale is None:
             s = random.uniform(1 - scale, 1.1 + scale)
-        else:
+        elif natural_max_scale is None:
             s = random.uniform(natural_min_scale, natural_min_scale + scale)
-    else:
-        if natural_min_scale is None:
-            s = random.uniform(1 + scale[0], 1.1 + scale[1])
+        elif natural_min_scale is None:
+            s = random.uniform(natural_max_scale - scale, natural_max_scale)
         else:
-            s = random.uniform(natural_min_scale, natural_min_scale+0.1)
-    
+            s = random.uniform(natural_min_scale, natural_max_scale)
+
+    else:
+        if natural_min_scale is None and natural_max_scale is None:
+            s = random.uniform(1 + scale[0], 1.1 + scale[1])
+        elif natural_max_scale is None:
+            s = random.uniform(natural_min_scale, natural_min_scale + 0.1)
+        elif natural_min_scale is None:
+            s = random.uniform(natural_max_scale - 0.1, natural_max_scale)
+        else:
+            s = random.uniform(natural_min_scale, natural_max_scale)
 
     # s = 2 ** random.uniform(-scale, scale)
     R[:2] = cv2.getRotationMatrix2D(angle=a, center=(0, 0), scale=s)
@@ -2741,7 +2827,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             new[:, [1, 3]] = new[:, [1, 3]].clip(0, height)
             
         # filter candidates
-        i = box_candidates(box1=targets[:, 1:5].T * s, box2=new.T, area_thr=0.2)# 0.01 if use_segments else 0.10)
+        i = box_candidates(box1=targets[:, 1:5].T * s, box2=new.T, area_thr=0.3)# 0.01 if use_segments else 0.10)
         targets = targets[i]
         targets[:, 1:5] = new[i]
 

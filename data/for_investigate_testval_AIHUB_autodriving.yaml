@@ -16,12 +16,12 @@ test: [
 /data/AIHUB_autodriving_daytime_city_yolo/val.txt, #1520
 /data/AIHUB_autodriving_night_city_yolo/train.txt, #12840
 /data/AIHUB_autodriving_night_city_yolo/val.txt, #1520
-]
+] # 69544 / 68593
 
 # number of classes
-nc: 7
+nc: 6
 
 # class names
-names: ['person', 'person_from_ADAS', 'car', 'truck', 'bus', 'motorcycle', 'bicycle']
+names: ['person', 'car', 'truck', 'bus', 'motorcycle', 'bicycle']
 
-valid_idx: [0, 6, 8, 9, 10, 12, 13]
+valid_idx: [6, 8, 9, 10, 12, 13]

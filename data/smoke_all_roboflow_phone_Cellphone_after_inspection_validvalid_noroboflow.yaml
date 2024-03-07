@@ -5,7 +5,6 @@ train: [
 /data/valid_phone_data/phonecalls_crawling_grounding_dino/train.txt, # 11517
 /data/valid_phone_data/roboflow_all/train.txt, # 1454
 /data/valid_phone_data/phonecalls_crawling2_auto/train.txt, # 5415
-/data/roboflow_phone_after_inspection/train_valid_valid.txt, # 19298 -> 15630
 ] 
 
 val: [
