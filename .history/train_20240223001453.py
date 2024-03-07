@@ -234,9 +234,9 @@ def train(hyp, opt, device, tb_writer=None):
         #    best_fitness = ckpt['best_fitness']
 
         # EMA
-        #if ema and ckpt.get('ema'):
-        #    ema.ema.load_state_dict(ckpt['ema'].float().state_dict())
-        #    ema.updates = ckpt['updates']
+        if ema and ckpt.get('ema'):
+            ema.ema.load_state_dict(ckpt['ema'].float().state_dict())
+            ema.updates = ckpt['updates']
 
         # Results
         if ckpt.get('training_results') is not None:
