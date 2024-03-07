@@ -1680,14 +1680,14 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     blended_img=np.array(blended_pillow)
 
                     blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
-                    blended_img = cv2.addWeighted(blended_img, 0.9, img_crop_origin, 0.1, 0)
+                    blended_img = cv2.addWeighted(blended_img, 0.8, img_crop_origin, 0.2, 0)
                     img[pedestrian_img_position_y:pedestrian_img_position_y+temp_h, pedestrian_img_position_x:pedestrian_img_position_x+temp_w] = blended_img
 
                     min_x = p_x1 + pedestrian_img_position_x
                     min_y = p_y1 + pedestrian_img_position_y
                     max_x = p_x2 + pedestrian_img_position_x
                     max_y = p_y2 + pedestrian_img_position_y
-                    new_label = np.array([[0, min_x, min_y, max_x, max_y]])
+                    new_label = np.array([[1, min_x, min_y, max_x, max_y]])
                     new_segment = np.array([
                         [min_x, min_y], 
                         [max_x, min_y],  

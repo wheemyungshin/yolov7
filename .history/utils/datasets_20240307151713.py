@@ -1687,7 +1687,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     min_y = p_y1 + pedestrian_img_position_y
                     max_x = p_x2 + pedestrian_img_position_x
                     max_y = p_y2 + pedestrian_img_position_y
-                    new_label = np.array([[0, min_x, min_y, max_x, max_y]])
+                    new_label = np.array([[1, min_x, min_y, max_x, max_y]])
                     new_segment = np.array([
                         [min_x, min_y], 
                         [max_x, min_y],  
