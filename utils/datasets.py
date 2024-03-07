@@ -2767,6 +2767,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
         natural_min_scale = min_label_size_limit / min_label_size**0.5
     else:
         natural_min_scale = None
+
     max_label_size_limit = 256
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
     max_label_size = np.max(target_sizes)        
