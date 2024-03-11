@@ -270,7 +270,6 @@ class LoadImages:  # for inference
         self.nf = ni + nv  # number of files
         self.video_flag = [False] * ni + [True] * nv
         self.mode = 'image'
-        self.ratio_maintain = ratio_maintain
         if any(videos):
             self.new_video(videos[0])  # new video
         else:
@@ -311,10 +310,8 @@ class LoadImages:  # for inference
             assert img0 is not None, 'Image Not Found ' + path
 
         # Padded resize
-        if self.ratio_maintain:
-            img = letterbox(img0, self.img_size, stride=self.stride)[0]
-        else:
-            img = cv2.resize(img0, self.img_size)
+        #img = letterbox(img0, self.img_size, stride=self.stride)[0]
+        img = cv2.resize(img0, self.img_size)
 
 
         # Convert

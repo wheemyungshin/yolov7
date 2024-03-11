@@ -76,7 +76,8 @@ def detect(save_img=False):
         cudnn.benchmark = True  # set True to speed up constant image size inference
         dataset = LoadStreams(source, img_size=imgsz, stride=stride)
     else:
-        dataset = LoadImages(source, img_size=imgsz, stride=stride, ratio_maintain=(not opt.no_ratio_maintain))
+        print("imgsz: ", imgsz)
+        dataset = LoadImages(source, img_size=imgsz, stride=stride)
 
     # Get names and colors
     names = model.module.names if hasattr(model, 'module') else model.names
@@ -209,13 +210,7 @@ def detect(save_img=False):
 
                     scores = det[:, 4]
                     # Rescale boxes from img_size to im0 size
-                    if opt.no_ratio_maintain:
-                        det[:, 0] = det[:, 0] * (im0.shape[1] / img.shape[3])
-                        det[:, 1] = det[:, 1] * (im0.shape[0] / img.shape[2])
-                        det[:, 2] = det[:, 2] * (im0.shape[1] / img.shape[3])
-                        det[:, 3] = det[:, 3] * (im0.shape[0] / img.shape[2])
-                    else:
-                        det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape)#.round()d
+                    det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape)#.round()d
 
                     # Print results
                     for c in det[:, 5].unique():

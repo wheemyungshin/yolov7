@@ -299,7 +299,7 @@ def train(hyp, opt, device, tb_writer=None):
                                             world_size=opt.world_size, workers=opt.workers,
                                             image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), 
                                             valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg, gray=opt.gray,
-                                            ratio_maintain=(not opt.ratio_maintain))
+                                            ratio_maintain=opt.ratio_maintain)
     mlc = np.concatenate(dataset.labels, 0)[:, 0].max()  # max label class
     nb = len(dataloader)  # number of batches
     if not opt.seg:
@@ -311,7 +311,7 @@ def train(hyp, opt, device, tb_writer=None):
                                        cache=opt.cache_images and not opt.notest, rect=opt.rect, rank=-1,
                                        world_size=opt.world_size, workers=opt.workers,
                                        prefix=colorstr('val: '), valid_idx=valid_idx, load_seg=opt.seg, gray=opt.gray,
-                                       ratio_maintain=(not opt.ratio_maintain))[0]
+                                       ratio_maintain=opt.ratio_maintain)[0]
 
         if not opt.resume:
             labels = np.concatenate(dataset.labels, 0)
@@ -404,7 +404,7 @@ def train(hyp, opt, device, tb_writer=None):
                                                     hyp=hyp, augment=False, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                                     world_size=opt.world_size, workers=opt.workers,
                                                     image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg, gray=opt.gray,
-                                                    ratio_maintain=(not opt.ratio_maintain))
+                                                    ratio_maintain=opt.ratio_maintain)
             
             print("STOP DISTILLATION!")
             is_distill = False
@@ -421,7 +421,7 @@ def train(hyp, opt, device, tb_writer=None):
                                                     hyp=hyp, augment=False, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                                     world_size=opt.world_size, workers=opt.workers,
                                                     image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg, gray=opt.gray,
-                                                    ratio_maintain=(not opt.ratio_maintain))
+                                                    ratio_maintain=opt.ratio_maintain)
 
         mloss = torch.zeros(4, device=device)  # mean losses
         if rank != -1:

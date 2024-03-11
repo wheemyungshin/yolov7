@@ -76,7 +76,8 @@ def detect(save_img=False):
         cudnn.benchmark = True  # set True to speed up constant image size inference
         dataset = LoadStreams(source, img_size=imgsz, stride=stride)
     else:
-        dataset = LoadImages(source, img_size=imgsz, stride=stride, ratio_maintain=(not opt.no_ratio_maintain))
+        print("imgsz: ", imgsz)
+        dataset = LoadImages(source, img_size=imgsz, stride=stride)
 
     # Get names and colors
     names = model.module.names if hasattr(model, 'module') else model.names
@@ -209,13 +210,7 @@ def detect(save_img=False):
 
                     scores = det[:, 4]
                     # Rescale boxes from img_size to im0 size
-                    if opt.no_ratio_maintain:
-                        det[:, 0] = det[:, 0] * (im0.shape[1] / img.shape[3])
-                        det[:, 1] = det[:, 1] * (im0.shape[0] / img.shape[2])
-                        det[:, 2] = det[:, 2] * (im0.shape[1] / img.shape[3])
-                        det[:, 3] = det[:, 3] * (im0.shape[0] / img.shape[2])
-                    else:
-                        det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape)#.round()d
+                    det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape)#.round()d
 
                     # Print results
                     for c in det[:, 5].unique():
@@ -394,7 +389,7 @@ if __name__ == '__main__':
     parser.add_argument('--valid-segment-labels', nargs='+', type=int, default=[], help='labels to include when calculating segmentation loss')
     parser.add_argument('--square', action='store_true', help='do square cut for input')
     parser.add_argument('--objcam', action='store_true', help='visualize extracted objectness scores.')
-    parser.add_argument('--no-ratio-maintain', action='store_true', help='maintain input ratio')
+    parser.add_argument('--ratio-maintain', action='store_true', help='maintain input ratio')
     
     opt = parser.parse_args()
     print(opt)

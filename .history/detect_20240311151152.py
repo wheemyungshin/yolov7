@@ -210,10 +210,7 @@ def detect(save_img=False):
                     scores = det[:, 4]
                     # Rescale boxes from img_size to im0 size
                     if opt.no_ratio_maintain:
-                        det[:, 0] = det[:, 0] * (im0.shape[1] / img.shape[3])
-                        det[:, 1] = det[:, 1] * (im0.shape[0] / img.shape[2])
-                        det[:, 2] = det[:, 2] * (im0.shape[1] / img.shape[3])
-                        det[:, 3] = det[:, 3] * (im0.shape[0] / img.shape[2])
+                        det[:, 0] = det[:, 0] * (im0.shape[0] / img.shape[2])
                     else:
                         det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape)#.round()d
 
