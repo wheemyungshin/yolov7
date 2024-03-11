@@ -799,12 +799,21 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     with open(lb_file, 'r') as f:
                         l = [x.split() for x in f.read().strip().splitlines()]       
 
-                        #fix label out of bouonds
+                        #fix label out of bounds
                         l_fix = []
                         for x_line in l:
-                            line_fixed = [x_line[0]]
-                            for x_item in x_line[1:]:
-                                line_fixed.append(str(round(max(min(float(x_item),1),0),6)))
+                            line_fixed_temp = [(round(float(x_item),6)) for x_item in x_line[1:]]
+                            x_temp, y_temp, w_temp, h_temp = line_fixed_temp
+                            x1_temp = max(min(x_temp - w_temp/2,1),0)
+                            y1_temp = max(min(y_temp - h_temp/2,1),0)
+                            x2_temp = max(min(x_temp + w_temp/2,1),0)
+                            y2_temp = max(min(y_temp + h_temp/2,1),0)
+                            x_fixed = str(round(float((x1_temp+x2_temp)/2),6))
+                            y_fixed = str(round(float((y1_temp+y2_temp)/2),6))
+                            w_fixed = str(round(float(x2_temp-x1_temp),6))
+                            h_fixed = str(round(float(y2_temp-y1_temp),6))
+                            line_fixed = [x_line[0], x_fixed, y_fixed, w_fixed, h_fixed]
+
                             l_fix.append(line_fixed)
                         l = l_fix
 
@@ -2708,8 +2717,6 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
         else:
             new_shape = (new_shape, new_shape * (shape[1]/shape[0]))
         new_shape = (max(make_divisible(new_shape[0], stride), stride), max(make_divisible(new_shape[1], stride), stride))
-
-
 
     # Scale ratio (new / old)
     r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
