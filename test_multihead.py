@@ -96,8 +96,8 @@ def test(data,
         
         valid_idx = data.get('valid_idx', None)
 
-        dataloader = create_dataloader(data[task], imgsz, batch_size, gs, opt, pad=0.5, rect=True,
-                                       prefix=colorstr(f'{task}: '), valid_idx=valid_idx)[0]
+        dataloader = create_dataloader(data[task], imgsz, batch_size, gs, opt, rect=False,
+                                       prefix=colorstr(f'{task}: '), valid_idx=valid_idx, load_seg=opt_seg, ratio_maintain=True)[0]
 
     if v5_metric:
         print("Testing with YOLOv5 AP metric...")
@@ -113,7 +113,7 @@ def test(data,
     if opt_size_devision:
         size_stats = defaultdict(list)
     stats = []
-    for batch_i, (img, targets, paths, shapes) in enumerate(tqdm(dataloader, desc=s)):
+    for batch_i, (img, targets, paths, shapes, masks) in enumerate(tqdm(dataloader, desc=s)):
         img = img.to(device, non_blocking=True)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0

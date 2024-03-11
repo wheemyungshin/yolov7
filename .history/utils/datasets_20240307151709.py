@@ -799,21 +799,12 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     with open(lb_file, 'r') as f:
                         l = [x.split() for x in f.read().strip().splitlines()]       
 
-                        #fix label out of bounds
+                        #fix label out of bouonds
                         l_fix = []
                         for x_line in l:
-                            line_fixed_temp = [(round(max(min(float(x_item),1),0),6)) for x_item in x_line[1:]]
-                            x_temp, y_temp, w_temp, h_temp = line_fixed_temp
-                            x1_temp = max(min(x_temp - w_temp/2,1),0)
-                            y1_temp = max(min(y_temp - h_temp/2,1),0)
-                            x2_temp = max(min(x_temp + w_temp/2,1),0)
-                            y2_temp = max(min(y_temp + h_temp/2,1),0)
-                            x_fixed = str(round(float((x1_temp+x2_temp)/2),6))
-                            y_fixed = str(round(float((y1_temp+y2_temp)/2),6))
-                            w_fixed = str(round(float(x2_temp-x1_temp),6))
-                            h_fixed = str(round(float(y2_temp-y1_temp),6))
-                            line_fixed = [x_line[0], x_fixed, y_fixed, w_fixed, h_fixed]
-
+                            line_fixed = [x_line[0]]
+                            for x_item in x_line[1:]:
+                                line_fixed.append(str(round(max(min(float(x_item),1),0),6)))
                             l_fix.append(line_fixed)
                         l = l_fix
 
@@ -1689,14 +1680,14 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     blended_img=np.array(blended_pillow)
 
                     blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
-                    blended_img = cv2.addWeighted(blended_img, 0.9, img_crop_origin, 0.1, 0)
+                    blended_img = cv2.addWeighted(blended_img, 0.8, img_crop_origin, 0.2, 0)
                     img[pedestrian_img_position_y:pedestrian_img_position_y+temp_h, pedestrian_img_position_x:pedestrian_img_position_x+temp_w] = blended_img
 
                     min_x = p_x1 + pedestrian_img_position_x
                     min_y = p_y1 + pedestrian_img_position_y
                     max_x = p_x2 + pedestrian_img_position_x
                     max_y = p_y2 + pedestrian_img_position_y
-                    new_label = np.array([[0, min_x, min_y, max_x, max_y]])
+                    new_label = np.array([[1, min_x, min_y, max_x, max_y]])
                     new_segment = np.array([
                         [min_x, min_y], 
                         [max_x, min_y],  
@@ -2768,6 +2759,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     a = random.uniform(-degrees, degrees)
     # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
 
+    '''
     min_label_size_limit = 32
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
     min_label_size = np.min(target_sizes)        
@@ -2775,8 +2767,6 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
         natural_min_scale = min_label_size_limit / min_label_size**0.5
     else:
         natural_min_scale = None
-        
-    '''
     max_label_size_limit = 256
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
     max_label_size = np.max(target_sizes)        
@@ -2790,8 +2780,8 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             natural_max_scale = natural_min_scale
             natural_min_scale = temp_val
     '''
-        
-    #natural_min_scale = None
+
+    natural_min_scale = None
     natural_max_scale = None
 
     if isinstance(scale, float):
@@ -2813,7 +2803,6 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             s = random.uniform(natural_max_scale - 0.1, natural_max_scale)
         else:
             s = random.uniform(natural_min_scale, natural_max_scale)
-    
 
     # s = 2 ** random.uniform(-scale, scale)
     R[:2] = cv2.getRotationMatrix2D(angle=a, center=(0, 0), scale=s)
