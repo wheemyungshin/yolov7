@@ -2775,11 +2775,6 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
         natural_min_scale = min_label_size_limit / min_label_size**0.5
     else:
         natural_min_scale = None
-<<<<<<< HEAD
-        
-=======
-
->>>>>>> 19d680bcb222456e1e534945df0eaf903c1d09f6
     '''
     max_label_size_limit = 256
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
@@ -2794,11 +2789,6 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             natural_max_scale = natural_min_scale
             natural_min_scale = temp_val
     '''
-<<<<<<< HEAD
-        
-=======
-
->>>>>>> 19d680bcb222456e1e534945df0eaf903c1d09f6
     #natural_min_scale = None
     natural_max_scale = None
 

@@ -708,11 +708,7 @@ if __name__ == '__main__':
     parser.add_argument('--valid-segment-labels', nargs='+', type=int, default=[], help='labels to include when calculating segmentation loss')
     parser.add_argument('--gray', action='store_true', help='Load all data as grayscale')
     parser.add_argument('--merge-label', type=int, nargs='+', action='append', default=[], help='list of merge label list chunk. --merge-label 0 1 --merge-label 2 3 4')
-<<<<<<< HEAD
-    parser.add_argument('--single-channel', action='store_true', help='The model gets input as single channel')
-=======
     parser.add_argument('--ratio-maintain', action='store_true', help='maintain input ratio')
->>>>>>> 19d680bcb222456e1e534945df0eaf903c1d09f6
     
     opt = parser.parse_args()
 
