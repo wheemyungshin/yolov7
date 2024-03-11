@@ -1680,14 +1680,14 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     blended_img=np.array(blended_pillow)
 
                     blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
-                    blended_img = cv2.addWeighted(blended_img, 0.9, img_crop_origin, 0.1, 0)
+                    blended_img = cv2.addWeighted(blended_img, 0.8, img_crop_origin, 0.2, 0)
                     img[pedestrian_img_position_y:pedestrian_img_position_y+temp_h, pedestrian_img_position_x:pedestrian_img_position_x+temp_w] = blended_img
 
                     min_x = p_x1 + pedestrian_img_position_x
                     min_y = p_y1 + pedestrian_img_position_y
                     max_x = p_x2 + pedestrian_img_position_x
                     max_y = p_y2 + pedestrian_img_position_y
-                    new_label = np.array([[0, min_x, min_y, max_x, max_y]])
+                    new_label = np.array([[1, min_x, min_y, max_x, max_y]])
                     new_segment = np.array([
                         [min_x, min_y], 
                         [max_x, min_y],  
@@ -2125,7 +2125,7 @@ def load_mosaic(self, hyp, index):
     indices = [index] + random.choices(self.indices, k=3)  # 3 additional image indices
     for i, index in enumerate(indices):
         # Load image
-        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain)
+        img, _, (h, w) = load_image(self, index)
 
         # place img in img4
         if i == 0:  # top left
@@ -2342,7 +2342,7 @@ def load_mosaic9(self, hyp, index):
     indices = [index] + random.choices(self.indices, k=8)  # 8 additional image indices
     for i, index in enumerate(indices):
         # Load image
-        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain)
+        img, _, (h, w) = load_image(self, index)
 
         # place img in img9
         if i == 0:  # center
@@ -2569,7 +2569,7 @@ def load_samples(self, index):
     indices = [index] + random.choices(self.indices, k=3)  # 3 additional image indices
     for i, index in enumerate(indices):
         # Load image
-        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain)
+        img, _, (h, w) = load_image(self, index)
 
         # place img in img4
         if i == 0:  # top left
@@ -2709,8 +2709,6 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
             new_shape = (new_shape, new_shape * (shape[1]/shape[0]))
         new_shape = (max(make_divisible(new_shape[0], stride), stride), max(make_divisible(new_shape[1], stride), stride))
 
-
-
     # Scale ratio (new / old)
     r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
     if not scaleup:  # only scale down, do not scale up (for better test mAP)
@@ -2761,6 +2759,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     a = random.uniform(-degrees, degrees)
     # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
 
+    '''
     min_label_size_limit = 32
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
     min_label_size = np.min(target_sizes)        
@@ -2768,8 +2767,6 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
         natural_min_scale = min_label_size_limit / min_label_size**0.5
     else:
         natural_min_scale = None
-
-    '''
     max_label_size_limit = 256
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
     max_label_size = np.max(target_sizes)        
@@ -2784,7 +2781,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             natural_min_scale = temp_val
     '''
 
-    #natural_min_scale = None
+    natural_min_scale = None
     natural_max_scale = None
 
     if isinstance(scale, float):
