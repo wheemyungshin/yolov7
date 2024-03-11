@@ -2223,7 +2223,7 @@ class ST2CSPC(nn.Module):
 
 ##### end of swin transformer v2 #####   
 
-
+# yolov7-lite
 class conv_bn_relu_maxpool(nn.Module):
     def __init__(self, c1, c2):  # ch_in, ch_out
         super(conv_bn_relu_maxpool, self).__init__()
