@@ -2284,6 +2284,7 @@ class ST2CSPC(nn.Module):
 ##### end of swin transformer v2 #####   
 
 # yolov7-lite
+<<<<<<< HEAD
 def channel_shuffle(x, groups):
     batchsize, num_channels, height, width = x.shape
     channels_per_group = num_channels // groups
@@ -2299,6 +2300,8 @@ def channel_shuffle(x, groups):
 
     return x
     
+=======
+>>>>>>> 19d680bcb222456e1e534945df0eaf903c1d09f6
 class conv_bn_relu_maxpool(nn.Module):
     def __init__(self, c1, c2):  # ch_in, ch_out
         super(conv_bn_relu_maxpool, self).__init__()

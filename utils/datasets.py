@@ -802,7 +802,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         #fix label out of bounds
                         l_fix = []
                         for x_line in l:
-                            line_fixed_temp = [(round(max(min(float(x_item),1),0),6)) for x_item in x_line[1:]]
+                            line_fixed_temp = [(round(float(x_item),6)) for x_item in x_line[1:]]
                             x_temp, y_temp, w_temp, h_temp = line_fixed_temp
                             x1_temp = max(min(x_temp - w_temp/2,1),0)
                             y1_temp = max(min(y_temp - h_temp/2,1),0)
@@ -2134,7 +2134,7 @@ def load_mosaic(self, hyp, index):
     indices = [index] + random.choices(self.indices, k=3)  # 3 additional image indices
     for i, index in enumerate(indices):
         # Load image
-        img, _, (h, w) = load_image(self, index)
+        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain)
 
         # place img in img4
         if i == 0:  # top left
@@ -2351,7 +2351,7 @@ def load_mosaic9(self, hyp, index):
     indices = [index] + random.choices(self.indices, k=8)  # 8 additional image indices
     for i, index in enumerate(indices):
         # Load image
-        img, _, (h, w) = load_image(self, index)
+        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain)
 
         # place img in img9
         if i == 0:  # center
@@ -2578,7 +2578,7 @@ def load_samples(self, index):
     indices = [index] + random.choices(self.indices, k=3)  # 3 additional image indices
     for i, index in enumerate(indices):
         # Load image
-        img, _, (h, w) = load_image(self, index)
+        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain)
 
         # place img in img4
         if i == 0:  # top left
@@ -2775,7 +2775,11 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
         natural_min_scale = min_label_size_limit / min_label_size**0.5
     else:
         natural_min_scale = None
+<<<<<<< HEAD
         
+=======
+
+>>>>>>> 19d680bcb222456e1e534945df0eaf903c1d09f6
     '''
     max_label_size_limit = 256
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
@@ -2790,7 +2794,11 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             natural_max_scale = natural_min_scale
             natural_min_scale = temp_val
     '''
+<<<<<<< HEAD
         
+=======
+
+>>>>>>> 19d680bcb222456e1e534945df0eaf903c1d09f6
     #natural_min_scale = None
     natural_max_scale = None
 
