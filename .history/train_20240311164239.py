@@ -104,7 +104,7 @@ def train(hyp, opt, device, tb_writer=None):
         with torch_distributed_zero_first(rank):
             attempt_download(weights)  # download if not found locally
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
-        model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+        model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create#, nm=nm).to(device)  # create
         exclude = ['anchor'] if not (opt.load_head_weight) and not opt.resume else []  # exclude keys
         if type(ckpt['model']) is Model:
             state_dict = ckpt['model'].float().state_dict()  # to FP32
@@ -118,7 +118,7 @@ def train(hyp, opt, device, tb_writer=None):
         model.load_state_dict(state_dict, strict=False)  # load
         logger.info('Transferred %g/%g items from %s' % (len(state_dict), len(model.state_dict()), weights))  # report
     else:
-        model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+        model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors'), nm=nm).to(device)  # create
     with torch_distributed_zero_first(rank):
         check_dataset(data_dict)  # check
     train_path = data_dict['train']
@@ -311,7 +311,7 @@ def train(hyp, opt, device, tb_writer=None):
                                        cache=opt.cache_images and not opt.notest, rect=opt.rect, rank=-1,
                                        world_size=opt.world_size, workers=opt.workers,
                                        prefix=colorstr('val: '), valid_idx=valid_idx, load_seg=opt.seg, gray=opt.gray,
-                                       ratio_maintain=(not opt.no_ratio_maintain))[0]
+                                       ratio_maintain=(not opt.ratio_maintain))[0]
 
         if not opt.resume:
             labels = np.concatenate(dataset.labels, 0)
@@ -404,7 +404,7 @@ def train(hyp, opt, device, tb_writer=None):
                                                     hyp=hyp, augment=False, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                                     world_size=opt.world_size, workers=opt.workers,
                                                     image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg, gray=opt.gray,
-                                                    ratio_maintain=(not opt.no_ratio_maintain))
+                                                    ratio_maintain=(not opt.ratio_maintain))
             
             print("STOP DISTILLATION!")
             is_distill = False
@@ -421,7 +421,7 @@ def train(hyp, opt, device, tb_writer=None):
                                                     hyp=hyp, augment=False, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                                     world_size=opt.world_size, workers=opt.workers,
                                                     image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg, gray=opt.gray,
-                                                    ratio_maintain=(not opt.no_ratio_maintain))
+                                                    ratio_maintain=(not opt.ratio_maintain))
 
         mloss = torch.zeros(4, device=device)  # mean losses
         if rank != -1:
@@ -708,7 +708,7 @@ if __name__ == '__main__':
     parser.add_argument('--valid-segment-labels', nargs='+', type=int, default=[], help='labels to include when calculating segmentation loss')
     parser.add_argument('--gray', action='store_true', help='Load all data as grayscale')
     parser.add_argument('--merge-label', type=int, nargs='+', action='append', default=[], help='list of merge label list chunk. --merge-label 0 1 --merge-label 2 3 4')
-    parser.add_argument('--no-ratio-maintain', action='store_true', help='do not maintain input ratio')
+    parser.add_argument('--no-ratio-maintain', action='store_true', help='maintain input ratio')
     
     opt = parser.parse_args()
 
