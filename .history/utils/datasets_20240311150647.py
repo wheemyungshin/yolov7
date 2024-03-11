@@ -270,7 +270,6 @@ class LoadImages:  # for inference
         self.nf = ni + nv  # number of files
         self.video_flag = [False] * ni + [True] * nv
         self.mode = 'image'
-        self.ratio_maintain = ratio_maintain
         if any(videos):
             self.new_video(videos[0])  # new video
         else:
@@ -311,7 +310,7 @@ class LoadImages:  # for inference
             assert img0 is not None, 'Image Not Found ' + path
 
         # Padded resize
-        if self.ratio_maintain:
+        if ratio_maintain:
             img = letterbox(img0, self.img_size, stride=self.stride)[0]
         else:
             img = cv2.resize(img0, self.img_size)
@@ -2780,6 +2779,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
         natural_min_scale = min_label_size_limit / min_label_size**0.5
     else:
         natural_min_scale = None
+
     '''
     max_label_size_limit = 256
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
@@ -2794,6 +2794,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             natural_max_scale = natural_min_scale
             natural_min_scale = temp_val
     '''
+
     #natural_min_scale = None
     natural_max_scale = None
 
@@ -2816,7 +2817,6 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             s = random.uniform(natural_max_scale - 0.1, natural_max_scale)
         else:
             s = random.uniform(natural_min_scale, natural_max_scale)
-    
 
     # s = 2 ** random.uniform(-scale, scale)
     R[:2] = cv2.getRotationMatrix2D(angle=a, center=(0, 0), scale=s)

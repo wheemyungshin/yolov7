@@ -184,14 +184,12 @@ def detect(save_img=False):
             if opt.objcam:
                 alpha = 0.4
                 view_cam = im0.copy()
-                obj1 = cv2.resize(np.sum(obj1, 0).astype(np.uint8), (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
-                obj2 = cv2.resize(np.sum(obj2, 0).astype(np.uint8), (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
-                obj3 = cv2.resize(np.sum(obj3, 0).astype(np.uint8), (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
+                obj1 = cv2.resize(np.transpose(obj1, (1,2,0)).astype(np.uint8), (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
+                obj2 = cv2.resize(np.transpose(obj2, (1,2,0)).astype(np.uint8), (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
+                obj3 = cv2.resize(np.transpose(obj3, (1,2,0)).astype(np.uint8), (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
                 
-                view_cam[:,:,2] = obj1
-                view_cam[:,:,1] = obj2
-                view_cam[:,:,0] = obj3
-                im0 = cv2.addWeighted(im0, 0.9, view_cam, 0.6, 0)
+                view_cam = obj1 + obj2 + obj3
+                im0 = cv2.addWeighted(im0, alpha, view_cam, 1 - alpha, 0)
 
             if opt.frame_ratio <= 0:
                 frame_ratio = fps

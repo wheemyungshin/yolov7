@@ -249,7 +249,7 @@ class _RepeatSampler(object):
 
 
 class LoadImages:  # for inference
-    def __init__(self, path, img_size=640, stride=32, ratio_maintain=True):
+    def __init__(self, path, img_size=640, stride=32):
         p = str(Path(path).absolute())  # os-agnostic absolute path
         if '*' in p:
             files = sorted(glob.glob(p, recursive=True))  # glob
@@ -270,7 +270,6 @@ class LoadImages:  # for inference
         self.nf = ni + nv  # number of files
         self.video_flag = [False] * ni + [True] * nv
         self.mode = 'image'
-        self.ratio_maintain = ratio_maintain
         if any(videos):
             self.new_video(videos[0])  # new video
         else:
@@ -311,11 +310,7 @@ class LoadImages:  # for inference
             assert img0 is not None, 'Image Not Found ' + path
 
         # Padded resize
-        if self.ratio_maintain:
-            img = letterbox(img0, self.img_size, stride=self.stride)[0]
-        else:
-            img = cv2.resize(img0, self.img_size)
-
+        img = letterbox(img0, self.img_size, stride=self.stride)[0]
 
         # Convert
         img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
@@ -2716,6 +2711,7 @@ def replicate(img, labels):
 def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):
     # Resize and pad image while meeting stride-multiple constraints
     shape = img.shape[:2]  # current shape [height, width]
+    print(new_shape)
     if isinstance(new_shape, int):
         if shape[0] < shape[1]:
             new_shape = (new_shape * (shape[0]/shape[1]), new_shape)            
@@ -2780,6 +2776,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
         natural_min_scale = min_label_size_limit / min_label_size**0.5
     else:
         natural_min_scale = None
+
     '''
     max_label_size_limit = 256
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
@@ -2794,6 +2791,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             natural_max_scale = natural_min_scale
             natural_min_scale = temp_val
     '''
+
     #natural_min_scale = None
     natural_max_scale = None
 
@@ -2816,7 +2814,6 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             s = random.uniform(natural_max_scale - 0.1, natural_max_scale)
         else:
             s = random.uniform(natural_min_scale, natural_max_scale)
-    
 
     # s = 2 ** random.uniform(-scale, scale)
     R[:2] = cv2.getRotationMatrix2D(angle=a, center=(0, 0), scale=s)
