@@ -1329,7 +1329,8 @@ def parse_model(d, ch, nm):  # model_dict, input_channels(3)
                  Ghost, GhostCSPA, GhostCSPB, GhostCSPC,
                  SwinTransformerBlock, STCSPA, STCSPB, STCSPC,
                  SwinTransformer2Block, ST2CSPA, ST2CSPB, ST2CSPC,
-                 conv_bn_relu_maxpool, Shuffle_Block, DWConvblock, Hswish, SELayer, mobilev3_bneck]:
+                 conv_bn_relu_maxpool, Shuffle_Block, DWConvblock, Hswish, SELayer, mobilev3_bneck,
+                 ADown, SPPELAN]:
             print(m)
             c1, c2 = ch[f], args[0]
             if c2 != no:  # if not output
@@ -1377,6 +1378,20 @@ def parse_model(d, ch, nm):  # model_dict, input_channels(3)
             c2 = ch[f] * args[0] ** 2
         elif m is Expand:
             c2 = ch[f] // args[0] ** 2
+        elif m is CBLinear:
+            c2 = args[0]
+            c1 = ch[f]
+            args = [c1, c2, *args[1:]]
+        elif m is CBFuse:
+            c2 = ch[f[-1]]
+        elif m is RepNCSPELAN4:
+            c1, c2, c3, c4, c5 = ch[f], args[0], args[1], args[2], args[3]
+            if c2 != no:  # if not output
+                c2 = make_divisible(c2 * gw, 8)
+                c3 = make_divisible(c3 * gw, 8)
+                c4 = make_divisible(c4 * gw, 8)
+
+            args = [c1, c2, c3, c4, c5]
         else:
             c2 = ch[f]
 

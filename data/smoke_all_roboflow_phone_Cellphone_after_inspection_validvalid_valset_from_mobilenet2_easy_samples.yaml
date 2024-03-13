@@ -1,0 +1,19 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+/data/smoke_all_roboflow_phone_Cellphone_after_inspection_validvalid_valset_from_mobilenet2_easy_samples.txt # 33695
+] 
+
+val: [
+/data/TANG_phones_not_included/train.txt
+] 
+test: [
+/data/TANG_phones_not_included/train.txt
+] 
+
+# number of classes
+nc: 1
+
+# class names
+names: ['cellphone']
+
+valid_idx: [3]
