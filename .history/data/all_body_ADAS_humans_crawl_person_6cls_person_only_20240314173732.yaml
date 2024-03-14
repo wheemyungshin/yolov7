@@ -13,6 +13,6 @@ test: [/data/roboflow_head/test.txt]   # 5884
 nc: 2
 
 # class names
-names: ['person', 'rider']
+names: ['person', 'head']
 
-valid_idx: [6, 7]
+valid_idx: [0, 1]

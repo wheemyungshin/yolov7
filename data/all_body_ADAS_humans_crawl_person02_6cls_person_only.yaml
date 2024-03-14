@@ -4,7 +4,7 @@ train: [
 /data/bdd100k_humans.txt, #1491
 /data/cityscapes_others_humans.txt, # 691
 /data/small_ticket_testset_humans.txt, # 971
-[/data/crawl_person/train.txt, 1.0] # 37394 -> 37394
+[/data/crawl_person/train.txt, 0.2] # 37394 -> ~7500~
 ] 
 val: [/data/roboflow_head/test.txt]   # 5884 images
 test: [/data/roboflow_head/test.txt]   # 5884
