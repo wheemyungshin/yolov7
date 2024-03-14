@@ -2894,7 +2894,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             new[:, [1, 3]] = new[:, [1, 3]].clip(0, height)
             
         # filter candidates
-        i = box_candidates(box1=targets[:, 1:5].T * s, box2=new.T, area_thr=0.3)# 0.01 if use_segments else 0.10)
+        i = box_candidates(box1=targets[:, 1:5].T * s, box2=new.T, area_thr=0.15)# 0.01 if use_segments else 0.10)
         targets = targets[i]
         targets[:, 1:5] = new[i]
 
