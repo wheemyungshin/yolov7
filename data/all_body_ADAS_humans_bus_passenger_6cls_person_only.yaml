@@ -1,0 +1,18 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+/data/AIHUB_autodriving_humans.txt, # 827
+/data/bdd100k_humans.txt, #1491
+/data/cityscapes_others_humans.txt, # 691
+/data/small_ticket_testset_humans.txt, # 971
+[/data/AIHUB_bus_passenger_onoff/train.txt, 0.4] # 15671 -> 6000~6500
+]
+val: [/data/cityscapes/yolov7_det/val.txt]
+test: [/data/cityscapes/yolov7_det/val.txt]
+
+# number of classes
+nc: 2
+
+# class names
+names: ['person', 'rider']
+
+valid_idx: [6, 7]

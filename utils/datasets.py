@@ -314,7 +314,7 @@ class LoadImages:  # for inference
         if self.ratio_maintain:
             img = letterbox(img0, self.img_size, stride=self.stride)[0]
         else:
-            img = cv2.resize(img0, (self.img_size[1], self.img_size[0]))
+            img = cv2.resize(img0, self.img_size)
 
 
         # Convert
@@ -561,8 +561,13 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         try:
             f = []  # image files
-            for p in path if isinstance(path, list) else [path]:
-                p = Path(p)  # os-agnostic
+            for p_ in path if isinstance(path, list) else [path]:
+                if isinstance(p_, list):
+                    p = Path(p_[0])
+                    data_sampling_ratio = p_[1]
+                else:
+                    p = Path(p_)  # os-agnostic
+                    data_sampling_ratio = 1.0
                 if p.is_dir():  # dir
                     f += glob.glob(str(p / '**' / '*.*'), recursive=True)
                     # f = list(p.rglob('**/*.*'))  # pathlib
@@ -570,7 +575,15 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     with open(p, 'r') as t:
                         t = t.read().strip().splitlines()
                         parent = str(p.parent) + os.sep
-                        f += [x.replace('./', parent) if x.startswith('./') else x for x in t]  # local to global path
+
+                        add_line = []
+                        for x in t:
+                            if random.random() <= data_sampling_ratio:
+                                if x.startswith('./'):
+                                    add_line.append(x.replace('./', parent))
+                                else:
+                                    add_line.append(x)
+                        f += add_line  # local to global path
                         # f += [p.parent / x.lstrip(os.sep) for x in t]  # local to global path (pathlib)
                 else:
                     raise Exception(f'{prefix}{p} does not exist')
