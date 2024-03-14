@@ -6,8 +6,8 @@ train: [
 /data/small_ticket_testset_humans.txt, # 971
 [/data/crawl_person_6cls/train.txt, 1.0] # 37394 -> 37394
 ] 
-val: [/data/cityscapes/yolov7_det/val.txt]
-test: [/data/cityscapes/yolov7_det/val.txt]
+val: [/data/roboflow_head/test.txt]   # 5884 images
+test: [/data/roboflow_head/test.txt]   # 5884
 
 # number of classes
 nc: 2
