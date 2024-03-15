@@ -4,7 +4,7 @@ train: [
 /data/bdd100k_humans.txt, #1491
 /data/cityscapes_others_humans.txt, # 691
 /data/small_ticket_testset_humans.txt, # 971
-[/data/AIHUB_bus_passenger_onoff/train.txt, 0.4] # 15671 -> 6000~6500
+/data/AIHUB_bus_passenger_onoff/train.txt # 3888
 ]
 val: [/data/cityscapes/yolov7_det/val.txt]
 test: [/data/cityscapes/yolov7_det/val.txt]
