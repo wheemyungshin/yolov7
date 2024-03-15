@@ -48,7 +48,8 @@ def test(data,
          opt_size_division=False,
          opt_seg=False,
          valid_cls_idx=[],
-         merge_label=[]):
+         merge_label=[],
+         opt_infinite_names=False):
     # Initialize/load model and set device
     training = model is not None
     if training:  # called by train.py
@@ -111,7 +112,10 @@ def test(data,
     
     seen = 0
     confusion_matrix = ConfusionMatrix(nc=nc)
-    names = {k: v for k, v in enumerate(model.names if hasattr(model, 'names') else model.module.names)}
+    if opt_infinite_names:
+        names = {id_: str(id_) for id_ in range(9999)}
+    else:
+        names = {k: v for k, v in enumerate(model.names if hasattr(model, 'names') else model.module.names)}
     coco91class = coco80_to_coco91_class()
     s = ('%20s' + '%12s' * 6) % ('Class', 'Images', 'Labels', 'P', 'R', 'mAP@.5', 'mAP@.5:.95')
     p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
@@ -126,7 +130,7 @@ def test(data,
     if len(merge_label) > 0:
         nc = len(merge_label)
         names = [str(n_num) for n_num in range(len(merge_label))]
-
+    
     miou = [[] for _ in range(nc)]
     for batch_i, (img, targets, paths, shapes, masks) in enumerate(tqdm(dataloader, desc=s)):
         '''
@@ -483,6 +487,8 @@ if __name__ == '__main__':
     parser.add_argument('--seg', action='store_true', help='Segmentation-Training')
     parser.add_argument('--valid-cls-idx', nargs='+', type=int, default=[], help='labels to include when calculating mAP')
     parser.add_argument('--merge-label', type=int, nargs='+', action='append', default=[], help='list of merge label list chunk. --merge-label 0 1 --merge-label 2 3 4')
+    parser.add_argument('--infinite-names', action='store_true', help='Do not use saved names in model')
+
     opt = parser.parse_args()
     opt.save_json |= opt.data.endswith('coco.yaml')
     opt.data = check_file(opt.data)  # check file
@@ -509,7 +515,8 @@ if __name__ == '__main__':
              opt_size_division=opt.size_division,
              opt_seg=opt.seg,
              valid_cls_idx=opt.valid_cls_idx,
-             merge_label=opt.merge_label
+             merge_label=opt.merge_label,
+             opt_infinite_names=opt.infinite_names
              )
 
     elif opt.task == 'speed':  # speed benchmarks

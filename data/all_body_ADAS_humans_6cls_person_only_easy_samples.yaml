@@ -1,0 +1,14 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+  /data/all_body_ADAS_humans_6cls_person_only_valset_easy_samples.txt
+]
+val: [/data/all_body_ADAS_humans_6cls_person_only_valset_hard_samples.txt]
+test: [/data/all_body_ADAS_humans_6cls_person_only_valset_hard_samples.txt]
+
+# number of classes
+nc: 2
+
+# class names
+names: ['person', 'rider']
+
+valid_idx: [6, 7]
