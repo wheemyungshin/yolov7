@@ -49,7 +49,7 @@ def test(data,
          opt_seg=False,
          valid_cls_idx=[],
          merge_label=[],
-         opt_infinite_names=False):
+         opt_manual_names=False):
     # Initialize/load model and set device
     training = model is not None
     if training:  # called by train.py
@@ -112,8 +112,8 @@ def test(data,
     
     seen = 0
     confusion_matrix = ConfusionMatrix(nc=nc)
-    if opt_infinite_names:
-        names = {id_: str(id_) for id_ in range(9999)}
+    if opt_manual_names > 0:
+        names = {id_: str(id_) for id_ in range(opt_manual_names)}
     else:
         names = {k: v for k, v in enumerate(model.names if hasattr(model, 'names') else model.module.names)}
     print(names)
@@ -488,7 +488,7 @@ if __name__ == '__main__':
     parser.add_argument('--seg', action='store_true', help='Segmentation-Training')
     parser.add_argument('--valid-cls-idx', nargs='+', type=int, default=[], help='labels to include when calculating mAP')
     parser.add_argument('--merge-label', type=int, nargs='+', action='append', default=[], help='list of merge label list chunk. --merge-label 0 1 --merge-label 2 3 4')
-    parser.add_argument('--infinite-names', action='store_true', help='Do not use saved names in model')
+    parser.add_argument('--manual-names', type=int, default=0, help='set manual name num. 0 for no setting.')
 
     opt = parser.parse_args()
     opt.save_json |= opt.data.endswith('coco.yaml')
@@ -517,7 +517,7 @@ if __name__ == '__main__':
              opt_seg=opt.seg,
              valid_cls_idx=opt.valid_cls_idx,
              merge_label=opt.merge_label,
-             opt_infinite_names=opt.infinite_names
+             opt_manual_names=opt.manual_names
              )
 
     elif opt.task == 'speed':  # speed benchmarks

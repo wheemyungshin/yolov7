@@ -516,8 +516,7 @@ if __name__ == '__main__':
              opt_size_division=opt.size_division,
              opt_seg=opt.seg,
              valid_cls_idx=opt.valid_cls_idx,
-             merge_label=opt.merge_label,
-             opt_infinite_names=opt.infinite_names
+             merge_label=opt.merge_label
              )
 
     elif opt.task == 'speed':  # speed benchmarks

@@ -48,8 +48,7 @@ def test(data,
          opt_size_division=False,
          opt_seg=False,
          valid_cls_idx=[],
-         merge_label=[],
-         opt_infinite_names=False):
+         merge_label=[]):
     # Initialize/load model and set device
     training = model is not None
     if training:  # called by train.py
@@ -112,11 +111,10 @@ def test(data,
     
     seen = 0
     confusion_matrix = ConfusionMatrix(nc=nc)
-    if opt_infinite_names:
+    if opt.infinite_names:
         names = {id_: str(id_) for id_ in range(9999)}
     else:
         names = {k: v for k, v in enumerate(model.names if hasattr(model, 'names') else model.module.names)}
-    print(names)
     coco91class = coco80_to_coco91_class()
     s = ('%20s' + '%12s' * 6) % ('Class', 'Images', 'Labels', 'P', 'R', 'mAP@.5', 'mAP@.5:.95')
     p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
@@ -516,8 +514,7 @@ if __name__ == '__main__':
              opt_size_division=opt.size_division,
              opt_seg=opt.seg,
              valid_cls_idx=opt.valid_cls_idx,
-             merge_label=opt.merge_label,
-             opt_infinite_names=opt.infinite_names
+             merge_label=opt.merge_label
              )
 
     elif opt.task == 'speed':  # speed benchmarks
