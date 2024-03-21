@@ -8,13 +8,17 @@ train: [
 /data/small_ticket_testset_humans.txt, # 971
 /data/gangnam_street_BH_cls6/train.txt
 ]
-val: [/data/cityscapes/yolov7_det/val.txt]
-test: [/data/cityscapes/yolov7_det/val.txt]
+val: [
+  /data/auto_det_gnet_test1/test.txt # 54
+]
+test: [
+  /data/auto_det_gnet_test1/test.txt # 54
+]
 
 # number of classes
-nc: 2
+nc: 3
 
 # class names
-names: ['person', 'rider']
+names: ['person', 'rider', 'nothing']
 
-valid_idx: [6, 7]
+valid_idx: [6, 7, 999]
