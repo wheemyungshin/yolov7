@@ -956,6 +956,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             segments = self.segments[index].copy()
 
             labels = self.labels[index].copy()
+            print(labels)
             
             if labels.size:  # normalized xywh to pixel xyxy format
                 labels[:, 1:] = xywhn2xyxy(labels[:, 1:], ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1])
@@ -1708,24 +1709,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         img_crop_origin = img_crop
                         img_crop = cv2.cvtColor(img_crop, cv2.COLOR_BGR2BGRA)
                         
-                        if random.random() < 0.5:
-                            pedestrian_img[:,:,:3] = (pedestrian_img[:,:,:3] * random.randint(0, 6) * 0.01).astype(np.uint8)
-                        else:                            
-                            min_x = p_x1 + pedestrian_img_position_x
-                            min_y = p_y1 + pedestrian_img_position_y
-                            max_x = p_x2 + pedestrian_img_position_x
-                            max_y = p_y2 + pedestrian_img_position_y
-                            new_label = np.array([[0, min_x, min_y, max_x, max_y]])
-                            new_segment = np.array([
-                                [min_x, min_y], 
-                                [max_x, min_y],  
-                                [max_x, max_y],
-                                [min_x, max_y]
-                                ])
-                            
-                            labels = np.append(labels, new_label, axis=0)  
-                            segments.append(new_segment)
-
+                        pedestrian_img[:,:,:3] = (pedestrian_img[:,:,:3] * random.randint(0, 6) * 0.01).astype(np.uint8)
                         pedestrian_img_pillow = Image.fromarray(pedestrian_img)
                         img_crop_pillow = Image.fromarray(img_crop)
                         blended_pillow = Image.alpha_composite(img_crop_pillow, pedestrian_img_pillow)
@@ -1734,6 +1718,23 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
                         blended_img = cv2.addWeighted(blended_img, 0.9, img_crop_origin, 0.1, 0)
                         img[pedestrian_img_position_y:pedestrian_img_position_y+temp_h, pedestrian_img_position_x:pedestrian_img_position_x+temp_w] = blended_img
+
+                    '''
+                    min_x = p_x1 + pedestrian_img_position_x
+                    min_y = p_y1 + pedestrian_img_position_y
+                    max_x = p_x2 + pedestrian_img_position_x
+                    max_y = p_y2 + pedestrian_img_position_y
+                    new_label = np.array([[0, min_x, min_y, max_x, max_y]])
+                    new_segment = np.array([
+                        [min_x, min_y], 
+                        [max_x, min_y],  
+                        [max_x, max_y],
+                        [min_x, max_y]
+                        ])
+                    
+                    labels = np.append(labels, new_label, axis=0)  
+                    segments.append(new_segment)
+                    '''
 
         if hyp is not None and (hyp.get('ciga_cutout', None) is not None or hyp.get('cellphone_cutout', None) is not None):
             nL = len(labels)  # number of labels
@@ -2079,15 +2080,32 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 # Ancillary functions --------------------------------------------------------------------------------------------------
 def load_image(self, index, ratio_maintain=True):
     # loads 1 image from dataset, returns img, original hw, resized hw
+    noise_dir = '/data/noise/images'
+    noise_imgs = os.listdir(noise_dir)      
+    noise_filename = noise_imgs[random.randint(0, len(noise_imgs) - 1)]
+    noise_img = cv2.imread(os.path.join(noise_dir, noise_filename), cv2.IMREAD_UNCHANGED)
+    noise_img = cv2.resize(noise_img, (0,0), fx=2, fy=2)
+    
     img = self.imgs[index]
     if img is None:  # not cached
         path = self.img_files[index]
         img = cv2.imread(path)  # BGR
+
+        height, width = img.shape[:2]
+        noise_h, noise_w = noise_img.shape[:2]
+        bigger_width = max(width, noise_w)
+        img_concat = np.zeros((noise_h+height, bigger_width, 3))
+        img_concat[:height, :width] = img
+        img_concat[height:, :noise_w] = noise_img
+        img = img_concat
+        
         assert img is not None, 'Image Not Found ' + path
         if self.gray:
             img[:,:,1] = img[:,:,0]
             img[:,:,2] = img[:,:,0]
         h0, w0 = img.shape[:2]  # orig hw
+
+
         if ratio_maintain:
             if isinstance(self.img_size, tuple):
                 r = self.img_size[1] / max(h0, w0)  # resize image to img_size
@@ -2110,7 +2128,13 @@ def load_image(self, index, ratio_maintain=True):
                     img = cv2.resize(img, (int(w0 * r), int(h0 * r)), interpolation=interp)
             return img, (h0, w0), img.shape[:2]  # img, hw_original, hw_resized
     else:
-        return self.imgs[index], self.img_hw0[index], self.img_hw[index]  # img, hw_original, hw_resized
+        height, width = img.shape[:2]
+        noise_h, noise_w = noise_img.shape[:2]
+        bigger_width = max(width, noise_w)
+        img_concat = np.zeros(noise_h+height, bigger_width, 3)
+        img_concat[:height, :width] = img
+        img_concat[height:, :noise_w] = noise_img
+        return img_concat, self.img_hw0[index], self.img_hw[index]  # img, hw_original, hw_resized
 
 
 def augment_hsv(img, hgain=0.5, sgain=0.5, vgain=0.5):
@@ -2335,15 +2359,8 @@ def load_mosaic(self, hyp, index):
 
     # Concat/clip labels
     labels4 = np.concatenate(labels4, 0)
-    np.clip(labels4[:, 1], 0, 2 * xs, out=labels4[:, 1])  # clip when using random_perspective()        
-    np.clip(labels4[:, 2], 0, 2 * ys, out=labels4[:, 2])  # clip when using random_perspective()
-    np.clip(labels4[:, 3], 0, 2 * xs, out=labels4[:, 3])  # clip when using random_perspective()        
-    np.clip(labels4[:, 4], 0, 2 * ys, out=labels4[:, 4])  # clip when using random_perspective()
-    
-    for x in segments4:
-        np.clip(x[:, 0], 0, 2 * xs, out=x[:, 0])  # clip when using random_perspective()
-    for x in segments4:
-        np.clip(x[:, 1], 0, 2 * ys, out=x[:, 1])  # clip when using random_perspective()
+    for x in (labels4[:, 1:], *segments4):
+        np.clip(x, 0, 2 * max(xs, ys), out=x)  # clip when using random_perspective()
     # img4, labels4 = replicate(img4, labels4)  # replicate
 
     poses4 = np.array(poses4)
@@ -2412,9 +2429,6 @@ def load_mosaic9(self, hyp, index):
 
         padx, pady = c[:2]
         x1a, y1a, x2a, y2a = [max(x, 0) for x in c]  # allocate coords
-        if y2a > ys * 3:
-            pady -= (y2a - (ys * 3))
-            y2a = ys * 3
 
         # Labels
         labels, segments = self.labels[index].copy(), self.segments[index].copy()
@@ -2575,15 +2589,9 @@ def load_mosaic9(self, hyp, index):
     labels9[:, [2, 4]] -= yc
     c = np.array([xc, yc])  # centers
     segments9 = [x - c for x in segments9]
-    
-    np.clip(labels9[:, 1], 0, 2 * xs, out=labels9[:, 1])  # clip when using random_perspective()        
-    np.clip(labels9[:, 2], 0, 2 * ys, out=labels9[:, 2])  # clip when using random_perspective()
-    np.clip(labels9[:, 3], 0, 2 * xs, out=labels9[:, 3])  # clip when using random_perspective()        
-    np.clip(labels9[:, 4], 0, 2 * ys, out=labels9[:, 4])  # clip when using random_perspective()    
-    for x in segments9:
-        np.clip(x[:, 0], 0, 2 * xs, out=x[:, 0])  # clip when using random_perspective()
-    for x in segments9:
-        np.clip(x[:, 1], 0, 2 * ys, out=x[:, 1])  # clip when using random_perspective()
+
+    for x in (labels9[:, 1:], *segments9):
+        np.clip(x, 0, 2 * max(xs, ys), out=x)  # clip when using random_perspective()
     # img9, labels9 = replicate(img9, labels9)  # replicate
 
     poses9 = [x - c if x.any() is not None else x for x in poses9]
@@ -2812,14 +2820,16 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     a = random.uniform(-degrees, degrees)
     # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
 
-    min_label_size_limit = 24
+    '''
+    min_label_size_limit = 32
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
     min_label_size = np.min(target_sizes)        
     if 0 < min_label_size < min_label_size_limit**2:
         natural_min_scale = min_label_size_limit / min_label_size**0.5
     else:
         natural_min_scale = None
-    max_label_size_limit = 96
+
+    max_label_size_limit = 256
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
     max_label_size = np.max(target_sizes)        
     if max_label_size_limit**2 < max_label_size:
@@ -2831,16 +2841,17 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             temp_val = natural_max_scale
             natural_max_scale = natural_min_scale
             natural_min_scale = temp_val
-    #natural_min_scale = None
-    #natural_max_scale = None
+    '''
+    natural_min_scale = None
+    natural_max_scale = None
 
     if isinstance(scale, float):
         if natural_min_scale is None and natural_max_scale is None:
             s = random.uniform(1 - scale, 1.1 + scale)
         elif natural_max_scale is None:
-            s = random.uniform(natural_min_scale, natural_min_scale + 0.1)
+            s = random.uniform(natural_min_scale, natural_min_scale + scale)
         elif natural_min_scale is None:
-            s = random.uniform(natural_max_scale - 0.1, natural_max_scale)
+            s = random.uniform(natural_max_scale - scale, natural_max_scale)
         else:
             s = random.uniform(natural_min_scale, natural_max_scale)
 

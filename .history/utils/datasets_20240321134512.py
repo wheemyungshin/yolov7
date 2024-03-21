@@ -2335,15 +2335,18 @@ def load_mosaic(self, hyp, index):
 
     # Concat/clip labels
     labels4 = np.concatenate(labels4, 0)
-    np.clip(labels4[:, 1], 0, 2 * xs, out=labels4[:, 1])  # clip when using random_perspective()        
-    np.clip(labels4[:, 2], 0, 2 * ys, out=labels4[:, 2])  # clip when using random_perspective()
-    np.clip(labels4[:, 3], 0, 2 * xs, out=labels4[:, 3])  # clip when using random_perspective()        
-    np.clip(labels4[:, 4], 0, 2 * ys, out=labels4[:, 4])  # clip when using random_perspective()
-    
-    for x in segments4:
-        np.clip(x[:, 0], 0, 2 * xs, out=x[:, 0])  # clip when using random_perspective()
-    for x in segments4:
-        np.clip(x[:, 1], 0, 2 * ys, out=x[:, 1])  # clip when using random_perspective()
+    for x in (labels4[:, 1]):
+        np.clip(x, 0, 2 * xs, out=x)  # clip when using random_perspective()        
+    for x in (labels4[:, 2]):
+        np.clip(x, 0, 2 * ys, out=x)  # clip when using random_perspective()
+    for x in (labels4[:, 3]):
+        np.clip(x, 0, 2 * xs, out=x)  # clip when using random_perspective()        
+    for x in (labels4[:, 4]):
+        np.clip(x, 0, 2 * ys, out=x)  # clip when using random_perspective()    
+    for x in (segments4):
+        print(x)
+        print(x.shape)
+        np.clip(x, 0, 2 * ys, out=x)  # clip when using random_perspective()
     # img4, labels4 = replicate(img4, labels4)  # replicate
 
     poses4 = np.array(poses4)
@@ -2575,15 +2578,15 @@ def load_mosaic9(self, hyp, index):
     labels9[:, [2, 4]] -= yc
     c = np.array([xc, yc])  # centers
     segments9 = [x - c for x in segments9]
-    
-    np.clip(labels9[:, 1], 0, 2 * xs, out=labels9[:, 1])  # clip when using random_perspective()        
-    np.clip(labels9[:, 2], 0, 2 * ys, out=labels9[:, 2])  # clip when using random_perspective()
-    np.clip(labels9[:, 3], 0, 2 * xs, out=labels9[:, 3])  # clip when using random_perspective()        
-    np.clip(labels9[:, 4], 0, 2 * ys, out=labels9[:, 4])  # clip when using random_perspective()    
-    for x in segments9:
-        np.clip(x[:, 0], 0, 2 * xs, out=x[:, 0])  # clip when using random_perspective()
-    for x in segments9:
-        np.clip(x[:, 1], 0, 2 * ys, out=x[:, 1])  # clip when using random_perspective()
+
+    for x in (labels9[:, 1], *segments9):
+        np.clip(x, 0, 2 * xs, out=x)  # clip when using random_perspective()        
+    for x in (labels9[:, 2], *segments9):
+        np.clip(x, 0, 2 * ys, out=x)  # clip when using random_perspective()
+    for x in (labels9[:, 3], *segments9):
+        np.clip(x, 0, 2 * xs, out=x)  # clip when using random_perspective()        
+    for x in (labels9[:, 4], *segments9):
+        np.clip(x, 0, 2 * ys, out=x)  # clip when using random_perspective()
     # img9, labels9 = replicate(img9, labels9)  # replicate
 
     poses9 = [x - c if x.any() is not None else x for x in poses9]
