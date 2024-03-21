@@ -38,6 +38,7 @@ from utils.torch_utils import ModelEMA, select_device, intersect_dicts, torch_di
 from utils.wandb_logging.wandb_utils import WandbLogger, check_wandb_resume
 import collections
 import shutil
+import skimage
 
 logger = logging.getLogger(__name__)
 
@@ -307,7 +308,7 @@ def train(hyp, opt, device, tb_writer=None):
 
     # Process 0
     if rank in [-1, 0]:
-        testloader = create_dataloader(test_path, tuple([128, 224]), batch_size * 2, gs, opt,  # testloader
+        testloader = create_dataloader(test_path, tuple([96, 192]), batch_size * 2, gs, opt,  # testloader
                                        cache=opt.cache_images and not opt.notest, rect=opt.rect, rank=-1,
                                        world_size=opt.world_size, workers=opt.workers,
                                        prefix=colorstr('val: '), valid_idx=valid_idx, load_seg=opt.seg, gray=opt.gray,
@@ -550,6 +551,7 @@ def train(hyp, opt, device, tb_writer=None):
                 results, maps, times = test.test(data_dict,
                                                  batch_size=batch_size * 2,
                                                  imgsz=imgsz,
+                                                 conf_thres=0.5,
                                                  model=ema.ema,
                                                  single_cls=opt.single_cls,
                                                  dataloader=testloader,
@@ -631,7 +633,7 @@ def train(hyp, opt, device, tb_writer=None):
                 results, _, _ = test.test(opt.data,
                                           batch_size=batch_size * 2,
                                           imgsz=imgsz,
-                                          conf_thres=0.001,
+                                          conf_thres=0.5,
                                           iou_thres=0.7,
                                           model=attempt_load(m, device).half(),
                                           single_cls=opt.single_cls,

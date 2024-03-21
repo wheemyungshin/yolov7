@@ -2,18 +2,17 @@
 train: [
 /data/smoke_all_roboflow_phone_Cellphone_after_inspection_map50easy_samples.txt # 16631
 ] 
-
 val: [
-/data/TANG_phones_not_included/train.txt
+/data/n78_video_auto_det_after_filter/test.txt
 ] 
 test: [
-/data/TANG_phones_not_included/train.txt
+/data/n78_video_auto_det_after_filter/test.txt
 ] 
 
 # number of classes
-nc: 1
+nc: 2
 
 # class names
-names: ['cellphone']
+names: ['cellphone', 'Nothing']
 
-valid_idx: [3]
+valid_idx: [3, 999]
