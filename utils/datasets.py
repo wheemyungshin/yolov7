@@ -1675,7 +1675,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     segments.append(new_segment)
         
         if hyp is not None and random.random() < hyp.get('render_pedestrian', ['', 0.0])[1]:
-            num_of_pedestrian_img = [1,6]
+            num_of_pedestrian_img = [1,3]
             num_of_pedestrian = random.randint(num_of_pedestrian_img[0], num_of_pedestrian_img[1])
             for idx in range(num_of_pedestrian) :
                 pedestrian_filename = self.pedestrian_imgs[random.randint(0, len(self.pedestrian_imgs) - 1)]
@@ -1708,7 +1708,9 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         
                         if random.random() < 0.5:
                             pedestrian_img[:,:,:3] = (pedestrian_img[:,:,:3] * random.randint(0, 6) * 0.01).astype(np.uint8)
-                        else:                            
+                        else:
+                            pedestrian_img[:,:,:3] = apply_brightness_contrast(pedestrian_img[:,:,:3], brightness = 0, 
+                                contrast = random.random()*50-50)
                             min_x = p_x1 + pedestrian_img_position_x
                             min_y = p_y1 + pedestrian_img_position_y
                             max_x = p_x2 + pedestrian_img_position_x
@@ -2815,24 +2817,30 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
 
     min_label_size_limit = 24
-    target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
-    min_label_size = np.min(target_sizes)        
-    if 0 < min_label_size < min_label_size_limit**2:
-        natural_min_scale = min_label_size_limit / min_label_size**0.5
-    else:
-        natural_min_scale = None
     max_label_size_limit = 96
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
-    max_label_size = np.max(target_sizes)        
-    if max_label_size_limit**2 < max_label_size:
-        natural_max_scale = max_label_size_limit / max_label_size**0.5
+    if len(target_sizes) > 0:
+        min_label_size = np.min(target_sizes)        
+        if 0 < min_label_size < min_label_size_limit**2:
+            natural_min_scale = min_label_size_limit / min_label_size**0.5
+        else:
+            natural_min_scale = None
+
+        max_label_size = np.max(target_sizes)        
+        if max_label_size_limit**2 < max_label_size:
+            natural_max_scale = max_label_size_limit / max_label_size**0.5
+        else:
+            natural_max_scale = None
+
+        if natural_min_scale is not None and natural_max_scale is not None:
+            if natural_min_scale > natural_max_scale :
+                temp_val = natural_max_scale
+                natural_max_scale = natural_min_scale
+                natural_min_scale = temp_val
     else:
+        natural_min_scale = None
         natural_max_scale = None
-    if natural_min_scale is not None and natural_max_scale is not None:
-        if natural_min_scale > natural_max_scale :
-            temp_val = natural_max_scale
-            natural_max_scale = natural_min_scale
-            natural_min_scale = temp_val
+    
     #natural_min_scale = None
     #natural_max_scale = None
 
