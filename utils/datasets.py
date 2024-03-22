@@ -946,7 +946,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         else:
             # Load image
-            img, (h0, w0), (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain)
+            img, (h0, w0), (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
             # Letterbox
             shape = self.batch_shapes[self.batch[index]] if self.rect else self.img_size  # final letterboxed shape
@@ -1003,8 +1003,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             #img, labels = self.albumentations(img, labels)
 
             # Augment colorspace
-            if 'contrast' in hyp:
-                img = apply_brightness_contrast(img, brightness = 0, contrast = random.random()*(hyp['contrast'][1]-hyp['contrast'][0])+hyp['contrast'][0])
             augment_hsv(img, hgain=hyp['hsv_h'], sgain=hyp['hsv_s'], vgain=hyp['hsv_v'])
 
             # Apply cutouts
@@ -2077,13 +2075,17 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
 
 # Ancillary functions --------------------------------------------------------------------------------------------------
-def load_image(self, index, ratio_maintain=True):
+def load_image(self, index, ratio_maintain=True, hyp=None):
     # loads 1 image from dataset, returns img, original hw, resized hw
     img = self.imgs[index]
     if img is None:  # not cached
         path = self.img_files[index]
         img = cv2.imread(path)  # BGR
         assert img is not None, 'Image Not Found ' + path
+
+        if hyp is not None and 'contrast' in hyp:                
+            img = apply_brightness_contrast(img, brightness = 0, contrast = random.random()*(hyp['contrast'][1]-hyp['contrast'][0])+hyp['contrast'][0])
+
         if self.gray:
             img[:,:,1] = img[:,:,0]
             img[:,:,2] = img[:,:,0]
@@ -2162,7 +2164,7 @@ def load_mosaic(self, hyp, index):
     indices = [index] + random.choices(self.indices, k=3)  # 3 additional image indices
     for i, index in enumerate(indices):
         # Load image
-        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain)
+        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
         # place img in img4
         if i == 0:  # top left
@@ -2386,7 +2388,7 @@ def load_mosaic9(self, hyp, index):
     indices = [index] + random.choices(self.indices, k=8)  # 8 additional image indices
     for i, index in enumerate(indices):
         # Load image
-        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain)
+        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
         # place img in img9
         if i == 0:  # center
@@ -2622,7 +2624,7 @@ def load_samples(self, index):
     indices = [index] + random.choices(self.indices, k=3)  # 3 additional image indices
     for i, index in enumerate(indices):
         # Load image
-        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain)
+        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
         # place img in img4
         if i == 0:  # top left
