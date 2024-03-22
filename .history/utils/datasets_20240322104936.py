@@ -1677,7 +1677,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     segments.append(new_segment)
         
         if hyp is not None and random.random() < hyp.get('render_pedestrian', ['', 0.0])[1]:
-            num_of_pedestrian_img = [1,3]
+            num_of_pedestrian_img = [1,6]
             num_of_pedestrian = random.randint(num_of_pedestrian_img[0], num_of_pedestrian_img[1])
             for idx in range(num_of_pedestrian) :
                 pedestrian_filename = self.pedestrian_imgs[random.randint(0, len(self.pedestrian_imgs) - 1)]

@@ -31,4 +31,4 @@ paste_in: 0.0  # image copy paste (probability), use 0 for faster training
 loss_ota: 0 # use ComputeLossOTA, use 0 for faster training
 min_size: 0
 min_scale_up: 0
-render_pedestrian: ['../data/images_removebg_renamed', 0.5]
+render_pedestrian: ['/data/images_removebg_renamed', 0.9]
