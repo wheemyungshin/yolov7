@@ -128,6 +128,8 @@ def detect(save_img=False):
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
         if img.ndimension() == 3:
             img = img.unsqueeze(0)
+            
+        np.save(os.path.join('my_inputs_gnet_live', str(save_dir / Path(p).name)), torch.numpy(img))
 
         if opt.frame_ratio > 0:
             frame_ratio = opt.frame_ratio

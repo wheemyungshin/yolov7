@@ -88,8 +88,9 @@ if __name__ == '__main__':
     fd_model = tf.lite.Interpreter("/data/gnet_tflite_test_models/A_adam_try_crowd_yolov7-shufflenet-t_s448_e060_128_224_float32.tflite")
     fd_model.allocate_tensors()
 
-    for img_name in os.listdir('/data/gnet_crosscheck35'):
-        frame = skimage.io.imread(os.path.join('/data/gnet_crosscheck35', img_name))
+    for img_name_id in range(426):
+        frame = np.load(os.path.join('/data/gnet_live_samples', str(img_name_id)+'.npy'))
+        frame = np.reshape(frame, (464 , 800 , 3))
         frame = frame[:, :, [2,1,0]]
 
         frame_vis = frame.copy()
@@ -112,7 +113,10 @@ if __name__ == '__main__':
         fd_model.set_tensor(fd_model.get_input_details()[0]['index'], img_board)
         fd_model.invoke()
 
-        fd_output_0 = fd_model.get_tensor(fd_model.get_output_details()[0]['index'])
+        fd_output_0 = np.load(os.path.join('/data/gnet_live_samples_npy_inout', str(img_name_id)+'_000000_clean.jpgoutput.npy'))
+        fd_output_0 = np.expand_dims(fd_output_0, 0)
+        print(fd_output_0.shape)
+        #fd_output_0 = fd_model.get_tensor(fd_model.get_output_details()[0]['index'])
         boxes, scores = nms(fd_output_0)
 
         max_fd = None
@@ -122,15 +126,15 @@ if __name__ == '__main__':
             if scores[idx] > 0.3 :
                 size = (boxes[idx][2] - boxes[idx][0]) * (boxes[idx][3] - boxes[idx][1])
                 max_fd = boxes[idx]
-                max_fd[0] = int(max_fd[0] * ( frame.shape[1] / fd_model.get_input_details()[0]["shape"][2]))
-                max_fd[2] = int(max_fd[2] * ( frame.shape[1] / fd_model.get_input_details()[0]["shape"][2]))
-                max_fd[1] = int(max_fd[1] * ( frame.shape[0] / fd_model.get_input_details()[0]["shape"][1]))
-                max_fd[3] = int(max_fd[3] * ( frame.shape[0] / fd_model.get_input_details()[0]["shape"][1]))
+                max_fd[0] = int(max_fd[0] * ( frame.shape[1] / 192))
+                max_fd[2] = int(max_fd[2] * ( frame.shape[1] / 96))
+                max_fd[1] = int(max_fd[1] * ( frame.shape[0] / 192))
+                max_fd[3] = int(max_fd[3] * ( frame.shape[0] / 96))
                 max_fd = max_fd.astype(np.int32)
                 frame_vis = cv2.rectangle(frame_vis, (max_fd[0],max_fd[1]), (max_fd[2],max_fd[3]), (255,255,0), 2)            
                 cv2.putText(frame_vis, str(round(scores[idx], 5)), (max_fd[0],max_fd[1] - 2), 0, 1, [225, 255, 255], thickness=2, lineType=cv2.LINE_AA)
-                print(img_name, " : ", scores[idx])
+                print(str(img_name_id)+'.jpg', " : ", scores[idx])
 
-        skimage.io.imsave("demo_"+img_name, frame_vis)
+        skimage.io.imsave("demo_"+str(img_name_id)+'.jpg', frame_vis)
 
 

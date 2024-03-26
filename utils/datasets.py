@@ -314,7 +314,7 @@ class LoadImages:  # for inference
         if self.ratio_maintain:
             img = letterbox(img0, self.img_size, stride=self.stride)[0]
         else:
-            img = cv2.resize(img0, self.img_size)
+            img = cv2.resize(img0, (self.img_size[1], self.img_size[0]))
 
 
         # Convert

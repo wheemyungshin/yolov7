@@ -195,7 +195,7 @@ def detect(save_img=False):
     t0 = time.time()
     for path, img, im0s, vid_cap in dataset:
         print(img.shape)
-        img = img.copy()[[2,1,0], :, :]
+        #img = img.copy()[[2,1,0], :, :]
         if opt.square:
             if img.shape[1] == square_size:
                 square_crop_margin = int((img.shape[2] - square_size) / 2)
