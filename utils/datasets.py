@@ -1682,7 +1682,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             for idx in range(num_of_pedestrian) :
                 pedestrian_filename = self.pedestrian_imgs[random.randint(0, len(self.pedestrian_imgs) - 1)]
                 pedestrian_img = cv2.imread(pedestrian_filename, cv2.IMREAD_UNCHANGED)
-                render_point = [int(str_point)/10000 for str_point in pedestrian_filename.split('_axis_')[-1][:19].split('_')]
+                render_point = [int(str_point)/10000 for str_point in pedestrian_filename.split('_axis_')[-1].split('.')[0].split('_')]
                 random_scale = random.randint(16, 320)
                 pedestrian_img = cv2.resize(pedestrian_img, (random_scale, random_scale), interpolation=cv2.INTER_LINEAR)
 
@@ -1732,7 +1732,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         blended_img=np.array(blended_pillow)
 
                         blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
-                        blended_img = cv2.addWeighted(blended_img, 0.9, img_crop_origin, 0.1, 0)
+                        blended_img = cv2.addWeighted(blended_img, 0.8, img_crop_origin, 0.2, 0)
                         img[pedestrian_img_position_y:pedestrian_img_position_y+temp_h, pedestrian_img_position_x:pedestrian_img_position_x+temp_w] = blended_img
 
         if hyp is not None and (hyp.get('ciga_cutout', None) is not None or hyp.get('cellphone_cutout', None) is not None):
@@ -2812,6 +2812,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     a = random.uniform(-degrees, degrees)
     # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
 
+    '''
     min_label_size_limit = 24
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
     min_label_size = np.min(target_sizes)        
@@ -2831,8 +2832,9 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             temp_val = natural_max_scale
             natural_max_scale = natural_min_scale
             natural_min_scale = temp_val
-    #natural_min_scale = None
-    #natural_max_scale = None
+    '''
+    natural_min_scale = None
+    natural_max_scale = None
 
     if isinstance(scale, float):
         if natural_min_scale is None and natural_max_scale is None:

@@ -21,6 +21,84 @@ import numpy as np
 
 from collections import defaultdict
 
+##################################################################################
+def xywh2xyxy(x):
+    # Convert bounding box (x, y, w, h) to bounding box (x1, y1, x2, y2)
+    y = np.copy(x)
+    y[..., 0] = x[..., 0] - x[..., 2] / 2
+    y[..., 1] = x[..., 1] - x[..., 3] / 2
+    y[..., 2] = x[..., 0] + x[..., 2] / 2
+    y[..., 3] = x[..., 1] + x[..., 3] / 2
+    return y
+
+def compute_iou(box, boxes):
+    # Compute xmin, ymin, xmax, ymax for both boxes
+    xmin = np.maximum(box[0], boxes[:, 0])
+    ymin = np.maximum(box[1], boxes[:, 1])
+    xmax = np.minimum(box[2], boxes[:, 2])
+    ymax = np.minimum(box[3], boxes[:, 3])
+
+    # Compute intersection area
+    intersection_area = np.maximum(0, xmax - xmin) * np.maximum(0, ymax - ymin)
+
+    # Compute union area
+    box_area = (box[2] - box[0]) * (box[3] - box[1])
+    boxes_area = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+    union_area = box_area + boxes_area - intersection_area
+
+    # Compute IoU
+    iou = intersection_area / union_area
+    return iou
+
+def nms(output, conf_thres=0.5, iou_thres=0.45):
+
+    predictions = np.squeeze(output[0])
+
+    # Filter out object confidence scores below threshold
+
+    obj_conf = predictions[:, 4]
+    predictions = predictions[obj_conf > conf_thres]
+    obj_conf = obj_conf[obj_conf > conf_thres]
+
+    # Multiply class confidence with bounding box confidence
+    predictions[:, 5:] *= obj_conf[:, np.newaxis]
+
+
+    # Get the scores
+    scores = np.max(predictions[:, 5:], axis=1)
+
+    # Filter out the objects with a low score
+    predictions = predictions[scores > conf_thres]
+    scores = scores[scores > conf_thres]
+
+    if len(scores) == 0:
+        return [], []
+
+    # Get bounding boxes for each object
+    boxes = predictions[:, :4]
+    boxes = xywh2xyxy(boxes)
+
+    # Sort by score
+    sorted_indices = np.argsort(scores)[::-1]
+
+    # Select Bbox
+    indices = []
+    while sorted_indices.size > 0:
+
+        # Pick the last box
+        box_id = sorted_indices[0]
+        indices.append(box_id)
+
+        # Compute IoU of the picked box with the rest
+        ious = compute_iou(boxes[box_id, :], boxes[sorted_indices[1:], :])
+
+        # Remove boxes with IoU over the threshold
+        keep_indices = np.where(ious < iou_thres)[0]
+        sorted_indices = sorted_indices[keep_indices + 1]
+
+    return boxes[indices], scores[indices]
+##################################################################################
+
 def detect(save_img=False):
     bbox_num = 0
     bbox_num_per_cls = defaultdict(int)
@@ -43,7 +121,8 @@ def detect(save_img=False):
     # Initialize
     set_logging()
     device = select_device(opt.device)
-    half = device.type != 'cpu'  # half precision only supported on CUDA
+    #half = device.type != 'cpu'  # half precision only supported on CUDA
+    half = False
 
     # Load model
     model = attempt_load(weights, map_location=device)  # load FP32 model
@@ -111,12 +190,12 @@ def detect(save_img=False):
 
     if opt.save_frame:
         os.makedirs(os.path.join(save_dir, 'vis_frames'), exist_ok=True)
-        os.makedirs(os.path.join(save_dir, 'images_detected'), exist_ok=True)
-        os.makedirs(os.path.join(save_dir, 'images_nothing'), exist_ok=True)
+        os.makedirs(os.path.join(save_dir, 'images'), exist_ok=True)
 
     t0 = time.time()
     for path, img, im0s, vid_cap in dataset:
         print(img.shape)
+        img = img.copy()[[2,1,0], :, :]
         if opt.square:
             if img.shape[1] == square_size:
                 square_crop_margin = int((img.shape[2] - square_size) / 2)
@@ -124,6 +203,7 @@ def detect(save_img=False):
             elif img.shape[2] == square_size:
                 square_crop_margin = int((img.shape[1] - square_size) / 2)
                 img = img[:, square_crop_margin : square_crop_margin+square_size, :]
+        loaded_img = np.transpose(img, (1,2,0)).astype(np.uint8)
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
@@ -145,6 +225,8 @@ def detect(save_img=False):
 
         # Inference
         t1 = time_synchronized()
+        print(torch.min(img))
+        print(torch.max(img))
         if opt.seg:
             pred, out = model(img, augment=opt.augment)
             proto = out[1]
@@ -157,13 +239,25 @@ def detect(save_img=False):
 
         t2 = time_synchronized()
 
-        pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
+        #pred = torch.from_numpy(np.load('/data/out.npy')).to(device)
+        print(pred.shape)
+        print(torch.min(pred))
+        print(torch.max(pred))
+    
+        boxes, scores = nms(pred.cpu().numpy())
+        if len(boxes) > 0:
+            pred = [torch.from_numpy(np.array([[boxes[0][0], boxes[0][1], boxes[0][2], boxes[0][3], scores[0], 0]])).to(device)]
+        else:
+            pred = []
+        #pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
         #pred = non_max_suppression_seg(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms, nm=len(names))#, nm=32)
         t3 = time_synchronized()
 
         # Apply Classifier
         if classify:
             pred = apply_classifier(pred, modelc, img, im0s)
+
+        print(pred)
             
         # Process detections
         for i, det in enumerate(pred):  # detections per image
@@ -269,7 +363,7 @@ def detect(save_img=False):
 
                         if save_img or view_img:  # Add bbox to image
                             size = (xyxy[2]-xyxy[0])*(xyxy[3]-xyxy[1])
-                            label = f'{names[int(cls)]} {conf:.2f} {size}'
+                            label = f'{names[int(cls)]} {conf:.5f} {size}'
                             plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
                         
                         if opt.save_json:
@@ -320,9 +414,7 @@ def detect(save_img=False):
                             print(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0]))
                             if len(det) > 0:
                                 cv2.imwrite(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'.jpg', im0)
-                                cv2.imwrite(os.path.join(save_dir, 'images_detected', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'.jpg', clean_im0)
-                            else:
-                                cv2.imwrite(os.path.join(save_dir, 'images_nothing', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'.jpg', clean_im0)
+                                cv2.imwrite(os.path.join(save_dir, 'images', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'_clean.jpg', clean_im0)
                     else:  # 'video' or 'stream'
                         if vid_path != save_path:  # new video
                             vid_path = save_path
@@ -343,10 +435,7 @@ def detect(save_img=False):
                             print(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0]))
                             cv2.imwrite(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'.jpg', im0)
                             if len(det) > 0:
-                                cv2.imwrite(os.path.join(save_dir, 'images_detected', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'.jpg', clean_im0)
-                            else:
-                                cv2.imwrite(os.path.join(save_dir, 'images_nothing', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'.jpg', clean_im0)
-                               
+                                cv2.imwrite(os.path.join(save_dir, 'images', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'_clean.jpg', clean_im0)
                         vid_writer.write(im0)
 
     if save_txt or save_img:
