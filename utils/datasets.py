@@ -561,6 +561,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         try:
             f = []  # image files
+            self.sampling_ratios = []
             for p_ in path if isinstance(path, list) else [path]:
                 if isinstance(p_, list):
                     p = Path(p_[0])
@@ -578,11 +579,13 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
                         add_line = []
                         for x in t:
-                            if random.random() <= data_sampling_ratio:
+                            #if random.random() <= data_sampling_ratio:
+                            if data_sampling_ratio > 0:
                                 if x.startswith('./'):
                                     add_line.append(x.replace('./', parent))
                                 else:
                                     add_line.append(x)
+                                self.sampling_ratios.append(data_sampling_ratio)
                         f += add_line  # local to global path
                         # f += [p.parent / x.lstrip(os.sep) for x in t]  # local to global path (pathlib)
                 else:
@@ -658,6 +661,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             self.shapes = np.array([self.shapes[i] for i, x in enumerate(self.labels) if len(x)>0])
             self.segments = tuple([self.segments[i] for i, x in enumerate(self.labels) if len(x)>0])
             self.labels = [self.labels[i] for i, x in enumerate(self.labels) if len(x)>0]
+            self.sampling_ratios = [self.sampling_ratios[i] for i, x in enumerate(self.labels) if len(x)>0]
 
         if self.pose_data is not None:
             new_pose_data = []
@@ -759,6 +763,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             self.label_files = [self.label_files[i] for i in irect]
             self.labels = [self.labels[i] for i in irect]
             self.segments = [self.segments[i] for i in irect]
+            self.sampling_ratios = [self.sampling_ratios[i] for i in irect]
             self.shapes = s[irect]  # wh
             ar = ar[irect]
 
@@ -896,6 +901,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
     def __getitem__(self, index):
         index = self.indices[index]  # linear, shuffled, or image_weights
+        while random.random() > self.sampling_ratios[index]:
+            index = random.choices(self.indices, k=1)[0]
 
         hyp = self.hyp
         mosaic = self.mosaic and random.random() < hyp['mosaic']
@@ -2089,8 +2096,8 @@ def load_image(self, index, ratio_maintain=True, hyp=None):
             img = apply_brightness_contrast(img, brightness = 0, contrast = random.random()*(hyp['contrast'][1]-hyp['contrast'][0])+hyp['contrast'][0])
 
         if self.gray:
-            img[:,:,1] = img[:,:,0]
-            img[:,:,2] = img[:,:,0]
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
         h0, w0 = img.shape[:2]  # orig hw
         if ratio_maintain:
             if isinstance(self.img_size, tuple):
@@ -2163,7 +2170,17 @@ def load_mosaic(self, hyp, index):
         xs = self.img_size
     yc, xc = [int(random.uniform(-self.mosaic_border[0], 2 * ys + self.mosaic_border[0])), \
             int(random.uniform(-self.mosaic_border[1], 2 * xs + self.mosaic_border[1]))]  # mosaic center x, y
-    indices = [index] + random.choices(self.indices, k=3)  # 3 additional image indices
+    index2 = random.choices(self.indices, k=1)[0]
+    index3 = random.choices(self.indices, k=1)[0]
+    index4 = random.choices(self.indices, k=1)[0]
+    while random.random() > self.sampling_ratios[index2]:
+        index2 = self.indices[index2]
+    while random.random() > self.sampling_ratios[index3]:
+        index3 = self.indices[index3]
+    while random.random() > self.sampling_ratios[index4]:
+        index4 = self.indices[index4]
+    indices = [index, index2, index3, index4]  # 3 additional image indices
+
     for i, index in enumerate(indices):
         # Load image
         img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
@@ -2387,7 +2404,33 @@ def load_mosaic9(self, hyp, index):
     else:
         ys = self.img_size
         xs = self.img_size
-    indices = [index] + random.choices(self.indices, k=8)  # 8 additional image indices
+    
+    index2 = random.choices(self.indices, k=1)[0]
+    index3 = random.choices(self.indices, k=1)[0]
+    index4 = random.choices(self.indices, k=1)[0]
+    index5 = random.choices(self.indices, k=1)[0]
+    index6 = random.choices(self.indices, k=1)[0]
+    index7 = random.choices(self.indices, k=1)[0]
+    index8 = random.choices(self.indices, k=1)[0]
+    index9 = random.choices(self.indices, k=1)[0]
+    while random.random() > self.sampling_ratios[index2]:
+        index2 = self.indices[index2]
+    while random.random() > self.sampling_ratios[index3]:
+        index3 = self.indices[index3]
+    while random.random() > self.sampling_ratios[index4]:
+        index4 = self.indices[index4]
+    while random.random() > self.sampling_ratios[index5]:
+        index5 = self.indices[index5]
+    while random.random() > self.sampling_ratios[index6]:
+        index6 = self.indices[index6]
+    while random.random() > self.sampling_ratios[index7]:
+        index7 = self.indices[index7]
+    while random.random() > self.sampling_ratios[index8]:
+        index8 = self.indices[index8]
+    while random.random() > self.sampling_ratios[index9]:
+        index9 = self.indices[index9]
+    indices = [index, index2, index3, index4, index5, index6, index7, index8, index9] # 8 additional image indices    
+
     for i, index in enumerate(indices):
         # Load image
         img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
@@ -2827,16 +2870,18 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             natural_min_scale = None
 
         max_label_size = np.max(target_sizes)        
-        if max_label_size_limit**2 < max_label_size:
+        if max_label_size_limit < max_label_size**0.5:
             natural_max_scale = max_label_size_limit / max_label_size**0.5
         else:
             natural_max_scale = None
 
+        '''
         if natural_min_scale is not None and natural_max_scale is not None:
             if natural_min_scale > natural_max_scale :
                 temp_val = natural_max_scale
                 natural_max_scale = natural_min_scale
                 natural_min_scale = temp_val
+        '''
     else:
         natural_min_scale = None
         natural_max_scale = None
@@ -2853,6 +2898,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             s = random.uniform(natural_max_scale - 0.1, natural_max_scale)
         else:
             s = random.uniform(natural_min_scale, natural_max_scale)
+            #s = random.uniform(natural_min_scale, natural_min_scale + 0.1)
 
     else:
         if natural_min_scale is None and natural_max_scale is None:
@@ -2863,6 +2909,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             s = random.uniform(natural_max_scale - 0.1, natural_max_scale)
         else:
             s = random.uniform(natural_min_scale, natural_max_scale)
+            #s = random.uniform(natural_min_scale, natural_min_scale + 0.1)
     
 
     # s = 2 ** random.uniform(-scale, scale)

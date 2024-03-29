@@ -1008,7 +1008,7 @@ class Model(nn.Module):
             y.append(x if m.i in self.save else None)  # save output
             if m.i in self.model[-1].f and get_feature and len(features) < 3:#distill features after the last repconv
                 features.append(x)
-
+        
         if profile:
             print('%.1fms total' % sum(dt))
             
