@@ -309,9 +309,6 @@ class LoadImages:  # for inference
             self.count += 1
             img0 = cv2.imread(path)  # BGR
             assert img0 is not None, 'Image Not Found ' + path
-        
-        h, w, _ = img0.shape
-        img0 = img0[:int(h*0.9),:int(w*0.9),:]
 
         # Padded resize
         if self.ratio_maintain:
@@ -2820,7 +2817,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
 
     min_label_size_limit = 24
-    max_label_size_limit = 96
+    max_label_size_limit = 64
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
     if len(target_sizes) > 0:
         min_label_size = np.min(target_sizes)        

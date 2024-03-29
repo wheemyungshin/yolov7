@@ -129,8 +129,6 @@ def detect(save_img=False):
         if img.ndimension() == 3:
             img = img.unsqueeze(0)
             
-        np.save(os.path.join('my_inputs_gnet_live', str(save_dir / Path(p).name)), torch.numpy(img))
-
         if opt.frame_ratio > 0:
             frame_ratio = opt.frame_ratio
         else:
@@ -337,7 +335,7 @@ def detect(save_img=False):
                             if opt.square:
                                 w = min(w, h)
                                 h = min(w, h)
-                            vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
+                            vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (int(w*0.9), int(h*0.9)))
                         if opt.save_frame:
                             print(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0]))
                             cv2.imwrite(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'.jpg', im0)

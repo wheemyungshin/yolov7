@@ -76,7 +76,7 @@ def detect(save_img=False):
         cudnn.benchmark = True  # set True to speed up constant image size inference
         dataset = LoadStreams(source, img_size=imgsz, stride=stride)
     else:
-        dataset = LoadImages(source, img_size=imgsz, stride=stride)
+        dataset = LoadImages(source, img_size=imgsz, stride=stride, ratio_maintain=(not opt.no_ratio_maintain))
 
     # Get names and colors
     names = model.module.names if hasattr(model, 'module') else model.names
@@ -115,6 +115,7 @@ def detect(save_img=False):
 
     t0 = time.time()
     for path, img, im0s, vid_cap in dataset:
+        print(img.shape)
         if opt.square:
             if img.shape[1] == square_size:
                 square_crop_margin = int((img.shape[2] - square_size) / 2)
@@ -127,7 +128,7 @@ def detect(save_img=False):
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
         if img.ndimension() == 3:
             img = img.unsqueeze(0)
-
+            
         if opt.frame_ratio > 0:
             frame_ratio = opt.frame_ratio
         else:
@@ -147,7 +148,12 @@ def detect(save_img=False):
             pred, out = model(img, augment=opt.augment)
             proto = out[1]
         else:
-            pred = model(img, augment=opt.augment)[0]
+            pred, out = model(img, augment=opt.augment)
+            if opt.objcam:
+                obj1 = (out[0][0, :, :, :, 4]).sigmoid().cpu().numpy()*255/3
+                obj2 = (out[1][0, :, :, :, 4]).sigmoid().cpu().numpy()*255/3
+                obj3 = (out[2][0, :, :, :, 4]).sigmoid().cpu().numpy()*255/3
+
         t2 = time_synchronized()
 
         pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
@@ -157,7 +163,7 @@ def detect(save_img=False):
         # Apply Classifier
         if classify:
             pred = apply_classifier(pred, modelc, img, im0s)
-
+            
         # Process detections
         for i, det in enumerate(pred):  # detections per image
             if webcam:  # batch_size >= 1
@@ -174,6 +180,18 @@ def detect(save_img=False):
                     square_crop_margin = int((im0.shape[0] - short_side) / 2)
                     im0 = im0[square_crop_margin : square_crop_margin+short_side, :, :]
             clean_im0 = im0.copy()
+
+            if opt.objcam:
+                alpha = 0.4
+                view_cam = im0.copy()
+                obj1 = cv2.resize(np.sum(obj1, 0).astype(np.uint8), (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
+                obj2 = cv2.resize(np.sum(obj2, 0).astype(np.uint8), (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
+                obj3 = cv2.resize(np.sum(obj3, 0).astype(np.uint8), (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
+                
+                view_cam[:,:,2] = obj1
+                view_cam[:,:,1] = obj2
+                view_cam[:,:,0] = obj3
+                im0 = cv2.addWeighted(im0, 0.9, view_cam, 0.6, 0)
 
             if opt.frame_ratio <= 0:
                 frame_ratio = fps
@@ -193,12 +211,18 @@ def detect(save_img=False):
 
                     scores = det[:, 4]
                     # Rescale boxes from img_size to im0 size
-                    det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape)#.round()d
+                    if opt.no_ratio_maintain:
+                        det[:, 0] = det[:, 0] * (im0.shape[1] / img.shape[3])
+                        det[:, 1] = det[:, 1] * (im0.shape[0] / img.shape[2])
+                        det[:, 2] = det[:, 2] * (im0.shape[1] / img.shape[3])
+                        det[:, 3] = det[:, 3] * (im0.shape[0] / img.shape[2])
+                    else:
+                        det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape)#.round()d
 
                     # Print results
                     for c in det[:, 5].unique():
                         n = (det[:, 5] == c).sum()  # detections per class
-                        s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
+                        s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string                        
                                             
                     # Mask plotting ----------------------------------------------------------------------------------------
                     if opt.seg:
@@ -235,6 +259,12 @@ def detect(save_img=False):
                             line = (cls, *xywh, conf) if opt.save_conf else (cls, *xywh)  # label format
                             with open(txt_path + '.txt', 'a') as f:
                                 f.write(('%g ' * len(line)).rstrip() % line + '\n')
+
+
+                        xyxy[0] = xyxy[0] - 3
+                        xyxy[1] = xyxy[1] - 3
+                        xyxy[2] = xyxy[2] + 3
+                        xyxy[3] = xyxy[3] + 3
 
                         if save_img or view_img:  # Add bbox to image
                             size = (xyxy[2]-xyxy[0])*(xyxy[3]-xyxy[1])
@@ -305,7 +335,7 @@ def detect(save_img=False):
                             if opt.square:
                                 w = min(w, h)
                                 h = min(w, h)
-                            vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
+                            vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (int(w*0.9), int(h*0.9)))
                         if opt.save_frame:
                             print(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0]))
                             cv2.imwrite(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'.jpg', im0)
@@ -365,6 +395,9 @@ if __name__ == '__main__':
     parser.add_argument('--save-npy', action='store_true', help='save npy files')
     parser.add_argument('--valid-segment-labels', nargs='+', type=int, default=[], help='labels to include when calculating segmentation loss')
     parser.add_argument('--square', action='store_true', help='do square cut for input')
+    parser.add_argument('--objcam', action='store_true', help='visualize extracted objectness scores.')
+    parser.add_argument('--no-ratio-maintain', action='store_true', help='maintain input ratio')
+    
     opt = parser.parse_args()
     print(opt)
     #check_requirements(exclude=('pycocotools', 'thop'))

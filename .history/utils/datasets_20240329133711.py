@@ -310,8 +310,9 @@ class LoadImages:  # for inference
             img0 = cv2.imread(path)  # BGR
             assert img0 is not None, 'Image Not Found ' + path
         
+        print(img0.shape)
         h, w, _ = img0.shape
-        img0 = img0[:int(h*0.9),:int(w*0.9),:]
+        img0 = img0[:,:,:]
 
         # Padded resize
         if self.ratio_maintain:
