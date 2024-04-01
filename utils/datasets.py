@@ -309,12 +309,15 @@ class LoadImages:  # for inference
             self.count += 1
             img0 = cv2.imread(path)  # BGR
             assert img0 is not None, 'Image Not Found ' + path
+        
+        if img0 is None:
+            return None, None, None, None
 
         # Padded resize
         if self.ratio_maintain:
             img = letterbox(img0, self.img_size, stride=self.stride)[0]
         else:
-            img = cv2.resize(img0, self.img_size)
+            img = cv2.resize(img0, (self.img_size[1], self.img_size[0]))
 
 
         # Convert
@@ -946,7 +949,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         else:
             # Load image
-            img, (h0, w0), (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain)
+            img, (h0, w0), (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
             # Letterbox
             shape = self.batch_shapes[self.batch[index]] if self.rect else self.img_size  # final letterboxed shape
@@ -1003,8 +1006,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             #img, labels = self.albumentations(img, labels)
 
             # Augment colorspace
-            if 'contrast' in hyp:
-                img = apply_brightness_contrast(img, brightness = 0, contrast = random.random()*(hyp['contrast'][1]-hyp['contrast'][0])+hyp['contrast'][0])
             augment_hsv(img, hgain=hyp['hsv_h'], sgain=hyp['hsv_s'], vgain=hyp['hsv_v'])
 
             # Apply cutouts
@@ -1677,7 +1678,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     segments.append(new_segment)
         
         if hyp is not None and random.random() < hyp.get('render_pedestrian', ['', 0.0])[1]:
-            num_of_pedestrian_img = [1,6]
+            num_of_pedestrian_img = [1,3]
             num_of_pedestrian = random.randint(num_of_pedestrian_img[0], num_of_pedestrian_img[1])
             for idx in range(num_of_pedestrian) :
                 pedestrian_filename = self.pedestrian_imgs[random.randint(0, len(self.pedestrian_imgs) - 1)]
@@ -1710,7 +1711,9 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         
                         if random.random() < 0.5:
                             pedestrian_img[:,:,:3] = (pedestrian_img[:,:,:3] * random.randint(0, 6) * 0.01).astype(np.uint8)
-                        else:                            
+                        else:
+                            pedestrian_img[:,:,:3] = apply_brightness_contrast(pedestrian_img[:,:,:3], brightness = 0, 
+                                contrast = random.random()*50-50)
                             min_x = p_x1 + pedestrian_img_position_x
                             min_y = p_y1 + pedestrian_img_position_y
                             max_x = p_x2 + pedestrian_img_position_x
@@ -2077,13 +2080,17 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
 
 # Ancillary functions --------------------------------------------------------------------------------------------------
-def load_image(self, index, ratio_maintain=True):
+def load_image(self, index, ratio_maintain=True, hyp=None):
     # loads 1 image from dataset, returns img, original hw, resized hw
     img = self.imgs[index]
     if img is None:  # not cached
         path = self.img_files[index]
         img = cv2.imread(path)  # BGR
         assert img is not None, 'Image Not Found ' + path
+
+        if hyp is not None and 'contrast' in hyp:                
+            img = apply_brightness_contrast(img, brightness = 0, contrast = random.random()*(hyp['contrast'][1]-hyp['contrast'][0])+hyp['contrast'][0])
+
         if self.gray:
             img[:,:,1] = img[:,:,0]
             img[:,:,2] = img[:,:,0]
@@ -2162,7 +2169,7 @@ def load_mosaic(self, hyp, index):
     indices = [index] + random.choices(self.indices, k=3)  # 3 additional image indices
     for i, index in enumerate(indices):
         # Load image
-        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain)
+        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
         # place img in img4
         if i == 0:  # top left
@@ -2386,7 +2393,7 @@ def load_mosaic9(self, hyp, index):
     indices = [index] + random.choices(self.indices, k=8)  # 8 additional image indices
     for i, index in enumerate(indices):
         # Load image
-        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain)
+        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
         # place img in img9
         if i == 0:  # center
@@ -2622,7 +2629,7 @@ def load_samples(self, index):
     indices = [index] + random.choices(self.indices, k=3)  # 3 additional image indices
     for i, index in enumerate(indices):
         # Load image
-        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain)
+        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
         # place img in img4
         if i == 0:  # top left
@@ -2812,20 +2819,29 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     a = random.uniform(-degrees, degrees)
     # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
 
-    '''
     min_label_size_limit = 24
-    target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
-    min_label_size = np.min(target_sizes)        
-    if 0 < min_label_size < min_label_size_limit**2:
-        natural_min_scale = min_label_size_limit / min_label_size**0.5
-    else:
-        natural_min_scale = None
     max_label_size_limit = 96
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
-    max_label_size = np.max(target_sizes)        
-    if max_label_size_limit**2 < max_label_size:
-        natural_max_scale = max_label_size_limit / max_label_size**0.5
+    if len(target_sizes) > 0:
+        min_label_size = np.min(target_sizes)        
+        if 0 < min_label_size < min_label_size_limit**2:
+            natural_min_scale = min_label_size_limit / min_label_size**0.5
+        else:
+            natural_min_scale = None
+
+        max_label_size = np.max(target_sizes)        
+        if max_label_size_limit**2 < max_label_size:
+            natural_max_scale = max_label_size_limit / max_label_size**0.5
+        else:
+            natural_max_scale = None
+
+        if natural_min_scale is not None and natural_max_scale is not None:
+            if natural_min_scale > natural_max_scale :
+                temp_val = natural_max_scale
+                natural_max_scale = natural_min_scale
+                natural_min_scale = temp_val
     else:
+        natural_min_scale = None
         natural_max_scale = None
     if natural_min_scale is not None and natural_max_scale is not None:
         if natural_min_scale > natural_max_scale :
@@ -2835,6 +2851,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     '''
     natural_min_scale = None
     natural_max_scale = None
+    '''
 
     if isinstance(scale, float):
         if natural_min_scale is None and natural_max_scale is None:

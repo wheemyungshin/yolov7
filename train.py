@@ -105,7 +105,7 @@ def train(hyp, opt, device, tb_writer=None):
         with torch_distributed_zero_first(rank):
             attempt_download(weights)  # download if not found locally
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
-        model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+        model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create#, nm=nm).to(device)  # create
         exclude = ['anchor'] if not (opt.load_head_weight) and not opt.resume else []  # exclude keys
         if type(ckpt['model']) is Model:
             state_dict = ckpt['model'].float().state_dict()  # to FP32
@@ -119,7 +119,7 @@ def train(hyp, opt, device, tb_writer=None):
         model.load_state_dict(state_dict, strict=False)  # load
         logger.info('Transferred %g/%g items from %s' % (len(state_dict), len(model.state_dict()), weights))  # report
     else:
-        model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+        model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors'), nm=nm).to(device)  # create
     with torch_distributed_zero_first(rank):
         check_dataset(data_dict)  # check
     train_path = data_dict['train']
@@ -308,7 +308,7 @@ def train(hyp, opt, device, tb_writer=None):
 
     # Process 0
     if rank in [-1, 0]:
-        testloader = create_dataloader(test_path, tuple([96, 192]), batch_size * 2, gs, opt,  # testloader
+        testloader = create_dataloader(test_path, tuple([128, 128]), batch_size * 2, gs, opt,  # testloader
                                        cache=opt.cache_images and not opt.notest, rect=opt.rect, rank=-1,
                                        world_size=opt.world_size, workers=opt.workers,
                                        prefix=colorstr('val: '), valid_idx=valid_idx, load_seg=opt.seg, gray=opt.gray,
