@@ -6,9 +6,9 @@ train: [
   ../data/bdd100k_humans.txt, #1491
   ../data/cityscapes_others_humans.txt, # 691
   ../data/small_ticket_testset_humans.txt, # 971
-  [../data/auto_det_s384_640_back/train.txt, 0.1],
-  [../data/auto_det_s384_640_right/train.txt, 0.1],
-  [../data/auto_det_s384_640_left/train.txt, 0.1]
+  [../data/auto_det_s384_640_back/train.txt, 0.1], #45000 -> 4500
+  [../data/auto_det_s384_640_right/train.txt, 0.1], #45000 -> 4500
+  [../data/auto_det_s384_640_left/train.txt, 0.1] #45000 -> 4500
 ]
 val: [
   ../data/auto_det_gnet_test1/test.txt # 54
