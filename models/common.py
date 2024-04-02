@@ -866,27 +866,37 @@ class InvertedResidualBlock(nn.Module):
         else:
             return self.conv(x)
 
-class DWConvblock(nn.Module):
-    "Depthwise conv + Pointwise conv"
-    def __init__(self, in_channels, out_channels, k, s):
-        super(DWConvblock, self).__init__()
-        self.p = k // 2
-        self.conv1 = nn.Conv2d(in_channels, in_channels, kernel_size=k, stride=s, padding=self.p, groups=in_channels, bias=False)
-        self.bn1 = nn.BatchNorm2d(in_channels)
-        self.act1 =  nn.LeakyReLU(0.1)
-        self.conv2 = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=False)
-        self.bn2 = nn.BatchNorm2d(out_channels)
-        self.act2 =  nn.LeakyReLU(0.1)
+class InvertedResidualBlockReLU(nn.Module):
+    def __init__(self, inp, oup, stride, expand_ratio=2):
+        super(InvertedResidualBlockReLU, self).__init__()
+        self.stride = stride
+        assert stride in [1, 2]
+
+        hidden_dim = round(inp * expand_ratio)
+        self.use_res_connect = self.stride == 1 and inp == oup
+
+        layers = []
+        if expand_ratio != 1:
+            # pw
+            layers.append(nn.Conv2d(inp, hidden_dim, 1, 1, 0, bias=False))
+            layers.append(nn.ReLU(inplace=True))
+        
+        layers.extend([
+            # dw
+            nn.Conv2d(hidden_dim, hidden_dim, 3, stride, 1, groups=hidden_dim, bias=False),
+            nn.ReLU(inplace=True),
+            # pw-linear
+            nn.Conv2d(hidden_dim, oup, 1, 1, 0, bias=False),
+        ])
+
+        self.conv = nn.Sequential(*layers)
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.act1(x)
-        x = self.conv2(x)
-        x = self.bn2(x)
-        x = self.act2(x)
-        return x
-
+        if self.use_res_connect:
+            return x + self.conv(x)
+        else:
+            return self.conv(x)
+            
 class StemBlock(nn.Module):
     def __init__(self, c1, c2, k=3, s=2, p=None, g=1, act=True):
         super(StemBlock, self).__init__()
@@ -2406,6 +2416,23 @@ class DWConvblock(nn.Module):
         x = F.relu(x)
         x = self.conv2(x)
         x = self.bn2(x)
+        x = F.relu(x)
+        return x
+
+class DWConvblocknoBN(nn.Module):
+    "Depthwise conv + Pointwise conv"
+
+    def __init__(self, in_channels, out_channels, k, s):
+        super(DWConvblocknoBN, self).__init__()
+        self.p = k // 2
+        self.conv1 = nn.Conv2d(in_channels, in_channels, kernel_size=k, stride=s, padding=self.p, groups=in_channels,
+                               bias=False)
+        self.conv2 = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=False)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = F.relu(x)
+        x = self.conv2(x)
         x = F.relu(x)
         return x
 
