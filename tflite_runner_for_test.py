@@ -105,15 +105,13 @@ def merge_overlapping_boxes(boxes, scores, overlap_num_thr=5):
 
 if __name__ == '__main__':
     fd_model = tf.lite.Interpreter("tflite_test_models/my_test_yolov7-mobilenet_allrelu_e125_128_128_integer_quant.tflite")
-    fd_model2= tf.lite.Interpreter("top5_ircalibration/CA_phone_mobilenet_manual_resize_range24_96_small96from_BDagain_qat_128_128_01_float32.tflite")
     nms_part = tf.lite.Interpreter("weights_n78_tflite_nms_sep/nms_float32.tflite")
     fd_model.allocate_tensors()
-    fd_model2.allocate_tensors()
     nms_part.allocate_tensors()
 
     cap = cv2.VideoCapture("/data/n78_testvid.mp4")
 
-    vid_writer = cv2.VideoWriter('n78_my_allrelu_test_crop_ir_01.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 30, (480, 480))
+    vid_writer = cv2.VideoWriter('my_test_allrelu_e125.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 30, (480, 480))
     frame_id = 0
     unique_confidences = []
     while True :
@@ -131,40 +129,20 @@ if __name__ == '__main__':
             fd_model.set_tensor(fd_model.get_input_details()[0]['index'], crop_img)
             fd_model.invoke()
 
-            fd_output_0_0 = fd_model.get_tensor(fd_model.get_output_details()[0]['index'])
-            fd_output_0_1 = fd_model.get_tensor(fd_model.get_output_details()[1]['index'])
-            fd_output_0_2= fd_model.get_tensor(fd_model.get_output_details()[2]['index'])
+            fd_output_0 = fd_model.get_tensor(fd_model.get_output_details()[0]['index'])
 
-            print(fd_output_0_0.shape, fd_model2.get_input_details()[0]["shape"])
-            print(fd_output_0_1.shape, fd_model2.get_input_details()[1]["shape"])
-            print(fd_output_0_2.shape, fd_model2.get_input_details()[2]["shape"])
-            fd_model2.set_tensor(fd_model2.get_input_details()[0]['index'], fd_output_0_0)
-            fd_model2.set_tensor(fd_model2.get_input_details()[1]['index'], fd_output_0_1)
-            fd_model2.set_tensor(fd_model2.get_input_details()[2]['index'], fd_output_0_2)
-            fd_model2.invoke()
-
-            fd_output_1 = fd_model2.get_tensor(fd_model2.get_output_details()[0]['index'])
+            #print(fd_output_0)
+            print(fd_output_0.shape)
             
-            for unique_c in np.unique(fd_output_1[:,-1]):
+            for unique_c in np.unique(fd_output_0[:,-1]):
                 if unique_c not in unique_confidences:
                     unique_confidences.append(unique_c)
-            #fd_output_0 = np.expand_dims(fd_output_0, 0)
-            #boxes, scores = nms(fd_output_0)
-
-            #boxes = fd_output_0[fd_output_0[:, -1] > 0]
-            #scores = fd_output_0[fd_output_0[:, -1] > 0, -1]
-            #fd_output_1 = np.expand_dims(fd_output_1[:, 1:], 0)
-            print(fd_output_1)
-            print(fd_output_1.shape)
-            #print(nms_part.get_input_details()[0]['shape'])
             
-            #nms_part.set_tensor(nms_part.get_input_details()[0]['index'], np.transpose(fd_output_0, (0,2,1)))
-            #nms_part.invoke()
-            #nms_output = nms_part.get_tensor(nms_part.get_output_details()[0]['index'])
+            boxes = fd_output_0[fd_output_0[:, -1] > 0.1, 1:5]
+            scores = fd_output_0[fd_output_0[:, -1] > 0.1, -1]
             
-            boxes = fd_output_1[fd_output_1[:, -1] > 0.1, 1:5]
-            scores = fd_output_1[fd_output_1[:, -1] > 0.1, -1]
-            
+            print(scores)
+            print(boxes)
             '''
             print(scores)
             print(boxes)
