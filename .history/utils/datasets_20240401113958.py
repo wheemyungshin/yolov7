@@ -2816,8 +2816,8 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     a = random.uniform(-degrees, degrees)
     # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
 
-    min_label_size_limit = 32
-    max_label_size_limit = 160
+    min_label_size_limit = 48
+    max_label_size_limit = 192
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
     if len(target_sizes) > 0:
         min_label_size = np.min(target_sizes)        
