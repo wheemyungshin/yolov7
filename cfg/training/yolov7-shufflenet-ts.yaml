@@ -11,7 +11,7 @@ anchors:
 # custom backbone
 backbone:
   # [from, number, module, args]
-  [ [ -1, 1, StemBlock, [32, 3, 2] ],    # 0-P2/4
+  [ [ -1, 1, StemBlock, [24, 3, 2] ],    # 0-P2/4
     [ -1, 1, Shuffle_Block, [48, 2]], # 1-P3/8
     [ -1, 2, Shuffle_Block, [48, 1]], # 2
     [ -1, 1, Shuffle_Block, [96, 2]], # 3-P4/16
