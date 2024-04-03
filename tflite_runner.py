@@ -82,7 +82,7 @@ def nms(output, conf_thres=0.5, iou_thres=0.45):
 
     return boxes[indices], scores[indices]
 
-def merge_overlapping_boxes(boxes, overlap_num_thr=5):
+def merge_overlapping_boxes(boxes, scores, overlap_num_thr=5):
     valid_idx = []
     valid_bbox = []
     for b_idxm, box in enumerate(boxes):
@@ -96,8 +96,8 @@ def merge_overlapping_boxes(boxes, overlap_num_thr=5):
             print(overlaps)
             if overlaps >= overlap_num_thr:
                 valid_idx.append(b_idxm)
-                merged_bbox = [0, np.mean(boxes[ious > 0, 1]), np.mean(boxes[ious > 0, 2]), 
-                    np.mean(boxes[ious > 0, 3]), np.mean(boxes[ious > 0, 4]), 0, np.mean(boxes[ious > 0, 6])]
+                print(boxes[ious > 0])
+                merged_bbox = [np.mean(boxes[ious > 0, 0]), np.mean(boxes[ious > 0, 1]), np.mean(boxes[ious > 0, 2]), np.mean(boxes[ious > 0, 3]), np.sum(scores[ious > 0])]
                 valid_bbox.append(merged_bbox)
     return np.array(valid_bbox)
 
@@ -105,50 +105,75 @@ def merge_overlapping_boxes(boxes, overlap_num_thr=5):
 
 if __name__ == '__main__':
 
-    fd_model = tf.lite.Interpreter("weights_n78_tflite_nms_sep/BD_phone_mobilenet_manual_resize_range24_96_lessrot_128_128_00_integer_quant.tflite")
+    fd_model = tf.lite.Interpreter("n78_models_bests_and_latests/CH_test_yolov7-mobilenet_allrelu_s128_e150_128_128_00_integer_quant.tflite")
+    fd_model2= tf.lite.Interpreter("n78_models_bests_and_latests/CH_test_yolov7-mobilenet_allrelu_s128_e150_128_128_01_float32.tflite")
     nms_part = tf.lite.Interpreter("weights_n78_tflite_nms_sep/nms_float32.tflite")
     fd_model.allocate_tensors()
+    fd_model2.allocate_tensors()
     nms_part.allocate_tensors()
 
     cap = cv2.VideoCapture("/data/n78_testvid.mp4")
 
-    vid_writer = cv2.VideoWriter('n78_BD3.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 30, (480, 480))
+    vid_writer = cv2.VideoWriter('n78_CH_crop_ir_05.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 30, (480, 480))
     frame_id = 0
+    unique_confidences = []
     while True :
         _, frame = cap.read()
 
         if frame is not None:
+            #frame = frame[::-1, :, :]#.transpose(1, 0, 2)
             frame_vis = frame.copy()
 
+            print(fd_model.get_input_details()[0]["shape"])
             crop_img = cv2.resize(frame, (fd_model.get_input_details()[0]["shape"][2], fd_model.get_input_details()[0]["shape"][1]))
-            crop_img = (cv2.cvtColor(crop_img, cv2.COLOR_BGR2RGB) / 255).astype(np.float32)
+            crop_img = (crop_img / 255).astype(np.float32)
+            print(np.min(crop_img),np.max(crop_img))
             crop_img = np.expand_dims(crop_img.astype(np.float32), axis=0)
             fd_model.set_tensor(fd_model.get_input_details()[0]['index'], crop_img)
             fd_model.invoke()
 
-            fd_output_0 = fd_model.get_tensor(fd_model.get_output_details()[0]['index'])
-            print(fd_output_0)
-            print(fd_output_0.shape)
+            fd_output_0_0 = fd_model.get_tensor(fd_model.get_output_details()[0]['index'])
+            fd_output_0_1 = fd_model.get_tensor(fd_model.get_output_details()[1]['index'])
+            fd_output_0_2= fd_model.get_tensor(fd_model.get_output_details()[2]['index'])
+
+            
+            print(fd_output_0_0.shape, fd_model2.get_input_details()[0]["shape"])
+            print(fd_output_0_1.shape, fd_model2.get_input_details()[1]["shape"])
+            print(fd_output_0_2.shape, fd_model2.get_input_details()[2]["shape"])
+            fd_model2.set_tensor(fd_model2.get_input_details()[0]['index'], fd_output_0_0)
+            fd_model2.set_tensor(fd_model2.get_input_details()[1]['index'], fd_output_0_1)
+            fd_model2.set_tensor(fd_model2.get_input_details()[2]['index'], fd_output_0_2)
+            fd_model2.invoke()
+
+            fd_output_1 = fd_model2.get_tensor(fd_model2.get_output_details()[0]['index'])
+            
+            for unique_c in np.unique(fd_output_1[:,-1]):
+                if unique_c not in unique_confidences:
+                    unique_confidences.append(unique_c)
             #fd_output_0 = np.expand_dims(fd_output_0, 0)
             #boxes, scores = nms(fd_output_0)
 
             #boxes = fd_output_0[fd_output_0[:, -1] > 0]
             #scores = fd_output_0[fd_output_0[:, -1] > 0, -1]
+            #fd_output_1 = np.expand_dims(fd_output_1[:, 1:], 0)
+            print(fd_output_1)
+            print(fd_output_1.shape)
+            #print(nms_part.get_input_details()[0]['shape'])
             
-            nms_part.set_tensor(fd_model.get_input_details()[0]['index'], np.transpose(fd_output_0, (0,2,1)))
-            nms_part.invoke()
-            nms_output = nms_part.get_tensor(nms_part.get_output_details()[0]['index'])
+            #nms_part.set_tensor(nms_part.get_input_details()[0]['index'], np.transpose(fd_output_0, (0,2,1)))
+            #nms_part.invoke()
+            #nms_output = nms_part.get_tensor(nms_part.get_output_details()[0]['index'])
             
-            boxes = nms_output[nms_output[:, -1] > 0, 1:5]
-            scores = nms_output[nms_output[:, -1] > 0, -1]
+            boxes = fd_output_1[fd_output_1[:, -1] > 0.5, 1:5]
+            scores = fd_output_1[fd_output_1[:, -1] > 0.5, -1]
             
+            '''
             print(scores)
             print(boxes)
-            '''
             if len(boxes) > 0:
-                boxes = merge_overlapping_boxes(boxes)
+                boxes = merge_overlapping_boxes(boxes, scores, overlap_num_thr=0)
             
-            if len(boxes) > 0:            
+            if len(boxes) > 0:
                 scores = boxes[:, -1]
                 print(scores)
                 print(boxes)
@@ -160,7 +185,7 @@ if __name__ == '__main__':
             max_size = -1
 
             for idx in range(len(scores)) :
-                if scores[idx] > 0.5 :
+                if scores[idx] > 0.1 :
                     size = (boxes[idx][2] - boxes[idx][0]) * (boxes[idx][3] - boxes[idx][1])
                     max_fd = boxes[idx]
                     max_fd[0] = int(max_fd[0] * (480 / 128))
@@ -177,6 +202,8 @@ if __name__ == '__main__':
         frame_id += 1
 
     vid_writer.release()
+
+print("unique_confidences : ", unique_confidences)
 
 cv2.destroyAllWindows()
 

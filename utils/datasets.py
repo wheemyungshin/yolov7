@@ -193,11 +193,10 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
                                       load_seg=load_seg,
                                       gray=gray,
                                       merge_label=opt.merge_label)
-
     batch_size = min(batch_size, len(dataset))
     nw = min([os.cpu_count() // world_size, batch_size if batch_size > 1 else 0, workers])  # number of workers
     if rank != -1:
-        sampler = torch.utils.data.distributed.DistributedSampler(dataset=dataset, shuffle=True)
+        sampler = DistributedWeightedSampler(dataset=dataset, num_replicas=world_size, rank=rank, shuffle=True)
         is_shuffle = False
     else:
         sampler = None
@@ -212,7 +211,59 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
                         shuffle=is_shuffle,
                         collate_fn=LoadImagesAndLabels.collate_fn4 if quad else LoadImagesAndLabels.collate_fn,)
     return dataloader, dataset
+    
+class DistributedWeightedSampler(torch.utils.data.distributed.DistributedSampler):
+    def __init__(self, dataset, num_replicas=None, rank=None, replacement=False, shuffle=True):
+        if num_replicas is None:
+            if not dist.is_available():
+                raise RuntimeError("Requires distributed package to be available")
+            num_replicas = dist.get_world_size()
+        if rank is None:
+            if not dist.is_available():
+                raise RuntimeError("Requires distributed package to be available")
+            rank = dist.get_rank()
+        self.dataset = dataset
+        self.num_replicas = num_replicas
+        self.rank = rank
+        self.epoch = 0
+        self.sampling_ratios = self.dataset.sampling_ratios
+        self.num_samples = int((int(sum(self.sampling_ratios)) // self.num_replicas))
+        self.total_size = self.num_samples * self.num_replicas
+        self.replacement = replacement
+        self.shuffle = shuffle
 
+    def __iter__(self):
+        # deterministically shuffle based on epoch
+        g = torch.Generator()
+        g.manual_seed(self.epoch)
+
+        indices = list(range(len(self.dataset)))
+
+        # remove some samples to make it evenly divisible
+        indices = indices[:self.total_size]
+        assert len(indices) == self.total_size
+
+        # subsample
+        indices = indices[self.rank:self.total_size:self.num_replicas]
+        assert len(indices) == self.num_samples
+
+        # get targets (you can alternatively pass them in __init__, if this op is expensive)
+        sampling_ratios = self.dataset.sampling_ratios
+        #for index_index in range(7300):
+        #    print(self.dataset.label_files[index_index], self.dataset.sampling_ratios[index_index], sampling_ratios[index_index])
+        #sampling_ratios = sampling_ratios[self.rank:len(self.dataset):self.num_replicas]
+        #print("sampling_ratios: ", len(sampling_ratios), np.unique(np.array(sampling_ratios)))
+        #print("num_samples: ", self.num_samples)
+        #print("dataset: ", len(self.dataset))
+        weights = torch.tensor(sampling_ratios)
+
+        return iter(torch.multinomial(weights, self.num_samples, self.replacement).tolist())
+
+    def __len__(self):
+        return self.num_samples
+
+    def set_epoch(self, epoch):
+        self.epoch = epoch
 
 class InfiniteDataLoader(torch.utils.data.dataloader.DataLoader):
     """ Dataloader that reuses workers
@@ -564,7 +615,9 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             for p_ in path if isinstance(path, list) else [path]:
                 if isinstance(p_, list):
                     p = Path(p_[0])
-                    data_sampling_ratio = p_[1]
+                    with open(p, 'r') as t:
+                        t = t.read().strip().splitlines()
+                    data_sampling_ratio = p_[1] / len(t)
                 else:
                     p = Path(p_)  # os-agnostic
                     data_sampling_ratio = 1.0
@@ -587,7 +640,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         # f += [p.parent / x.lstrip(os.sep) for x in t]  # local to global path (pathlib)
                 else:
                     raise Exception(f'{prefix}{p} does not exist')
-            self.img_files = sorted([x.replace('/', os.sep) for x in f if x.split('.')[-1].lower() in img_formats])
+            self.img_files = [x.replace('/', os.sep) for x in f if x.split('.')[-1].lower() in img_formats]
             # self.img_files = sorted([x for x in f if x.suffix[1:].lower() in img_formats])  # pathlib
             assert self.img_files, f'{prefix}No images found'
         except Exception as e:
@@ -2374,8 +2427,6 @@ def load_mosaic(self, hyp, index):
 
 
     return img4, labels4, poses4, segments4
-
-
 
 def load_mosaic9(self, hyp, index):
     # loads images in a 9-mosaic

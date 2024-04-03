@@ -1329,7 +1329,7 @@ def parse_model(d, ch, nm):  # model_dict, input_channels(3)
                  Ghost, GhostCSPA, GhostCSPB, GhostCSPC,
                  SwinTransformerBlock, STCSPA, STCSPB, STCSPC,
                  SwinTransformer2Block, ST2CSPA, ST2CSPB, ST2CSPC,
-                 conv_bn_relu_maxpool, Shuffle_Block, DWConvblock, Hswish, SELayer, mobilev3_bneck,
+                 conv_bn_relu_maxpool, Shuffle_Block, DWConvblock, DWConvblocknoBN, Hswish, SELayer, mobilev3_bneck,
                  ADown, SPPELAN]:
             print(m)
             c1, c2 = ch[f], args[0]
@@ -1349,7 +1349,7 @@ def parse_model(d, ch, nm):  # model_dict, input_channels(3)
                      ST2CSPA, ST2CSPB, ST2CSPC]:
                 args.insert(2, n)  # number of repeats
                 n = 1
-        elif m in [Shuffle_Like_Block, Shuffle_Block, DWConvblock, StemBlock, InvertedResidualBlock]:
+        elif m in [Shuffle_Like_Block, Shuffle_Block, DWConvblock, DWConvblocknoBN, StemBlock, InvertedResidualBlock, InvertedResidualBlockReLU]:
             c1, c2 = ch[f], args[0]
             if c2 != no:  # if not output
                 c2 = make_divisible(c2 * gw, 8)
