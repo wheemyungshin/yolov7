@@ -1,7 +1,7 @@
 # parameters
 nc: 1  # number of classes
-depth_multiple: 1.0  # model depth multiple
-width_multiple: 1.0  # layer channel multiple
+depth_multiple: 1.05  # model depth multiple
+width_multiple: 1.05  # layer channel multiple
 
 anchors:
   - [4,5,  6,8,  10,12]  # P3/8
@@ -11,7 +11,7 @@ anchors:
 # custom backbone
 backbone:
   # [from, number, module, args]
-  [ [ -1, 1, StemBlock, [24, 3, 2] ],    # 0-P2/4
+  [ [ -1, 1, StemBlock, [16, 3, 2] ],    # 0-P2/4
     [ -1, 1, Shuffle_Block, [48, 2]], # 1-P3/8
     [ -1, 2, Shuffle_Block, [48, 1]], # 2
     [ -1, 1, Shuffle_Block, [96, 2]], # 3-P4/16
