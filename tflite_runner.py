@@ -162,8 +162,8 @@ if __name__ == '__main__':
             #nms_part.invoke()
             #nms_output = nms_part.get_tensor(nms_part.get_output_details()[0]['index'])
             
-            boxes = fd_output_1[fd_output_1[:, -1] > 0.1, 1:5]
-            scores = fd_output_1[fd_output_1[:, -1] > 0.1, -1]
+            boxes = fd_output_1[fd_output_1[:, -1] > 0.5, 1:5]
+            scores = fd_output_1[fd_output_1[:, -1] > 0.5, -1]
             
             '''
             print(scores)
