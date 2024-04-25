@@ -1,0 +1,19 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+/data/crowd/train.txt, /data/crowd/val.txt,
+/data/roboflow_head/train.txt, /data/roboflow_head/valid.txt,
+/data/SCUT_HEAD_Part_B/train.txt,
+/data/gangnam_street_BH/train.txt,
+/data/wider_face_updated/train.txt, /data/wider_face_updated/val.txt, 
+/data/coco_face_from_kpts_wholebody/train.txt, /data/coco_face_from_kpts_wholebody/val.txt,
+] 
+val: [/data/roboflow_head/test.txt]   # 5884 images
+test: [/data/roboflow_head/test.txt]   # 5884
+
+# number of classes
+nc: 1
+
+# class names
+names: ['head']
+
+valid_idx: [1]
