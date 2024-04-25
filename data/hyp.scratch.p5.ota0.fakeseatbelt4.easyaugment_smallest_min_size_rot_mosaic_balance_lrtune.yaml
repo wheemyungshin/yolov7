@@ -31,5 +31,5 @@ paste_in: 0.  # image copy paste (probability), use 0 for faster training
 loss_ota: 0 # use ComputeLossOTA, use 0 for faster training
 min_size: 25
 min_scale_up: 25
-fakeseatbelt3: ['/data/fake_seatbelts', 0.5]
+fakeseatbelt3: ['../data/fake_seatbelts', 0.5]
 obstacle: 0.1

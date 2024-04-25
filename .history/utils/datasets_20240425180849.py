@@ -46,6 +46,114 @@ for orientation in ExifTags.TAGS.keys():
     if ExifTags.TAGS[orientation] == 'Orientation':
         break
 
+def natural_minmax_crop(image, targets, min_label_size_limit=None, max_label_size_limit=None):#16, 96
+    height, width = image.shape[:2]
+
+    if min_label_size_limit is None and max_label_size_limit is None:
+        return image, targets
+    
+    target_sizes = targets[:, 3] * targets[:, 4]
+    if len(target_sizes) > 0:
+        if min_label_size_limit is not None:
+            min_label_size_limit_ratio = min_label_size_limit**2 / (height * width)
+
+            min_label_size = np.min(target_sizes)        
+            if 0 < min_label_size < min_label_size_limit_ratio:
+                natural_min_scale = min_label_size_limit_ratio / min_label_size
+            else:
+                natural_min_scale = None
+        else:
+            natural_min_scale = None
+
+        if max_label_size_limit is not None:
+            max_label_size_limit_ratio = max_label_size_limit**2 / (height * width)
+            
+            max_label_size = np.max(target_sizes)        
+            if max_label_size_limit_ratio < max_label_size:
+                natural_max_scale = max_label_size_limit_ratio / max_label_size
+            else:
+                natural_max_scale = None
+        else:
+            natural_max_scale = None
+    else:
+        natural_min_scale = None
+        natural_max_scale = None
+    
+    if natural_min_scale is None and natural_max_scale is not None:
+        natural_scale = natural_max_scale
+    elif natural_min_scale is not None and natural_max_scale is None:
+        natural_scale = natural_min_scale
+    elif natural_min_scale is not None and natural_max_scale is not None:
+        natural_scale = min(natural_min_scale, natural_max_scale)
+    else:
+        natural_scale = None
+    
+    if natural_scale is not None:
+        if natural_scale >= 1.0:
+            base_image = np.zeros_like(image)
+            image = cv2.resize(image, (0,0), fx=natural_scale, fy=natural_scale)
+            patch_height = image.shape[0]
+            patch_width = image.shape[1]
+            new_targets = targets.copy()
+            random_crop_x = np.random.randint(min(targets[:, 1])*patch_width-min_label_size_limit, max(targets[:, 1])*patch_width+min_label_size_limit)
+            random_crop_y = np.random.randint(min(targets[:, 2])*patch_height-min_label_size_limit, max(targets[:, 2])*patch_height+min_label_size_limit)
+            crop_x1 = max(int(random_crop_x - width/2), 0)
+            crop_y1 = max(int(random_crop_y - height/2), 0)
+            crop_x2 = min(int(crop_x1 + width), patch_width)
+            crop_y2 = min(int(crop_y1 + height), patch_height)
+            image = image[crop_y1:crop_y2, crop_x1:crop_x2, :]
+            base_image[:image.shape[0], :image.shape[1], :] = image
+            image = base_image
+            new_targets[:, 1] = (new_targets[:, 1]*patch_width - crop_x1) / image.shape[1]
+            new_targets[:, 2] = (new_targets[:, 2]*patch_height - crop_y1) / image.shape[0]
+            new_targets[:, 3] = new_targets[:, 3] * (patch_width/image.shape[1])
+            new_targets[:, 4] = new_targets[:, 4] * (patch_height/image.shape[0])
+        else:
+            base_image = np.zeros_like(image)
+            image = cv2.resize(image, (0,0), fx=natural_scale, fy=natural_scale)
+            patch_height = image.shape[0]
+            patch_width = image.shape[1]
+            black_margin_y = int((height - patch_height)/2)
+            black_margin_x = int((width - patch_width)/2)
+            base_image[black_margin_y:black_margin_y+patch_height, black_margin_x:black_margin_x+patch_width, :] = image
+            image = base_image
+            new_targets = targets.copy()
+            #new_targets[:, 1:4] = new_targets[:, 1:4] * natural_scale
+            new_targets[:, 1] = ((new_targets[:, 1])*patch_width + black_margin_x) / width
+            new_targets[:, 2] = ((new_targets[:, 2])*patch_height + black_margin_y) / height
+            new_targets[:, 3] = new_targets[:, 3] * (patch_width/width)
+            new_targets[:, 4] = new_targets[:, 4] * (patch_height/height)
+    else:
+        image = image
+        new_targets = targets
+    
+    valid_idx1 = 0 < new_targets[:, 1]
+    valid_idx2 = 0 < new_targets[:, 2]
+    valid_idx3 = new_targets[:, 1] < 1
+    valid_idx4 = new_targets[:, 2] < 1
+    valid_targets = new_targets[valid_idx1 * valid_idx2 * valid_idx3 * valid_idx4]
+
+    if len(valid_targets) > 0:
+        targets_fix = []
+        for x_line in valid_targets:
+            line_fixed_temp = [(round(float(x_item),6)) for x_item in x_line[1:]]
+            x_temp, y_temp, w_temp, h_temp = line_fixed_temp
+            x1_temp = max(min(x_temp - w_temp/2,1),0)
+            y1_temp = max(min(y_temp - h_temp/2,1),0)
+            x2_temp = max(min(x_temp + w_temp/2,1),0)
+            y2_temp = max(min(y_temp + h_temp/2,1),0)
+            x_fixed = str(round(float((x1_temp+x2_temp)/2),6))
+            y_fixed = str(round(float((y1_temp+y2_temp)/2),6))
+            w_fixed = str(round(float(x2_temp-x1_temp),6))
+            h_fixed = str(round(float(y2_temp-y1_temp),6))
+            line_fixed = [x_line[0], x_fixed, y_fixed, w_fixed, h_fixed]
+
+            targets_fix.append(line_fixed)    
+        targets_fix = np.array(targets_fix, dtype=np.float32)
+    else:
+        targets_fix = valid_targets
+    return image, targets_fix
+
 def apply_brightness_contrast(input_img, brightness = 0, contrast = 0):
     
     if contrast != 0:
@@ -174,7 +282,8 @@ def random_wave(img):
     return warped_img
 
 def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=False, cache=False, pad=0.0, rect=False, ratio_maintain=True,
-                      rank=-1, world_size=1, workers=8, image_weights=False, quad=False, prefix='', valid_idx=None, pose_data=None, load_seg=False, gray=False):
+                      rank=-1, world_size=1, workers=8, image_weights=False, quad=False, prefix='', valid_idx=None, pose_data=None, load_seg=False, gray=False,
+                      minmax_label_size_limit=[None,None]):
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache
     with torch_distributed_zero_first(rank):
         dataset = LoadImagesAndLabels(path, imgsz, batch_size,
@@ -192,12 +301,12 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
                                       pose_data=pose_data,
                                       load_seg=load_seg,
                                       gray=gray,
-                                      merge_label=opt.merge_label)
-
+                                      merge_label=opt.merge_label,
+                                      minmax_label_size_limit=minmax_label_size_limit)
     batch_size = min(batch_size, len(dataset))
     nw = min([os.cpu_count() // world_size, batch_size if batch_size > 1 else 0, workers])  # number of workers
     if rank != -1:
-        sampler = torch.utils.data.distributed.DistributedSampler(dataset=dataset, shuffle=True)
+        sampler = DistributedWeightedSampler(dataset=dataset, num_replicas=world_size, rank=rank, shuffle=True)
         is_shuffle = False
     else:
         sampler = None
@@ -212,7 +321,59 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
                         shuffle=is_shuffle,
                         collate_fn=LoadImagesAndLabels.collate_fn4 if quad else LoadImagesAndLabels.collate_fn,)
     return dataloader, dataset
+    
+class DistributedWeightedSampler(torch.utils.data.distributed.DistributedSampler):
+    def __init__(self, dataset, num_replicas=None, rank=None, replacement=False, shuffle=True):
+        if num_replicas is None:
+            if not dist.is_available():
+                raise RuntimeError("Requires distributed package to be available")
+            num_replicas = dist.get_world_size()
+        if rank is None:
+            if not dist.is_available():
+                raise RuntimeError("Requires distributed package to be available")
+            rank = dist.get_rank()
+        self.dataset = dataset
+        self.num_replicas = num_replicas
+        self.rank = rank
+        self.epoch = 0
+        self.sampling_ratios = self.dataset.sampling_ratios
+        self.num_samples = int((int(sum(self.sampling_ratios)) // self.num_replicas))
+        self.total_size = self.num_samples * self.num_replicas
+        self.replacement = replacement
+        self.shuffle = shuffle
 
+    def __iter__(self):
+        # deterministically shuffle based on epoch
+        g = torch.Generator()
+        g.manual_seed(self.epoch)
+
+        indices = list(range(len(self.dataset)))
+
+        # remove some samples to make it evenly divisible
+        indices = indices[:self.total_size]
+        assert len(indices) == self.total_size
+
+        # subsample
+        indices = indices[self.rank:self.total_size:self.num_replicas]
+        assert len(indices) == self.num_samples
+
+        # get targets (you can alternatively pass them in __init__, if this op is expensive)
+        sampling_ratios = self.dataset.sampling_ratios
+        #for index_index in range(7300):
+        #    print(self.dataset.label_files[index_index], self.dataset.sampling_ratios[index_index], sampling_ratios[index_index])
+        #sampling_ratios = sampling_ratios[self.rank:len(self.dataset):self.num_replicas]
+        #print("sampling_ratios: ", len(sampling_ratios), np.unique(np.array(sampling_ratios)))
+        #print("num_samples: ", self.num_samples)
+        #print("dataset: ", len(self.dataset))
+        weights = torch.tensor(sampling_ratios)
+
+        return iter(torch.multinomial(weights, self.num_samples, self.replacement).tolist())
+
+    def __len__(self):
+        return self.num_samples
+
+    def set_epoch(self, epoch):
+        self.epoch = epoch
 
 class InfiniteDataLoader(torch.utils.data.dataloader.DataLoader):
     """ Dataloader that reuses workers
@@ -308,7 +469,10 @@ class LoadImages:  # for inference
             # Read image
             self.count += 1
             img0 = cv2.imread(path)  # BGR
-            assert img0 is not None, 'Image Not Found ' + path
+            #assert img0 is not None, 'Image Not Found ' + path
+        
+        if img0 is None:
+            return None, None, None, None
 
         # Padded resize
         if self.ratio_maintain:
@@ -498,13 +662,15 @@ def img2seg_paths(img_paths):
 class LoadImagesAndLabels(Dataset):  # for training/testing
     def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, ratio_maintain=True, image_weights=False,
                  cache_images=False, single_cls=False, stride=32, pad=0.0, prefix='',valid_idx=None, pose_data=None,
-                 load_seg=False, gray=False, merge_label=[]):
+                 load_seg=False, gray=False, merge_label=[], minmax_label_size_limit=[None,None]):
         self.img_size = img_size
         self.augment = augment
         self.hyp = hyp
         self.image_weights = image_weights
         self.rect = False if image_weights else rect
         self.ratio_maintain = ratio_maintain
+        self.min_label_size_limit = minmax_label_size_limit[0]
+        self.max_label_size_limit = minmax_label_size_limit[1]
         self.mosaic = self.augment and not self.rect  # load 4 images at a time into a mosaic (only during training)
         if isinstance(img_size, tuple):
             self.mosaic_border = [-img_size[0] // 2, -img_size[1] // 2]
@@ -561,10 +727,13 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         try:
             f = []  # image files
+            self.sampling_ratios = []
             for p_ in path if isinstance(path, list) else [path]:
                 if isinstance(p_, list):
                     p = Path(p_[0])
-                    data_sampling_ratio = p_[1]
+                    with open(p, 'r') as t:
+                        t = t.read().strip().splitlines()
+                    data_sampling_ratio = p_[1] / len(t)
                 else:
                     p = Path(p_)  # os-agnostic
                     data_sampling_ratio = 1.0
@@ -578,16 +747,18 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
                         add_line = []
                         for x in t:
-                            if random.random() <= data_sampling_ratio:
+                            #if random.random() <= data_sampling_ratio:
+                            if data_sampling_ratio > 0:
                                 if x.startswith('./'):
                                     add_line.append(x.replace('./', parent))
                                 else:
                                     add_line.append(x)
+                                self.sampling_ratios.append(data_sampling_ratio)
                         f += add_line  # local to global path
                         # f += [p.parent / x.lstrip(os.sep) for x in t]  # local to global path (pathlib)
                 else:
                     raise Exception(f'{prefix}{p} does not exist')
-            self.img_files = sorted([x.replace('/', os.sep) for x in f if x.split('.')[-1].lower() in img_formats])
+            self.img_files = [x.replace('/', os.sep) for x in f if x.split('.')[-1].lower() in img_formats]
             # self.img_files = sorted([x for x in f if x.suffix[1:].lower() in img_formats])  # pathlib
             assert self.img_files, f'{prefix}No images found'
         except Exception as e:
@@ -658,6 +829,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             self.shapes = np.array([self.shapes[i] for i, x in enumerate(self.labels) if len(x)>0])
             self.segments = tuple([self.segments[i] for i, x in enumerate(self.labels) if len(x)>0])
             self.labels = [self.labels[i] for i, x in enumerate(self.labels) if len(x)>0]
+            self.sampling_ratios = [self.sampling_ratios[i] for i, x in enumerate(self.labels) if len(x)>0]
 
         if self.pose_data is not None:
             new_pose_data = []
@@ -759,6 +931,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             self.label_files = [self.label_files[i] for i in irect]
             self.labels = [self.labels[i] for i in irect]
             self.segments = [self.segments[i] for i in irect]
+            self.sampling_ratios = [self.sampling_ratios[i] for i in irect]
             self.shapes = s[irect]  # wh
             ar = ar[irect]
 
@@ -934,8 +1107,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     cuty_max = int(min(max(cuty + cuth/2, 0), img.shape[0]))
                     img[cuty_min : cuty_max, cutx_min : cutx_max, :] = random.random()*255
             elif hyp is not None and random.random() < hyp.get('cut_out', 0):
-                cutx = (0.6*random.random()+0.2)*img.shape[1]
-                cuty = (0.6*random.random()+0.2)*img.shape[0]
+                cutx = (0.8*random.random()+0.1)*img.shape[1]
+                cuty = (0.8*random.random()+0.1)*img.shape[0]
                 cutw = 0.07*random.random()*img.shape[1]
                 cuth = 0.07*random.random()*img.shape[0]
                 cutx_min = int(min(max(cutx - cutw/2, 0), img.shape[1]))
@@ -948,14 +1121,16 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             # Load image
             img, (h0, w0), (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
+            segments = self.segments[index].copy()
+            labels = self.labels[index].copy()
+
+            img, labels = natural_minmax_crop(img, labels, self.min_label_size_limit, self.max_label_size_limit)
+
             # Letterbox
             shape = self.batch_shapes[self.batch[index]] if self.rect else self.img_size  # final letterboxed shape
             img, ratio, pad = letterbox(img, shape, auto=False, scaleup=self.augment)
             shapes = (h0, w0), ((h / h0, w / w0), pad)  # for COCO mAP rescaling
 
-            segments = self.segments[index].copy()
-
-            labels = self.labels[index].copy()
             
             if labels.size:  # normalized xywh to pixel xyxy format
                 labels[:, 1:] = xywhn2xyxy(labels[:, 1:], ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1])
@@ -1030,6 +1205,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         break
                 labels = dark_pastein(img, labels, sample_images, sample_masks)
 
+        '''
         color_sample = cv2.resize(img, (100,100))
         b = np.mean(color_sample[:, :, 0])
         g = np.mean(color_sample[:, :, 1])
@@ -1038,6 +1214,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         b = b/origin_color_sum
         g = g/origin_color_sum
         r = r/origin_color_sum
+        '''
 
         nL = len(labels)  # number of labels
         if nL:
@@ -2085,12 +2262,28 @@ def load_image(self, index, ratio_maintain=True, hyp=None):
         img = cv2.imread(path)  # BGR
         assert img is not None, 'Image Not Found ' + path
 
+        if hyp is not None and random.random() < hyp.get('cut_out_ciga', 0):
+            cutx = (0.6*random.random()+0.2)*img.shape[1]
+            cuty = (0.6*random.random()+0.2)*img.shape[0]
+            if random.random() < 0.5:
+                cutw = 0.07*random.random()*img.shape[1]
+                cuth = (0.04*random.random()+0.18)*img.shape[1] - cutw
+            else:
+                cuth = 0.07*random.random()*img.shape[0]
+                cutw = (0.04*random.random()+0.18)*img.shape[0] - cuth
+            
+            cutx_min = int(min(max(cutx - cutw/2, 0), img.shape[1]))
+            cuty_min = int(min(max(cuty - cuth/2, 0), img.shape[0]))
+            cutx_max = int(min(max(cutx + cutw/2, 0), img.shape[1]))
+            cuty_max = int(min(max(cuty + cuth/2, 0), img.shape[0]))
+            img[cuty_min : cuty_max, cutx_min : cutx_max, :] = 225 + random.random()*30
+
         if hyp is not None and 'contrast' in hyp:                
             img = apply_brightness_contrast(img, brightness = 0, contrast = random.random()*(hyp['contrast'][1]-hyp['contrast'][0])+hyp['contrast'][0])
 
         if self.gray:
-            img[:,:,1] = img[:,:,0]
-            img[:,:,2] = img[:,:,0]
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
         h0, w0 = img.shape[:2]  # orig hw
         if ratio_maintain:
             if isinstance(self.img_size, tuple):
@@ -2168,6 +2361,11 @@ def load_mosaic(self, hyp, index):
         # Load image
         img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
+        # Labels
+        labels, segments = self.labels[index].copy(), self.segments[index].copy()
+
+        img, labels = natural_minmax_crop(img, labels, self.min_label_size_limit, self.max_label_size_limit)
+
         # place img in img4
         if i == 0:  # top left
             img4 = np.full((ys * 2, xs * 2, img.shape[2]), 114, dtype=np.uint8)  # base image with 4 tiles
@@ -2187,8 +2385,6 @@ def load_mosaic(self, hyp, index):
         padw = x1a - x1b
         padh = y1a - y1b
 
-        # Labels
-        labels, segments = self.labels[index].copy(), self.segments[index].copy()
 
         if self.pose_data is not None:
             poses = self.pose_data[index].copy()
@@ -2375,8 +2571,6 @@ def load_mosaic(self, hyp, index):
 
     return img4, labels4, poses4, segments4
 
-
-
 def load_mosaic9(self, hyp, index):
     # loads images in a 9-mosaic
 
@@ -2391,6 +2585,11 @@ def load_mosaic9(self, hyp, index):
     for i, index in enumerate(indices):
         # Load image
         img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
+
+        # Labels
+        labels, segments = self.labels[index].copy(), self.segments[index].copy()
+
+        img, labels = natural_minmax_crop(img, labels, self.min_label_size_limit, self.max_label_size_limit)
 
         # place img in img9
         if i == 0:  # center
@@ -2420,8 +2619,6 @@ def load_mosaic9(self, hyp, index):
             pady -= (y2a - (ys * 3))
             y2a = ys * 3
 
-        # Labels
-        labels, segments = self.labels[index].copy(), self.segments[index].copy()
         if self.pose_data is not None:
             poses = self.pose_data[index].copy()
         if labels.size:
@@ -2816,33 +3013,8 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     a = random.uniform(-degrees, degrees)
     # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
 
-    min_label_size_limit = 24
-    max_label_size_limit = 96
-    target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
-    if len(target_sizes) > 0:
-        min_label_size = np.min(target_sizes)        
-        if 0 < min_label_size < min_label_size_limit**2:
-            natural_min_scale = min_label_size_limit / min_label_size**0.5
-        else:
-            natural_min_scale = None
-
-        max_label_size = np.max(target_sizes)        
-        if max_label_size_limit**2 < max_label_size:
-            natural_max_scale = max_label_size_limit / max_label_size**0.5
-        else:
-            natural_max_scale = None
-
-        if natural_min_scale is not None and natural_max_scale is not None:
-            if natural_min_scale > natural_max_scale :
-                temp_val = natural_max_scale
-                natural_max_scale = natural_min_scale
-                natural_min_scale = temp_val
-    else:
-        natural_min_scale = None
-        natural_max_scale = None
-    
-    #natural_min_scale = None
-    #natural_max_scale = None
+    natural_min_scale = None
+    natural_max_scale = None
 
     if isinstance(scale, float):
         if natural_min_scale is None and natural_max_scale is None:
@@ -2853,6 +3025,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             s = random.uniform(natural_max_scale - 0.1, natural_max_scale)
         else:
             s = random.uniform(natural_min_scale, natural_max_scale)
+            #s = random.uniform(natural_min_scale, natural_min_scale + 0.1)
 
     else:
         if natural_min_scale is None and natural_max_scale is None:
@@ -2863,6 +3036,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
             s = random.uniform(natural_max_scale - 0.1, natural_max_scale)
         else:
             s = random.uniform(natural_min_scale, natural_max_scale)
+            #s = random.uniform(natural_min_scale, natural_min_scale + 0.1)
     
 
     # s = 2 ** random.uniform(-scale, scale)

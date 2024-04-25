@@ -13,8 +13,6 @@ train: [
 ../data/auto_det_AI_city_challenge_phone_data/auto_det_phone_call_right_after_inspection/train.txt, #22205
 ../data/auto_det_AI_city_challenge_phone_data/auto_det_text_left_after_inspection/train.txt, #372
 ../data/auto_det_AI_city_challenge_phone_data/auto_det_text_right_after_inspection/train.txt, #3808
-
-../data/phone_crawl/data/train.txt # 57635
 ] 
 
 val: [../data/TANG_phones_not_included/train.txt] # 995

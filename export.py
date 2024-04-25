@@ -135,7 +135,15 @@ if __name__ == '__main__':
     import onnx
 
     print('\nStarting ONNX export with onnx %s...' % onnx.__version__)
-    f = opt.weights.replace('.pt', '_{}_{}.onnx'.format(opt.img_size[0], opt.img_size[1]))  # filename
+    if opt.grid and opt.end2end:
+        option = 'full'
+    elif opt.grid and not opt.end2end:
+        option = 'grid_only'
+    elif not opt.grid and not opt.end2end:
+        option = 'no_opt'
+    else:
+        option = 'undefined'
+    f = opt.weights.replace('.pt', '_{}_{}_{}.onnx'.format(option, opt.img_size[0], opt.img_size[1]))  # filename
     model.eval()
     output_names = ['classes', 'boxes'] if y is None else ['output']
     dynamic_axes = None
@@ -215,7 +223,7 @@ if __name__ == '__main__':
             print(f'Simplifier failure: {e}')
 
     # print(onnx.helper.printable_graph(onnx_model.graph))  # print a human readable model
-    onnx.save(onnx_model,f)
+    onnx.save(onnx_model, f)
     print('ONNX export success, saved as %s' % f)
 
     if opt.include_nms:

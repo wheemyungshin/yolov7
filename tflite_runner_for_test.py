@@ -104,35 +104,16 @@ def merge_overlapping_boxes(boxes, scores, overlap_num_thr=5):
 
 
 if __name__ == '__main__':
-    #fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_AW_ciga_mobilenet_hardtune_e008_s128_128_128_integer_quant.tflite")
-    #fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_CQ_ciga_mobilenet_manual_resize_range32_160_allsample_large192_e025_gray_128_128_integer_quant.tflite")
-    #fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_CQ_ciga_mobilenet_manual_resize_range32_160_allsample_large192_e105_gray_128_128_integer_quant.tflite")
-    #fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_CU_ciga_mobilenet_manual_resize_range32_160_allsample_lessrot_large192_e059_gray_128_128_integer_quant.tflite")
-    #fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_CV_ciga_mobilenet_manual_resize_range32_160_allsample_lessrot_s128_e178_gray_128_128_integer_quant.tflite")
-    #fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_CW_ciga_mobilenet_manual_resize_range32_160_FC_ratio_large160_e050_128_128_integer_quant.tflite")
-    #fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_CX_ciga_mobilenet_manual_resize_range32_160_FC_ratio_large160_e299_128_128_integer_quant.tflite")
-    #fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_CY_ciga_mobilenet_large256_e262_128_128_integer_quant.tflite")
-    #fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_DA_ciga_mobilenet_manual_resize_range32_160_simratio_large192_lrtune_from_CQ_e299_gray_no_opt_128_128_integer_quant.tflite")
-    #fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_DE_ciga_mobilenet_manual_resize_range32_160_simratio_large192_cutout_lrtune_from_trial_e000_gray_qat_no_opt_128_128_integer_quant.tflite")
-    #fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_DE_ciga_mobilenet_manual_resize_range32_160_simratio_large192_cutout_lrtune_from_trial_e030_gray_qat_no_opt_128_128_integer_quant.tflite")
-    fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_DJ_phone_mobilenet_manual_resize_range32_160_allsample_crawl_large320_CEe211_no_opt_128_128_integer_quant.tflite")
-    #saved_model/modified_DF_ciga_mobilenet_simratio_large192_lrtune_e385_gray_qat_no_opt_128_128_integer_quant.tflite
-    
-    fd_model2= tf.lite.Interpreter("weights_n78_model_crop/BL_phone_mobilenet_manual_resize_range24_96_large256from_BDagain_gray_128_128_01_float32.tflite")
+    fd_model = tf.lite.Interpreter("tflite_test_models/my_test_yolov7-mobilenet_allrelu_e125_128_128_integer_quant.tflite")
     nms_part = tf.lite.Interpreter("weights_n78_tflite_nms_sep/nms_float32.tflite")
     fd_model.allocate_tensors()
-    fd_model2.allocate_tensors()
     nms_part.allocate_tensors()
 
-    cap = cv2.VideoCapture("../data/n78_testvid.mp4")
-    #cap = cv2.VideoCapture("../data/n78_tel8070_application.mp4")
+    cap = cv2.VideoCapture("/data/n78_testvid.mp4")
 
-    vid_name = 'n78_testvid_DJ_e211_crop_02.mp4'
-    vid_writer = cv2.VideoWriter(vid_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, (480, 480))
+    vid_writer = cv2.VideoWriter('my_test_allrelu_e125.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 30, (480, 480))
     frame_id = 0
     unique_confidences = []
-    voting_que = [0] * 60
-    voting_idx = 0
     while True :
         _, frame = cap.read()
 
@@ -148,39 +129,17 @@ if __name__ == '__main__':
             fd_model.set_tensor(fd_model.get_input_details()[0]['index'], crop_img)
             fd_model.invoke()
 
-            fd_output_0_0 = fd_model.get_tensor(fd_model.get_output_details()[0]['index'])
-            fd_output_0_1 = fd_model.get_tensor(fd_model.get_output_details()[1]['index'])
-            fd_output_0_2= fd_model.get_tensor(fd_model.get_output_details()[2]['index'])
+            fd_output_0 = fd_model.get_tensor(fd_model.get_output_details()[0]['index'])
 
-            print(fd_output_0_0.shape, fd_model2.get_input_details()[0]["shape"])
-            print(fd_output_0_1.shape, fd_model2.get_input_details()[1]["shape"])
-            print(fd_output_0_2.shape, fd_model2.get_input_details()[2]["shape"])
-            fd_model2.set_tensor(fd_model2.get_input_details()[0]['index'], fd_output_0_0)
-            fd_model2.set_tensor(fd_model2.get_input_details()[1]['index'], fd_output_0_2)
-            fd_model2.set_tensor(fd_model2.get_input_details()[2]['index'], fd_output_0_1)
-            fd_model2.invoke()
-
-            fd_output_1 = fd_model2.get_tensor(fd_model2.get_output_details()[0]['index'])
+            #print(fd_output_0)
+            print(fd_output_0.shape)
             
-            for unique_c in np.unique(fd_output_1[:,-1]):
+            for unique_c in np.unique(fd_output_0[:,-1]):
                 if unique_c not in unique_confidences:
                     unique_confidences.append(unique_c)
-            #fd_output_0 = np.expand_dims(fd_output_0, 0)
-            #boxes, scores = nms(fd_output_0)
-
-            #boxes = fd_output_0[fd_output_0[:, -1] > 0]
-            #scores = fd_output_0[fd_output_0[:, -1] > 0, -1]
-            #fd_output_1 = np.expand_dims(fd_output_1[:, 1:], 0)
-            #print(fd_output_1)
-            print(fd_output_1.shape)
-            #print(nms_part.get_input_details()[0]['shape'])
             
-            #nms_part.set_tensor(nms_part.get_input_details()[0]['index'], np.transpose(fd_output_0, (0,2,1)))
-            #nms_part.invoke()
-            #nms_output = nms_part.get_tensor(nms_part.get_output_details()[0]['index'])
-            
-            boxes = fd_output_1[fd_output_1[:, -1] > 0.2, 1:5]
-            scores = fd_output_1[fd_output_1[:, -1] > 0.2, -1]
+            boxes = fd_output_0[fd_output_0[:, -1] > 0.1, 1:5]
+            scores = fd_output_0[fd_output_0[:, -1] > 0.1, -1]
             
             print(scores)
             print(boxes)
@@ -198,13 +157,6 @@ if __name__ == '__main__':
                 scores = []
             '''
 
-            if len(scores) > 0:
-                voting_que[voting_idx] = 1#max(scores)
-            else:
-                voting_que[voting_idx] = 0
-            voting_idx+=1
-            if voting_idx >= len(voting_que):
-                voting_idx = 0
             max_fd = None
             max_size = -1
 
@@ -219,12 +171,6 @@ if __name__ == '__main__':
                     max_fd = max_fd.astype(np.int32)
                     frame_vis = cv2.rectangle(frame_vis, (max_fd[0],max_fd[1]), (max_fd[2],max_fd[3]), (255,255,0), 2)            
                     cv2.putText(frame_vis, str(round(scores[idx], 5)), (max_fd[0],max_fd[1] - 2), 0, 1, [225, 255, 255], thickness=2, lineType=cv2.LINE_AA)
-            
-            voting_score = sum(voting_que) / len(voting_que) 
-            if voting_score > 0.4:
-                cv2.putText(frame_vis, str(round(voting_score, 5)), (10, 30), 0, 1, [0, 0, 255], thickness=2, lineType=cv2.LINE_AA)
-            else:
-                cv2.putText(frame_vis, str(round(voting_score, 5)), (10, 30), 0, 1, [225, 255, 255], thickness=2, lineType=cv2.LINE_AA)
 
             vid_writer.write(frame_vis)
         else:
@@ -233,7 +179,7 @@ if __name__ == '__main__':
 
     vid_writer.release()
 
-cv2.destroyAllWindows()
-unique_confidences.sort()
 print("unique_confidences : ", unique_confidences)
-print(vid_name)
+
+cv2.destroyAllWindows()
+
