@@ -85,6 +85,9 @@ def natural_minmax_crop(image, targets, base_size, min_label_size_limit=None, ma
     else:
         natural_scale = None
     
+    print(target_sizes, '\n')
+    print(natural_scale, base_size, min_label_size_limit, max_label_size_limit, '\n')
+    
     if natural_scale is not None:
         image = cv2.resize(image, (0,0), fx=natural_scale, fy=natural_scale)
         if image.shape[0] > base_h and image.shape[1] > base_w:

@@ -104,7 +104,7 @@ def merge_overlapping_boxes(boxes, scores, overlap_num_thr=5):
 
 
 if __name__ == '__main__':
-    fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_test_natural_crop_range24_80_s192_192_gray_e100_no_opt_128_128_integer_quant.tflite")
+    fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/")
     #saved_model/modified_DF_ciga_mobilenet_simratio_large192_lrtune_e385_gray_qat_no_opt_128_128_integer_quant.tflite
     
     fd_model2= tf.lite.Interpreter("weights_n78_model_crop/BL_phone_mobilenet_manual_resize_range24_96_large256from_BDagain_gray_128_128_01_float32.tflite")
@@ -116,7 +116,7 @@ if __name__ == '__main__':
     #cap = cv2.VideoCapture("../data/n78_testvid.mp4")
     cap = cv2.VideoCapture("../data/n78_tel8070_application.mp4")
 
-    vid_name = 'n78_tel_test_e100_crop_04.mp4'
+    vid_name = 'n78_testvid_DJ_e211_crop_02.mp4'
     vid_writer = cv2.VideoWriter(vid_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, (480, 480))
     frame_id = 0
     unique_confidences = []
@@ -168,8 +168,8 @@ if __name__ == '__main__':
             #nms_part.invoke()
             #nms_output = nms_part.get_tensor(nms_part.get_output_details()[0]['index'])
             
-            boxes = fd_output_1[fd_output_1[:, -1] > 0.4, 1:5]
-            scores = fd_output_1[fd_output_1[:, -1] > 0.4, -1]
+            boxes = fd_output_1[fd_output_1[:, -1] > 0.2, 1:5]
+            scores = fd_output_1[fd_output_1[:, -1] > 0.2, -1]
             
             print(scores)
             print(boxes)

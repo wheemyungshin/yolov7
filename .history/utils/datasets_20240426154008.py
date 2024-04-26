@@ -87,7 +87,7 @@ def natural_minmax_crop(image, targets, base_size, min_label_size_limit=None, ma
     
     if natural_scale is not None:
         image = cv2.resize(image, (0,0), fx=natural_scale, fy=natural_scale)
-        if image.shape[0] > base_h and image.shape[1] > base_w:
+        if resized_image.shape[0] > base_h and resized_image.shape[1] > base_w:
             base_image = np.zeros_like(image)
             base_image = cv2.resize(base_image, (base_w, base_h))
             base_image = base_image * 0
@@ -109,11 +109,12 @@ def natural_minmax_crop(image, targets, base_size, min_label_size_limit=None, ma
             new_targets[:, 3] = new_targets[:, 3] * (patch_width/image.shape[1])
             new_targets[:, 4] = new_targets[:, 4] * (patch_height/image.shape[0])
         else:
-            max_base_size = max(image.shape[1], image.shape[0], base_w, base_h)
+            max_base_size = max(resized_image.shape[1], resized_image.shape[0], base_w, base_h)
             base_image = np.zeros_like(image)
             base_image = cv2.resize(base_image, (max_base_size, max_base_size))
             base_image = base_image * 0
 
+            image = cv2.resize(image, (0,0), fx=natural_scale, fy=natural_scale)
             patch_width = image.shape[1]
             patch_height = image.shape[0]
             black_margin_x = int((max_base_size - patch_width)/2)
@@ -1124,14 +1125,14 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         else:
             # Load image
-            #img, (h0, w0), (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
+            img, (h0, w0), (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
-            img, (h0, w0), (h, w), labels = load_image_and_label(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
+            #img, labels = load_image_and_label(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
             segments = self.segments[index].copy()
-            #labels = self.labels[index].copy()
+            labels = self.labels[index].copy()
 
-            #img, labels = natural_minmax_crop(img, labels, img.shape[:2], self.min_label_size_limit, self.max_label_size_limit)
+            img, labels = natural_minmax_crop(img, labels, self.min_label_size_limit, self.max_label_size_limit)
 
             # Letterbox
             shape = self.batch_shapes[self.batch[index]] if self.rect else self.img_size  # final letterboxed shape
@@ -2268,12 +2269,7 @@ def load_image_and_label(self, index, ratio_maintain=True, hyp=None):
         path = self.img_files[index]
         img = cv2.imread(path)  # BGR
 
-        if isinstance(self.img_size, tuple):
-            base_size = [self.img_size[0], self.img_size[1]]
-        else:
-            base_size = [self.img_size, self.img_size]
-
-        img, labels = natural_minmax_crop(img, labels, base_size, self.min_label_size_limit, self.max_label_size_limit)
+        img, labels = natural_minmax_crop(img, labels, self.min_label_size_limit, self.max_label_size_limit)
 
         assert img is not None, 'Image Not Found ' + path
 
@@ -2399,15 +2395,12 @@ def load_mosaic(self, hyp, index):
     indices = [index] + random.choices(self.indices, k=3)  # 3 additional image indices
     for i, index in enumerate(indices):
         # Load image
-        #img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
-
-        img, _, (h, w), labels = load_image_and_label(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
+        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
         # Labels
-        #labels, segments = self.labels[index].copy(), self.segments[index].copy()
-        segments = self.segments[index].copy()
+        labels, segments = self.labels[index].copy(), self.segments[index].copy()
 
-        #img, labels = natural_minmax_crop(img, labels, img.shape[:2], self.min_label_size_limit, self.max_label_size_limit)
+        img, labels = natural_minmax_crop(img, labels, self.min_label_size_limit, self.max_label_size_limit)
 
         # place img in img4
         if i == 0:  # top left
@@ -2627,14 +2620,12 @@ def load_mosaic9(self, hyp, index):
     indices = [index] + random.choices(self.indices, k=8)  # 8 additional image indices
     for i, index in enumerate(indices):
         # Load image
-        #img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
+        img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
-        img, _, (h, w), labels = load_image_and_label(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
         # Labels
-        #labels, segments = self.labels[index].copy(), self.segments[index].copy()
-        segments = self.segments[index].copy()
+        labels, segments = self.labels[index].copy(), self.segments[index].copy()
 
-        #img, labels = natural_minmax_crop(img, labels, img.shape[:2], self.min_label_size_limit, self.max_label_size_limit)
+        img, labels = natural_minmax_crop(img, labels, self.min_label_size_limit, self.max_label_size_limit)
 
         # place img in img9
         if i == 0:  # center

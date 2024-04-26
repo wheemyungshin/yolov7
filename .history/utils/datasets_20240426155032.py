@@ -2631,10 +2631,9 @@ def load_mosaic9(self, hyp, index):
 
         img, _, (h, w), labels = load_image_and_label(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
         # Labels
-        #labels, segments = self.labels[index].copy(), self.segments[index].copy()
-        segments = self.segments[index].copy()
+        labels, segments = self.labels[index].copy(), self.segments[index].copy()
 
-        #img, labels = natural_minmax_crop(img, labels, img.shape[:2], self.min_label_size_limit, self.max_label_size_limit)
+        img, labels = natural_minmax_crop(img, labels, img.shape[:2], self.min_label_size_limit, self.max_label_size_limit)
 
         # place img in img9
         if i == 0:  # center
