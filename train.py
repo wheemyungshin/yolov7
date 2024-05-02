@@ -65,7 +65,8 @@ def train(hyp, opt, device, tb_writer=None):
     # Configure
     plots = not opt.evolve  # create plots
     cuda = device.type != 'cpu'
-    init_seeds(2 + rank)
+    init_seeds()
+    #init_seeds(2 + rank)
     with open(opt.data) as f:
         data_dict = yaml.load(f, Loader=yaml.SafeLoader)  # data dict
     is_coco = opt.data.endswith('coco.yaml')
@@ -294,13 +295,17 @@ def train(hyp, opt, device, tb_writer=None):
     else:
         valid_segment_labels = []
 
+    minmax_label_size_limit = opt.minmax_label_size_limit
+    if minmax_label_size_limit[0] == -1 and minmax_label_size_limit[1] == -1:
+        minmax_label_size_limit = [None, None]
+
     # Trainloader
     dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, opt,
                                             hyp=hyp, augment=True, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                             world_size=opt.world_size, workers=opt.workers,
                                             image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), 
                                             valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg, gray=opt.gray,
-                                            ratio_maintain=(not opt.no_ratio_maintain))
+                                            ratio_maintain=(not opt.no_ratio_maintain), minmax_label_size_limit=minmax_label_size_limit)
     mlc = np.concatenate(dataset.labels, 0)[:, 0].max()  # max label class
     nb = len(dataloader)  # number of batches
     if not opt.seg:
@@ -308,7 +313,11 @@ def train(hyp, opt, device, tb_writer=None):
 
     # Process 0
     if rank in [-1, 0]:
+<<<<<<< HEAD
         testloader = create_dataloader(test_path, tuple([128, 256]), batch_size * 2, gs, opt,  # testloader
+=======
+        testloader = create_dataloader(test_path, tuple([128, 128]), batch_size * 2, gs, opt,  # testloader
+>>>>>>> 54b4ef927c4bcf8d33744c733c02e5e416161939
                                        cache=opt.cache_images and not opt.notest, rect=opt.rect, rank=-1,
                                        world_size=opt.world_size, workers=opt.workers,
                                        prefix=colorstr('val: '), valid_idx=valid_idx, load_seg=opt.seg, gray=opt.gray,
@@ -380,6 +389,10 @@ def train(hyp, opt, device, tb_writer=None):
     
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         model.train()
+        
+        target_size_division = {}
+        for divis_num in range(0, 192, 4):
+            target_size_division[divis_num] = 0
 
         # Update image weights (optional)
         if opt.image_weights:
@@ -460,6 +473,13 @@ def train(hyp, opt, device, tb_writer=None):
                     ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
                     imgs = F.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
 
+            for target_ in targets:
+                for divis_num in range(0, 192, 4):
+                    target_size = ((target_[4]*imgs.shape[3])*(target_[5]*imgs.shape[2]))**0.5
+                    if divis_num <= target_size < divis_num+4:
+                        target_size_division[divis_num] +=1
+
+
             # Forward
             '''
             if epoch < 5:
@@ -536,6 +556,19 @@ def train(hyp, opt, device, tb_writer=None):
 
             # end batch ------------------------------------------------------------------------------------------------
         # end epoch ----------------------------------------------------------------------------------------------------
+
+        #for t_k, t_v in target_size_division.items():
+        #    print(t_k, " : ", t_v)
+        labels_target_size_division = open('target_size_division.txt', 'a')
+        
+        labels_target_size_division.write(str(epoch))
+        labels_target_size_division.write('\n')
+        for size_k, size_v in target_size_division.items():
+            write_size_line = str(size_k)+' : '+str(size_v)
+            labels_target_size_division.write(write_size_line)
+            labels_target_size_division.write('\n')
+        
+        labels_target_size_division.close()
 
         # Scheduler
         lr = [x['lr'] for x in optimizer.param_groups]  # for tensorboard
@@ -711,6 +744,7 @@ if __name__ == '__main__':
     parser.add_argument('--gray', action='store_true', help='Load all data as grayscale')
     parser.add_argument('--merge-label', type=int, nargs='+', action='append', default=[], help='list of merge label list chunk. --merge-label 0 1 --merge-label 2 3 4')
     parser.add_argument('--no-ratio-maintain', action='store_true', help='do not maintain input ratio')
+    parser.add_argument('--minmax-label-size-limit', nargs='+', type=int, default=[-1, -1], help='labels to include when calculating segmentation loss')
     
     opt = parser.parse_args()
 
