@@ -2872,6 +2872,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     a = random.uniform(-degrees, degrees)
     # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
 
+    '''
     min_label_size_limit = 32
     max_label_size_limit = 160
     target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
@@ -2882,25 +2883,18 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
         else:
             natural_min_scale = None
 
-        max_label_size = np.max(target_sizes)        
+        max_label_size = np.max(target_sizes)
         if max_label_size_limit < max_label_size**0.5:
             natural_max_scale = max_label_size_limit / max_label_size**0.5
         else:
             natural_max_scale = None
-
-        '''
-        if natural_min_scale is not None and natural_max_scale is not None:
-            if natural_min_scale > natural_max_scale :
-                temp_val = natural_max_scale
-                natural_max_scale = natural_min_scale
-                natural_min_scale = temp_val
-        '''
     else:
         natural_min_scale = None
         natural_max_scale = None
+    '''
     
-    #natural_min_scale = None
-    #natural_max_scale = None
+    natural_min_scale = None
+    natural_max_scale = None
 
     if isinstance(scale, float):
         if natural_min_scale is None and natural_max_scale is None:

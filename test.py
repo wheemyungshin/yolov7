@@ -19,7 +19,7 @@ from utils.plots import plot_images, output_to_target, plot_study_txt
 from utils.torch_utils import select_device, time_synchronized, TracedModel
 from collections import defaultdict
 import cv2
-
+import skimage.io
 
 def test(data,
          weights=None,
@@ -145,6 +145,11 @@ def test(data,
 
         img = img.to(device, non_blocking=True)
         img = img.half() if half else img.float()  # uint8 to fp16/32
+
+        #vis__img = np.transpose(img.detach().cpu().numpy()[0], (1,2,0)).astype(np.uint8)
+        #print(vis__img.shape)
+        #skimage.io.imsave('save_'+str(batch_i)+'.jpg', vis__img)
+
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
         targets = targets.to(device)
         masks = masks.to(device)

@@ -308,7 +308,7 @@ def train(hyp, opt, device, tb_writer=None):
 
     # Process 0
     if rank in [-1, 0]:
-        testloader = create_dataloader(test_path, tuple([96, 192]), batch_size * 2, gs, opt,  # testloader
+        testloader = create_dataloader(test_path, tuple([128, 256]), batch_size * 2, gs, opt,  # testloader
                                        cache=opt.cache_images and not opt.notest, rect=opt.rect, rank=-1,
                                        world_size=opt.world_size, workers=opt.workers,
                                        prefix=colorstr('val: '), valid_idx=valid_idx, load_seg=opt.seg, gray=opt.gray,

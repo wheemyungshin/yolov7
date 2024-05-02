@@ -1,0 +1,28 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+  [../data/crowd_6cls/train.txt, 1500], # 2553
+  ../data/crowd_6cls/val.txt, # 788
+  ../data/AIHUB_autodriving_humans.txt, # 827
+  ../data/bdd100k_humans.txt, #1491
+  ../data/cityscapes_others_humans.txt, # 691
+  ../data/small_ticket_testset_humans.txt, # 971
+  [../data/auto_det_s384_640_back/train.txt, 6000], #45462
+  [../data/auto_det_s384_640_right/train.txt, 6000], #45461
+  [../data/auto_det_s384_640_left/train.txt, 6000], #45466
+  [../data/gangnam_street_BH_cls6/train.txt, 600], #31766
+  
+]
+val: [
+  ../data/auto_det_gnet_test1/test.txt # 54
+]
+test: [
+  ../data/auto_det_gnet_test1/test.txt # 54
+]
+
+# number of classes
+nc: 3
+
+# class names
+names: ['person', 'rider', 'nothing']
+
+valid_idx: [6, 7, 999]

@@ -36,7 +36,7 @@ def compute_iou(box, boxes):
 
 def nms(output, conf_thres=0.5, iou_thres=0.45):
 
-    predictions = np.squeeze(output[0])
+    predictions = np.squeeze(output)
 
     # Filter out object confidence scores below threshold
 
@@ -104,17 +104,15 @@ def merge_overlapping_boxes(boxes, scores, overlap_num_thr=5):
 
 
 if __name__ == '__main__':
-    fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_DA_ciga_mobilenet_manual_resize_range32_160_simratio_large192_lrtune_from_CQ_e299_gray_no_opt_128_128_integer_quant.tflite")
-    fd_model2= tf.lite.Interpreter("weights_n78_model_crop/BL_phone_mobilenet_manual_resize_range24_96_large256from_BDagain_gray_128_128_01_float32.tflite")
-    nms_part = tf.lite.Interpreter("weights_n78_tflite_nms_sep/nms_float32.tflite")
+    fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/M_gnet_shufflenet-t_v3_large448_e299_128_256_float32.tflite")
+    #nms_part = tf.lite.Interpreter("weights_n78_tflite_nms_sep/nms_float32.tflite")
     fd_model.allocate_tensors()
-    fd_model2.allocate_tensors()
-    nms_part.allocate_tensors()
+    #nms_part.allocate_tensors()
 
-    cap = cv2.VideoCapture("../data/n78_testvid.mp4")
+    cap = cv2.VideoCapture("../data/gnet_errors1/noperson2_right.mp4")
 
-    vid_name = 'n78_DA_e299_crop_05.mp4'
-    vid_writer = cv2.VideoWriter(vid_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, (480, 480))
+    vid_name = 'gnet_M_05_tf24.mp4'
+    vid_writer = cv2.VideoWriter(vid_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, (1920, 1080))
     frame_id = 0
     unique_confidences = []
     voting_que = [0] * 60
@@ -125,8 +123,9 @@ if __name__ == '__main__':
         if frame is not None:
             #frame = frame[::-1, :, :]#.transpose(1, 0, 2)
             frame_vis = frame.copy()
-
+            
             print(fd_model.get_input_details()[0]["shape"])
+            #print(nms_part.get_input_details()[0]["shape"])
             crop_img = cv2.resize(frame, (fd_model.get_input_details()[0]["shape"][2], fd_model.get_input_details()[0]["shape"][1]))
             crop_img = (crop_img / 255).astype(np.float32)
             print(np.min(crop_img),np.max(crop_img))
@@ -134,55 +133,18 @@ if __name__ == '__main__':
             fd_model.set_tensor(fd_model.get_input_details()[0]['index'], crop_img)
             fd_model.invoke()
 
-            fd_output_0_0 = fd_model.get_tensor(fd_model.get_output_details()[0]['index'])
-            fd_output_0_1 = fd_model.get_tensor(fd_model.get_output_details()[1]['index'])
-            fd_output_0_2= fd_model.get_tensor(fd_model.get_output_details()[2]['index'])
+            fd_output_0 = fd_model.get_tensor(fd_model.get_output_details()[0]['index'])[0]
 
-            print(fd_output_0_0.shape, fd_model2.get_input_details()[0]["shape"])
-            print(fd_output_0_1.shape, fd_model2.get_input_details()[1]["shape"])
-            print(fd_output_0_2.shape, fd_model2.get_input_details()[2]["shape"])
-            fd_model2.set_tensor(fd_model2.get_input_details()[0]['index'], fd_output_0_0)
-            fd_model2.set_tensor(fd_model2.get_input_details()[2]['index'], fd_output_0_1)
-            fd_model2.set_tensor(fd_model2.get_input_details()[1]['index'], fd_output_0_2)
-            fd_model2.invoke()
+            print(fd_output_0)
+            print(fd_output_0.shape)
 
-            fd_output_1 = fd_model2.get_tensor(fd_model2.get_output_details()[0]['index'])
+            boxes, scores = nms(fd_output_0, conf_thres=0.5, iou_thres=0.45)
             
-            for unique_c in np.unique(fd_output_1[:,-1]):
-                if unique_c not in unique_confidences:
-                    unique_confidences.append(unique_c)
-            #fd_output_0 = np.expand_dims(fd_output_0, 0)
-            #boxes, scores = nms(fd_output_0)
-
-            #boxes = fd_output_0[fd_output_0[:, -1] > 0]
-            #scores = fd_output_0[fd_output_0[:, -1] > 0, -1]
-            #fd_output_1 = np.expand_dims(fd_output_1[:, 1:], 0)
-            #print(fd_output_1)
-            print(fd_output_1.shape)
-            #print(nms_part.get_input_details()[0]['shape'])
-            
-            #nms_part.set_tensor(nms_part.get_input_details()[0]['index'], np.transpose(fd_output_0, (0,2,1)))
-            #nms_part.invoke()
-            #nms_output = nms_part.get_tensor(nms_part.get_output_details()[0]['index'])
-            
-            boxes = fd_output_1[fd_output_1[:, -1] > 0.5, 1:5]
-            scores = fd_output_1[fd_output_1[:, -1] > 0.5, -1]
+            #boxes = fd_output_0[fd_output_0[:, -1] > 0.1, 1:5]
+            #scores = fd_output_0[fd_output_0[:, -1] > 0.1, -1]
             
             print(scores)
             print(boxes)
-            '''
-            print(scores)
-            print(boxes)
-            if len(boxes) > 0:
-                boxes = merge_overlapping_boxes(boxes, scores, overlap_num_thr=0)
-            
-            if len(boxes) > 0:
-                scores = boxes[:, -1]
-                print(scores)
-                print(boxes)
-            else:
-                scores = []
-            '''
 
             if len(scores) > 0:
                 voting_que[voting_idx] = 1#max(scores)
@@ -198,10 +160,10 @@ if __name__ == '__main__':
                 if scores[idx] > 0.1 :
                     size = (boxes[idx][2] - boxes[idx][0]) * (boxes[idx][3] - boxes[idx][1])
                     max_fd = boxes[idx]
-                    max_fd[0] = int(max_fd[0] * (480 / 128))
-                    max_fd[2] = int(max_fd[2] * (480 / 128))
-                    max_fd[1] = int(max_fd[1] * (480 / 128))
-                    max_fd[3] = int(max_fd[3] * (480 / 128))
+                    max_fd[0] = int(max_fd[0] * (1920 / 256))
+                    max_fd[2] = int(max_fd[2] * (1920 / 256))
+                    max_fd[1] = int(max_fd[1] * (1080 / 128))
+                    max_fd[3] = int(max_fd[3] * (1080 / 128))
                     max_fd = max_fd.astype(np.int32)
                     frame_vis = cv2.rectangle(frame_vis, (max_fd[0],max_fd[1]), (max_fd[2],max_fd[3]), (255,255,0), 2)            
                     cv2.putText(frame_vis, str(round(scores[idx], 5)), (max_fd[0],max_fd[1] - 2), 0, 1, [225, 255, 255], thickness=2, lineType=cv2.LINE_AA)
@@ -219,6 +181,7 @@ if __name__ == '__main__':
 
     vid_writer.release()
 
+cv2.destroyAllWindows()
 unique_confidences.sort()
 print("unique_confidences : ", unique_confidences)
 print(vid_name)
