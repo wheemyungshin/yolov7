@@ -17,8 +17,8 @@ train: [
 ../data/phone_crawl/data/train.txt # 15755
 ] 
 
-val: [../data/n78_video_auto_det_after_filter/test.txt]
-test: [../data/n78_video_auto_det_after_filter/test.txt]
+val: [../data/n78_video_auto_det_after_filter/test.txt, ../data/n78_tel_autodet/test.txt] # 1195 + 2499
+test: [../data/n78_video_auto_det_after_filter/test.txt, ../data/n78_tel_autodet/test.txt] # 1195 + 2499
 
 # number of classes
 nc: 2
