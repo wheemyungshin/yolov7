@@ -555,6 +555,7 @@ def train(hyp, opt, device, tb_writer=None):
 
         #for t_k, t_v in target_size_division.items():
         #    print(t_k, " : ", t_v)
+        '''
         labels_target_size_division = open('target_size_division.txt', 'a')
         
         labels_target_size_division.write(str(epoch))
@@ -565,6 +566,7 @@ def train(hyp, opt, device, tb_writer=None):
             labels_target_size_division.write('\n')
         
         labels_target_size_division.close()
+        '''
 
         # Scheduler
         lr = [x['lr'] for x in optimizer.param_groups]  # for tensorboard

@@ -828,7 +828,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     
             self.labels = new_labels
             self.segments = new_segments
-            
+
             self.label_files = [self.label_files[i] for i, x in enumerate(self.labels) if len(x)>0]
             self.img_files = [self.img_files[i] for i, x in enumerate(self.labels) if len(x)>0]
             self.shapes = np.array([self.shapes[i] for i, x in enumerate(self.labels) if len(x)>0])
@@ -2396,7 +2396,7 @@ def load_mosaic(self, hyp, index):
         xs = self.img_size
     yc, xc = [int(random.uniform(-self.mosaic_border[0], 2 * ys + self.mosaic_border[0])), \
             int(random.uniform(-self.mosaic_border[1], 2 * xs + self.mosaic_border[1]))]  # mosaic center x, y
-    indices = [index] + random.choices(self.indices, k=3)  # 3 additional image indices
+    indices = [index] + random.choices(self.indices, weights=self.sampling_ratios, k=3)  # 3 additional image indices
     for i, index in enumerate(indices):
         # Load image
         #img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
@@ -2624,7 +2624,7 @@ def load_mosaic9(self, hyp, index):
     else:
         ys = self.img_size
         xs = self.img_size
-    indices = [index] + random.choices(self.indices, k=8)  # 8 additional image indices
+    indices = [index] + random.choices(self.indices, weights=self.sampling_ratios, k=8)  # 8 additional image indices
     for i, index in enumerate(indices):
         # Load image
         #img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
