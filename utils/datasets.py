@@ -2267,7 +2267,7 @@ def load_image_and_label(self, index, ratio_maintain=True, hyp=None):
     if img is None:  # not cached
         path = self.img_files[index]
         img = cv2.imread(path)  # BGR
-
+        
         if isinstance(self.img_size, tuple):
             base_size = [self.img_size[0], self.img_size[1]]
         else:
@@ -2396,7 +2396,7 @@ def load_mosaic(self, hyp, index):
         xs = self.img_size
     yc, xc = [int(random.uniform(-self.mosaic_border[0], 2 * ys + self.mosaic_border[0])), \
             int(random.uniform(-self.mosaic_border[1], 2 * xs + self.mosaic_border[1]))]  # mosaic center x, y
-    indices = [index] + random.choices(self.indices, k=3)  # 3 additional image indices
+    indices = [index] + random.choices(self.indices, weights=self.sampling_ratios, k=3)  # 3 additional image indices
     for i, index in enumerate(indices):
         # Load image
         #img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
@@ -2624,7 +2624,7 @@ def load_mosaic9(self, hyp, index):
     else:
         ys = self.img_size
         xs = self.img_size
-    indices = [index] + random.choices(self.indices, k=8)  # 8 additional image indices
+    indices = [index] + random.choices(self.indices, weights=self.sampling_ratios, k=8)  # 8 additional image indices
     for i, index in enumerate(indices):
         # Load image
         #img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
@@ -3058,33 +3058,6 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
     a = random.uniform(-degrees, degrees)
     # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
 
-<<<<<<< HEAD
-    '''
-    min_label_size_limit = 32
-    max_label_size_limit = 160
-    target_sizes = (targets[:, 3] - targets[:, 1]) * (targets[:, 4] - targets[:, 2])
-    if len(target_sizes) > 0:
-        min_label_size = np.min(target_sizes)        
-        if 0 < min_label_size < min_label_size_limit**2:
-            natural_min_scale = min_label_size_limit / min_label_size**0.5
-        else:
-            natural_min_scale = None
-
-        max_label_size = np.max(target_sizes)
-        if max_label_size_limit < max_label_size**0.5:
-            natural_max_scale = max_label_size_limit / max_label_size**0.5
-        else:
-            natural_max_scale = None
-    else:
-        natural_min_scale = None
-        natural_max_scale = None
-    '''
-    
-    natural_min_scale = None
-    natural_max_scale = None
-
-=======
->>>>>>> 54b4ef927c4bcf8d33744c733c02e5e416161939
     if isinstance(scale, float):
         s = random.uniform(1 - scale, 1.1 + scale)
     else:

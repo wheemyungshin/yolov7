@@ -3,7 +3,7 @@ import cv2
 import os
 import tensorflow as tf
 import skimage.io
-
+import argparse
 
 def xywh2xyxy(x):
     # Convert bounding box (x, y, w, h) to bounding box (x1, y1, x2, y2)
@@ -104,40 +104,27 @@ def merge_overlapping_boxes(boxes, scores, overlap_num_thr=5):
 
 
 if __name__ == '__main__':
-<<<<<<< HEAD
-<<<<<<< HEAD
-    fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_DA_ciga_mobilenet_manual_resize_range32_160_simratio_large192_lrtune_from_CQ_e299_gray_no_opt_128_128_integer_quant.tflite")
-=======
-    fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_test_natural_crop_range24_80_s192_192_gray_e100_no_opt_128_128_integer_quant.tflite")
-=======
-    fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_seatbelt_all_mobilenet_s256_e299_no_opt_128_128_integer_quant.tflite")
->>>>>>> 8941d79f90dff1985aa6b260a734f09655496251
-    #saved_model/modified_DF_ciga_mobilenet_simratio_large192_lrtune_e385_gray_qat_no_opt_128_128_integer_quant.tflite
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--weights', type=str, default='../onnx2tf/saved_model/modified_phone_mobilenet_n78_tuning_only3_e089_no_opt_128_128_integer_quant.tflite', help='initial weights path')
+    parser.add_argument('--weights2', type=str, default='../onnx2tf/saved_model/NMS_mobilenet_s128_128_float32.tflite', help='initial weights path')
+    parser.add_argument('--source', type=str, default='../data/n78_tel8070_application.mp4', help='initial weights path')
+    parser.add_argument('--save', type=str, default='n78_tuning3_phone_s128_e089_tel_c05.mp4', help='initial weights path')
+    parser.add_argument('--conf', type=float, default=0.4, help='Confidence threshold')
+
+    opt = parser.parse_args()
     
->>>>>>> 54b4ef927c4bcf8d33744c733c02e5e416161939
-    fd_model2= tf.lite.Interpreter("weights_n78_model_crop/BL_phone_mobilenet_manual_resize_range24_96_large256from_BDagain_gray_128_128_01_float32.tflite")
+    fd_model = tf.lite.Interpreter(opt.weights)    
+    fd_model2= tf.lite.Interpreter(opt.weights2)
     nms_part = tf.lite.Interpreter("weights_n78_tflite_nms_sep/nms_float32.tflite")
     fd_model.allocate_tensors()
     fd_model2.allocate_tensors()
     nms_part.allocate_tensors()
 
-<<<<<<< HEAD
-    cap = cv2.VideoCapture("../data/n78_testvid.mp4")
-
-    vid_name = 'n78_DA_e299_crop_05.mp4'
-=======
     #cap = cv2.VideoCapture("../data/n78_testvid.mp4")
-    #cap = cv2.VideoCapture("../data/n78_tel8070_application.mp4")
-    cap = cv2.VideoCapture("../data/data0429_bar_removed/day1_st_01_R.mp4")
+    cap = cv2.VideoCapture(opt.source)
 
-<<<<<<< HEAD
-    vid_name = 'n78_tel_test_e100_crop_04.mp4'
->>>>>>> 54b4ef927c4bcf8d33744c733c02e5e416161939
+    vid_name = opt.save
     vid_writer = cv2.VideoWriter(vid_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, (480, 480))
-=======
-    vid_name = 'seatbelt_day1_st_01_R_test_all_e299_crop_025.mp4'
-    vid_writer = cv2.VideoWriter(vid_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, (1080, 1080))
->>>>>>> 8941d79f90dff1985aa6b260a734f09655496251
     frame_id = 0
     unique_confidences = []
     voting_que = [0] * 60
@@ -146,8 +133,8 @@ if __name__ == '__main__':
         _, frame = cap.read()
 
         if frame is not None:
-            frame = frame[:, 500:1580]
-            #frame = frame[::-1, :, :]#.transpose(1, 0, 2)
+            #frame = frame[:, 500:1580]
+            frame = frame[:, :, :]#.transpose(1, 0, 2)
             frame_vis = frame.copy()
 
             print(fd_model.get_input_details()[0]["shape"])
@@ -166,13 +153,8 @@ if __name__ == '__main__':
             print(fd_output_0_1.shape, fd_model2.get_input_details()[1]["shape"])
             print(fd_output_0_2.shape, fd_model2.get_input_details()[2]["shape"])
             fd_model2.set_tensor(fd_model2.get_input_details()[0]['index'], fd_output_0_0)
-<<<<<<< HEAD
-            fd_model2.set_tensor(fd_model2.get_input_details()[2]['index'], fd_output_0_1)
-            fd_model2.set_tensor(fd_model2.get_input_details()[1]['index'], fd_output_0_2)
-=======
             fd_model2.set_tensor(fd_model2.get_input_details()[1]['index'], fd_output_0_2)
             fd_model2.set_tensor(fd_model2.get_input_details()[2]['index'], fd_output_0_1)
->>>>>>> 54b4ef927c4bcf8d33744c733c02e5e416161939
             fd_model2.invoke()
 
             fd_output_1 = fd_model2.get_tensor(fd_model2.get_output_details()[0]['index'])
@@ -194,24 +176,22 @@ if __name__ == '__main__':
             #nms_part.invoke()
             #nms_output = nms_part.get_tensor(nms_part.get_output_details()[0]['index'])
             
-            boxes = fd_output_1[fd_output_1[:, -1] > 0.25, 1:5]
-            scores = fd_output_1[fd_output_1[:, -1] > 0.25, -1]
+            boxes = fd_output_1[fd_output_1[:, -1] > opt.conf, 1:5]
+            scores = fd_output_1[fd_output_1[:, -1] > opt.conf, -1]
             
             print(scores)
             print(boxes)
-            '''
-            print(scores)
-            print(boxes)
-            if len(boxes) > 0:
-                boxes = merge_overlapping_boxes(boxes, scores, overlap_num_thr=0)
             
-            if len(boxes) > 0:
-                scores = boxes[:, -1]
-                print(scores)
-                print(boxes)
-            else:
-                scores = []
-            '''
+            #if len(boxes) > 0:
+            #    boxes = merge_overlapping_boxes(boxes, scores, overlap_num_thr=0)
+            #
+            #if len(boxes) > 0:
+            #    scores = boxes[:, -1]
+            #    print(scores)
+            #    print(boxes)
+            #else:
+            #    scores = []
+
 
             if len(scores) > 0:
                 voting_que[voting_idx] = 1#max(scores)
@@ -227,10 +207,10 @@ if __name__ == '__main__':
                 if scores[idx] > 0.1 :
                     size = (boxes[idx][2] - boxes[idx][0]) * (boxes[idx][3] - boxes[idx][1])
                     max_fd = boxes[idx]
-                    max_fd[0] = int(max_fd[0] * (1080 / 128))
-                    max_fd[2] = int(max_fd[2] * (1080 / 128))
-                    max_fd[1] = int(max_fd[1] * (1080 / 128))
-                    max_fd[3] = int(max_fd[3] * (1080 / 128))
+                    max_fd[0] = int(max_fd[0] * (480 / 128))
+                    max_fd[2] = int(max_fd[2] * (480 / 128))
+                    max_fd[1] = int(max_fd[1] * (480 / 128))
+                    max_fd[3] = int(max_fd[3] * (480 / 128))
                     max_fd = max_fd.astype(np.int32)
                     frame_vis = cv2.rectangle(frame_vis, (max_fd[0],max_fd[1]), (max_fd[2],max_fd[3]), (255,255,0), 2)            
                     cv2.putText(frame_vis, str(round(scores[idx], 5)), (max_fd[0],max_fd[1] - 2), 0, 1, [225, 255, 255], thickness=2, lineType=cv2.LINE_AA)
@@ -248,10 +228,6 @@ if __name__ == '__main__':
 
     vid_writer.release()
 
-<<<<<<< HEAD
-=======
-cv2.destroyAllWindows()
->>>>>>> 54b4ef927c4bcf8d33744c733c02e5e416161939
 unique_confidences.sort()
 print("unique_confidences : ", unique_confidences)
 print(vid_name)
