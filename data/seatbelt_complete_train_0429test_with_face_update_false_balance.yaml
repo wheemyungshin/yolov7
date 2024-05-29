@@ -10,10 +10,10 @@ train: [
       ../data/auto_BF_checks/auto_BF_check_1/train.txt, # 1457                      # X
       ../data/auto_BF_checks/auto_BF_check_2/train.txt, # 540                       # X
       [../data/roboflow_seatbelt_merge_after_inspection/train_with_face.txt, 10000], # 14308 # O
-      ../data/auto_det_seatbelt1_after_inspection/train.txt, # 2214                 # O
-      [../data/auto_det_seatbelt2_after_inspection/train.txt, 3000], # 13449                # O
-      ../data/auto_det_seatbelt3_after_inspection/train.txt, # 23                   # O
-      ../data/auto_det_seatbelt4_after_inspection/train.txt, # 1796                 # O
+      ../data/auto_det_aicitychal1_after_inspection/train.txt, # 2214                 # O
+      [../data/auto_det_aicitychal2_after_inspection/train.txt, 3000], # 13449                # O
+      ../data/auto_det_aicitychal3_after_inspection/train.txt, # 23                   # O
+      ../data/auto_det_aicitychal4_after_inspection/train.txt, # 1796                 # O
       [../data/auto_seatbelt_data0429_day1_O/train_with_face.txt, 10000], # 11296         # O
       [../data/auto_seatbelt_data0429_day2_O/train_with_face.txt, 20000], # 29807         # O
       ] # 23494 + 14308 + 17482 : 20720 + 929 + 5784 + 17230 + 1262 + 1457 + 540 = 55284 : 47922
