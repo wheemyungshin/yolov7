@@ -1,0 +1,16 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+../data/auto_ciga_n78_tuning/train.txt, # 462
+[../data/auto_bg_n78_tuning/train.txt, 300], # 1269
+] 
+
+val: [../data/n78_testvid_autodet_ciga/test.txt, ../data/n78_tel_autodet_ciga/test.txt] # 2347 + 6086
+test: [../data/n78_testvid_autodet_ciga/test.txt, ../data/n78_tel_autodet_ciga/test.txt] # 2347 + 6086
+
+# number of classes
+nc: 3
+
+# class names
+names: ['body', 'smoke', 'nothing']
+
+valid_idx: [0, 2, 999]
