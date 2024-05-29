@@ -9,19 +9,23 @@ train: [
       ../data/auto_BF_checks/auto_BF_check_0/train.txt, # 1262                      # X
       ../data/auto_BF_checks/auto_BF_check_1/train.txt, # 1457                      # X
       ../data/auto_BF_checks/auto_BF_check_2/train.txt, # 540                       # X
-      ../data/roboflow_seatbelt_merge_after_inspection/train.txt, # 14308           # O
+      ../data/roboflow_seatbelt_merge_after_inspection/train_with_face.txt, # 14308 # O
       ../data/auto_det_aicitychal1_after_inspection/train.txt, # 2214                 # O
       ../data/auto_det_aicitychal2_after_inspection/train.txt, # 13449                # O
       ../data/auto_det_aicitychal3_after_inspection/train.txt, # 23                   # O
       ../data/auto_det_aicitychal4_after_inspection/train.txt, # 1796                 # O
-      ] # 23494 + 14308 + 17482 : 20720 + 929 + 5784 + 17230 + 1262 + 1457 + 540 = 55284 : 47922
-val: [../data/auto_seatbelt_data0429_day1/test.txt]   
-test: [../data/auto_seatbelt_data0429_day1/test.txt]   
+      ../data/auto_seatbelt_data0429_day2_O/train_with_face.txt, # 29807         # O
+      ../data/wider_face_updated/val.txt, 
+      ../data/coco_face_from_kpts_wholebody/val.txt,
+      ../data/crowd/val.txt,
+      ../data/MAFA_concat/val.txt]  # 99575 images
+val: [../data/auto_BF_data0429_day1_O_after_inspection_bar_removed/train.txt]
+test: [../data/auto_BF_data0429_day1_O_after_inspection_bar_removed/train.txt]
 
 # number of classes
-nc: 3
+nc: 1
 
 # class names
-names: ['seatbelt', 'face', 'nothing']
+names: ['face']
 
-valid_idx: [0, 1, 999]
+valid_idx: [1]

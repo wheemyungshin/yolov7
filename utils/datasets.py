@@ -828,13 +828,13 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     
             self.labels = new_labels
             self.segments = new_segments
-            
+
             self.label_files = [self.label_files[i] for i, x in enumerate(self.labels) if len(x)>0]
             self.img_files = [self.img_files[i] for i, x in enumerate(self.labels) if len(x)>0]
             self.shapes = np.array([self.shapes[i] for i, x in enumerate(self.labels) if len(x)>0])
             self.segments = tuple([self.segments[i] for i, x in enumerate(self.labels) if len(x)>0])
-            self.labels = [self.labels[i] for i, x in enumerate(self.labels) if len(x)>0]
             self.sampling_ratios = [self.sampling_ratios[i] for i, x in enumerate(self.labels) if len(x)>0]
+            self.labels = [self.labels[i] for i, x in enumerate(self.labels) if len(x)>0]
 
         if self.pose_data is not None:
             new_pose_data = []
