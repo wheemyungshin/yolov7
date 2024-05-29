@@ -111,7 +111,7 @@ if __name__ == '__main__':
     #fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_seatbelt_face_mobilenet_s256_e220_no_opt_128_128_integer_quant.tflite")
     #fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_seatbelt_face_mobilenet_s256_e299_no_opt_128_128_integer_quant.tflite")
     #fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_seatbelt_face_all_mobilenet_s256_e299_no_opt_128_128_integer_quant.tflite")
-    fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_seatbelt_face_balance3_mobilenet_s256_e138_no_opt_128_128_integer_quant.tflite")
+    fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_seatbelt_face_balance3_mobilenet_s256_e238_no_opt_128_128_integer_quant.tflite")
     #fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_face_DMS_mobilenet_s256_e077_no_opt_128_128_integer_quant.tflite")
     #fd_model = tf.lite.Interpreter("../onnx2tf/saved_model/modified_seatbelt_all_0429Otrain_0429test_mobilenet_s256_little_stronger_lrtune_e040_no_opt_128_128_integer_quant.tflite")
     
@@ -127,7 +127,7 @@ if __name__ == '__main__':
     #cap = cv2.VideoCapture("../data/n78_tel8070_application.mp4")
     cap = cv2.VideoCapture("../data/data0429_bar_removed/day1_ww_00_R.mp4")
 
-    vid_name = 'modified_seatbelt_face_all_balance3_mobilenet_s256_e138_day1_ww_00_R_s128.mp4'
+    vid_name = 'modified_seatbelt_face_all_balance3_mobilenet_s256_e238_day1_ww_00_R_s128.mp4'
     vid_writer = cv2.VideoWriter(vid_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, (1080, 1080))
     frame_id = 0
     unique_confidences = []
