@@ -2839,9 +2839,9 @@ class CIB(nn.Module):
 class C2fCIB(C2f):
     """Faster Implementation of CSP Bottleneck with 2 convolutions."""
 
-    def __init__(self, c1, c2, n=1, shortcut=False, lk=False, g=1, e=0.5):
+    def __init__(self, c1, c2, shortcut=False, lk=False, g=1, e=0.5):
         """Initialize CSP bottleneck layer with two convolutions with arguments ch_in, ch_out, number, shortcut, groups,
         expansion.
         """
-        super().__init__(c1, c2, n, shortcut, g, e)
+        super().__init__(c1, c2, shortcut, g, e)
         self.m = nn.ModuleList(CIB(self.c, self.c, shortcut, e=1.0, lk=lk) for _ in range(n))
