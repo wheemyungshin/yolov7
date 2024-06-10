@@ -33,7 +33,6 @@ from utils.general import check_requirements, xyxy2xywh, xywh2xyxy, xywhn2xyxy, 
 from utils.torch_utils import torch_distributed_zero_first
 
 from collections import defaultdict
-import albumentations as A
 
 # Parameters
 help_url = 'https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
@@ -685,6 +684,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         self.path = path
         self.gray = gray
         #self.albumentations = Albumentations() if augment else None
+
+        import albumentations as A
         
         if pose_data is not None:
             if pose_data[0] is not None:
@@ -934,9 +935,9 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             irect = ar.argsort()
             self.img_files = [self.img_files[i] for i in irect]
             self.label_files = [self.label_files[i] for i in irect]
-            self.labels = [self.labels[i] for i in irect]
             self.segments = [self.segments[i] for i in irect]
             self.sampling_ratios = [self.sampling_ratios[i] for i in irect]
+            self.labels = [self.labels[i] for i in irect]
             self.shapes = s[irect]  # wh
             ar = ar[irect]
 
@@ -2268,13 +2269,15 @@ def load_image_and_label(self, index, ratio_maintain=True, hyp=None):
         path = self.img_files[index]
         img = cv2.imread(path)  # BGR
         
+        '''
         if 'n78' not in path:
             img = apply_brightness_contrast(img, brightness = -100-random.random()*100, contrast = 0)
             if random.random() < 0.5:
                 img = cv2.blur(img, (3, 3))
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-            
+        '''
+
         if isinstance(self.img_size, tuple):
             base_size = [self.img_size[0], self.img_size[1]]
         else:

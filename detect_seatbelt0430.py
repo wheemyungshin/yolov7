@@ -313,10 +313,10 @@ def detect(save_img=False):
                         if opt.save_frame:
                             print(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0]))
                             if len(det) > 0:
-                                cv2.imwrite(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'.jpg', im0)
-                                cv2.imwrite(os.path.join(save_dir, 'images_detected', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'.jpg', clean_im0)
+                                cv2.imwrite(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0])+'.jpg', im0)
+                                cv2.imwrite(os.path.join(save_dir, 'images_detected', p.name.split('.')[0])+'.jpg', clean_im0)
                             else:
-                                cv2.imwrite(os.path.join(save_dir, 'images_nothing', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'.jpg', clean_im0)
+                                cv2.imwrite(os.path.join(save_dir, 'images_nothing', p.name.split('.')[0])+'.jpg', clean_im0)
                     else:  # 'video' or 'stream'
                         if vid_path != save_path:  # new video
                             vid_path = save_path
