@@ -207,10 +207,10 @@ if __name__ == '__main__':
                 if scores[idx] > 0.1 :
                     size = (boxes[idx][2] - boxes[idx][0]) * (boxes[idx][3] - boxes[idx][1])
                     max_fd = boxes[idx]
-                    max_fd[0] = int(max_fd[0] * (480 / 128))
-                    max_fd[2] = int(max_fd[2] * (480 / 128))
-                    max_fd[1] = int(max_fd[1] * (480 / 128))
-                    max_fd[3] = int(max_fd[3] * (480 / 128))
+                    max_fd[0] = int(max_fd[0] * (480 / fd_model.get_input_details()[0]["shape"][2]))
+                    max_fd[2] = int(max_fd[2] * (480 / fd_model.get_input_details()[0]["shape"][2]))
+                    max_fd[1] = int(max_fd[1] * (480 / fd_model.get_input_details()[0]["shape"][1]))
+                    max_fd[3] = int(max_fd[3] * (480 / fd_model.get_input_details()[0]["shape"][1]))
                     max_fd = max_fd.astype(np.int32)
                     frame_vis = cv2.rectangle(frame_vis, (max_fd[0],max_fd[1]), (max_fd[2],max_fd[3]), (255,255,0), 2)            
                     cv2.putText(frame_vis, str(round(scores[idx], 5)), (max_fd[0],max_fd[1] - 2), 0, 1, [225, 255, 255], thickness=2, lineType=cv2.LINE_AA)

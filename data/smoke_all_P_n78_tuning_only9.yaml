@@ -1,0 +1,19 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+../data/auto_phone_n78_tuning/train.txt, # 1335
+../data/auto_bg_n78_tuning/train.txt, # 1269
+../data/auto_ciga_n78_tuning/train.txt, # 462
+../data/phone_hard_cases/no_phone/train.txt, # 2668
+../data/phone_hard_cases/yes_phone/train.txt, # 1386
+] 
+
+val: [../data/n78_video_auto_det_after_filter/test.txt, ../data/n78_tel_autodet/test.txt] # 2499
+test: [../data/n78_video_auto_det_after_filter/test.txt, ../data/n78_tel_autodet/test.txt] # 2499
+
+# number of classes
+nc: 3
+
+# class names
+names: ['body', 'cellphone', 'Nothing']
+
+valid_idx: [0, 3, 999]

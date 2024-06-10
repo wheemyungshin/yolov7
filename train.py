@@ -407,6 +407,21 @@ def train(hyp, opt, device, tb_writer=None):
         # Update mosaic border
         # b = int(random.uniform(0.25 * imgsz, 0.75 * imgsz + gs) // gs * gs)
         # dataset.mosaic_border = [b - imgsz, -b]  # height, width borders
+
+        hyp['degrees'] = (1 - (epoch / epochs))*70
+        hyp['hsv_v'] = (1 - (epoch / epochs))*0.5 + 0.1
+        hyp['hsv_s'] = (1 - (epoch / epochs))*0.3 + 0.4
+        hyp['translate'] = (1 - (epoch / epochs))*0.3
+        hyp['scale'] = [-0.55 - (1 - (epoch / epochs))*0.25, -0.45 + (1 - (epoch / epochs))*0.25]
+        print(hyp)
+        
+        dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, opt,
+                                            hyp=hyp, augment=True, cache=opt.cache_images, rect=opt.rect, rank=rank,
+                                            world_size=opt.world_size, workers=opt.workers,
+                                            image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), 
+                                            valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg, gray=opt.gray,
+                                            ratio_maintain=(not opt.no_ratio_maintain), minmax_label_size_limit=minmax_label_size_limit)
+
         if epoch == epochs - opt.close_mosaic:
             print("CLOSE MOSAIC!")
             # Trainloader
