@@ -633,7 +633,6 @@ class IAuxDetect(nn.Module):
         box @= convert_matrix                          
         return (box, score)
 
-
 class IBin(nn.Module):
     stride = None  # strides computed during build
     export = False  # onnx export

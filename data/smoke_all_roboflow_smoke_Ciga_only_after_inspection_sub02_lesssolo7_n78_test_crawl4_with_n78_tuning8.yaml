@@ -1,0 +1,29 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+[../data/smoke_data_BFC/train.txt, 4000], # 34493
+[../data/valid_ciga_data_cbf_for_training/tang.txt, 500], # 3423
+[../data/valid_ciga_data_cbf_for_training/pitta_1st.txt, 450], # 2023
+[../data/PITTA_2ND_ir_smoke_frames_after_inspection/train.txt, 600], # 5555
+[../data/valid_pitta_smoke_BFC2/train.txt, 500], #3942
+
+[../data/roboflow_smoke_after_inspection/train.txt, 1500], # 76469 -> 75793
+
+[../data/ciga_crawl/train.txt, 1500], # 5104
+
+[../data/coco_face_from_kpts_wholebody/train.txt, 2000], # 56673
+
+../data/auto_ciga_n78_tuning/train.txt, # 462
+../data/auto_bg_n78_tuning/train.txt, # 1269
+../data/auto_phone_n78_tuning/train.txt, # 1335
+] 
+
+val: [../data/n78_testvid_autodet_ciga/test.txt, ../data/n78_tel_autodet_ciga/test.txt] # 2347 + 6086
+test: [../data/n78_testvid_autodet_ciga/test.txt, ../data/n78_tel_autodet_ciga/test.txt] # 2347 + 6086
+
+# number of classes
+nc: 3
+
+# class names
+names: ['body', 'smoke', 'nothing']
+
+valid_idx: [0, 2, 999]
