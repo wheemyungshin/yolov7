@@ -1,0 +1,38 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+[../data/BFcellphone/auto_PITTA_2ND_divided_cellphone_yolov7-e6e_s384_after_inspection/train.txt, 10], #6538
+[../data/BFcellphone/auto_TANG_phones_yolov7-e6e_s384_after_inspection/train.txt, 10], #2727
+
+[../data/valid_phone_data/phonecalls_crawling_grounding_dino/train.txt, 10], # 11517
+[../data/valid_phone_data/roboflow_all/train.txt, 1], # 1454
+[../data/valid_phone_data/phonecalls_crawling2_auto/train.txt, 10], # 5415
+
+[../data/roboflow_phone_after_inspection/train_valid.txt, 5], # 28873 -> 19282
+
+[../data/auto_det_AI_city_challenge_phone_data/auto_det_phone_call_left_after_inspection/train.txt, 3], #3921
+[../data/auto_det_AI_city_challenge_phone_data/auto_det_phone_call_right_after_inspection/train.txt, 10], #22205
+[../data/auto_det_AI_city_challenge_phone_data/auto_det_text_left_after_inspection/train.txt, 1], #372
+[../data/auto_det_AI_city_challenge_phone_data/auto_det_text_right_after_inspection/train.txt, 3], #3808
+
+[../data/phone_crawl/train.txt, 10], # 15755
+
+[../data/coco_face_from_kpts_wholebody/train.txt, 70], # 56673
+
+../data/auto_ciga_n78_tuning/train.txt, # 462
+../data/auto_phone_n78_tuning/train.txt, # 1335
+../data/auto_bg_n78_tuning/train.txt, # 1269
+
+../data/auto_ciga_n78_tuning2/train.txt, # 462
+../data/auto_phone_n78_tuning2/train.txt, # 462
+] 
+
+val: [../data/n78_video_auto_det_after_filter/test.txt, ../data/n78_tel_autodet/test.txt] # 1195 + 2499
+test: [../data/n78_video_auto_det_after_filter/test.txt, ../data/n78_tel_autodet/test.txt] # 1195 + 2499
+
+# number of classes
+nc: 3
+
+# class names
+names: ['body', 'cellphone', 'Nothing']
+
+valid_idx: [0, 3, 999]
