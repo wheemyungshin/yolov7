@@ -408,6 +408,7 @@ def train(hyp, opt, device, tb_writer=None):
         # b = int(random.uniform(0.25 * imgsz, 0.75 * imgsz + gs) // gs * gs)
         # dataset.mosaic_border = [b - imgsz, -b]  # height, width borders
 
+        '''
         hyp['degrees'] = (1 - (epoch / epochs))*70
         hyp['hsv_v'] = (1 - (epoch / epochs))*0.5 + 0.1
         hyp['hsv_s'] = (1 - (epoch / epochs))*0.3 + 0.4
@@ -421,7 +422,8 @@ def train(hyp, opt, device, tb_writer=None):
                                             image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), 
                                             valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg, gray=opt.gray,
                                             ratio_maintain=(not opt.no_ratio_maintain), minmax_label_size_limit=minmax_label_size_limit)
-
+        '''
+        
         if epoch == epochs - opt.close_mosaic:
             print("CLOSE MOSAIC!")
             # Trainloader

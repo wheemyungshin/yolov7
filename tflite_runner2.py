@@ -5,6 +5,8 @@ import tensorflow as tf
 import skimage.io
 import argparse
 
+COLORS = [[255,255,0], [255,0,255], [0,255,255]]
+
 def xywh2xyxy(x):
     # Convert bounding box (x, y, w, h) to bounding box (x1, y1, x2, y2)
     y = np.copy(x)
@@ -168,7 +170,7 @@ if __name__ == '__main__':
             #boxes = fd_output_0[fd_output_0[:, -1] > 0]
             #scores = fd_output_0[fd_output_0[:, -1] > 0, -1]
             #fd_output_1 = np.expand_dims(fd_output_1[:, 1:], 0)
-            #print(fd_output_1)
+            print(fd_output_1)
             print(fd_output_1.shape)
             #print(nms_part.get_input_details()[0]['shape'])
             
@@ -176,11 +178,9 @@ if __name__ == '__main__':
             #nms_part.invoke()
             #nms_output = nms_part.get_tensor(nms_part.get_output_details()[0]['index'])
             
+            classes = fd_output_1[fd_output_1[:, -1] > opt.conf, 5]
             boxes = fd_output_1[fd_output_1[:, -1] > opt.conf, 1:5]
-            scores = fd_output_1[fd_output_1[:, -1] > opt.conf, -1]
-            
-            print(scores)
-            print(boxes)
+            scores = fd_output_1[fd_output_1[:, -1] > opt.conf, -1]            
             
             #if len(boxes) > 0:
             #    boxes = merge_overlapping_boxes(boxes, scores, overlap_num_thr=0)
@@ -203,16 +203,18 @@ if __name__ == '__main__':
             max_fd = None
             max_size = -1
 
+            print(boxes)
             for idx in range(len(scores)) :
                 if scores[idx] > 0.1 :
+                    cls_ = int(classes[idx])
                     size = (boxes[idx][2] - boxes[idx][0]) * (boxes[idx][3] - boxes[idx][1])
                     max_fd = boxes[idx]
-                    max_fd[0] = int(max_fd[0] * (480 / 128))
-                    max_fd[2] = int(max_fd[2] * (480 / 128))
-                    max_fd[1] = int(max_fd[1] * (480 / 128))
-                    max_fd[3] = int(max_fd[3] * (480 / 128))
+                    max_fd[0] = int(max_fd[0] * (480 / fd_model.get_input_details()[0]["shape"][2]))
+                    max_fd[2] = int(max_fd[2] * (480 / fd_model.get_input_details()[0]["shape"][2]))
+                    max_fd[1] = int(max_fd[1] * (480 / fd_model.get_input_details()[0]["shape"][1]))
+                    max_fd[3] = int(max_fd[3] * (480 / fd_model.get_input_details()[0]["shape"][1]))
                     max_fd = max_fd.astype(np.int32)
-                    frame_vis = cv2.rectangle(frame_vis, (max_fd[0],max_fd[1]), (max_fd[2],max_fd[3]), (255,255,0), 2)            
+                    frame_vis = cv2.rectangle(frame_vis, (max_fd[0],max_fd[1]), (max_fd[2],max_fd[3]), COLORS[cls_], 2)            
                     cv2.putText(frame_vis, str(round(scores[idx], 5)), (max_fd[0],max_fd[1] - 2), 0, 1, [225, 255, 255], thickness=2, lineType=cv2.LINE_AA)
             
             voting_score = sum(voting_que) / len(voting_que) 
