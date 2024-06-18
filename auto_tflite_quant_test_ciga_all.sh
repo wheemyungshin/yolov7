@@ -20,7 +20,7 @@ for w in $target/*; do
             conda activate yolov7
 
             python tflite_runner2_map_check.py \
-                --data data/smoke_all_roboflow_smoke_Ciga_only_n78_test.yaml \
+                --data data/smoke_all_ciga_n78_testset_manual.yaml \
                  --img 192 --batch 1 --conf 0.05 --iou 0.65 \
                 --weights saved_model/modified_${basename}_no_opt_192_192_integer_quant.tflite \
                 --weights2 ../onnx2tf/saved_model/NMS_mobilenet_v2_s192_192_float32.tflite \
