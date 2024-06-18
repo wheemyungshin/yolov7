@@ -2846,3 +2846,65 @@ class C2fCIB(C2f):
         n=1
         super().__init__(c1, c2, shortcut, g, e)
         self.m = nn.ModuleList(CIB(self.c, self.c, shortcut, e=1.0, lk=lk) for _ in range(n))
+
+#################
+
+#########MobileNetV4#########
+
+class UniversalInvertedBottleneckBlock(nn.Module):
+    def __init__(self, 
+            inp, 
+            oup, 
+            start_dw_kernel_size, 
+            middle_dw_kernel_size, 
+            middle_dw_downsample,
+            stride,
+            expand_ratio
+        ):
+        """An inverted bottleneck block with optional depthwises.
+        Referenced from here https://github.com/tensorflow/models/blob/master/official/vision/modeling/layers/nn_blocks.py
+        """
+        super().__init__()
+        # Starting depthwise conv.
+        self.start_dw_kernel_size = start_dw_kernel_size
+        if self.start_dw_kernel_size:            
+            stride_ = stride if not middle_dw_downsample else 1
+            self._start_dw_ = self.conv_2d(inp, inp, kernel_size=start_dw_kernel_size, stride=stride_, groups=inp, act=False)
+        # Expansion with 1x1 convs.
+        expand_filters = make_divisible(inp * expand_ratio, 8)
+        self._expand_conv = self.conv_2d(inp, expand_filters, kernel_size=1)
+        # Middle depthwise conv.
+        self.middle_dw_kernel_size = middle_dw_kernel_size
+        if self.middle_dw_kernel_size:
+            stride_ = stride if middle_dw_downsample else 1
+            self._middle_dw = self.conv_2d(expand_filters, expand_filters, kernel_size=middle_dw_kernel_size, stride=stride_, groups=expand_filters)
+        # Projection with 1x1 convs.
+        self._proj_conv = self.conv_2d(expand_filters, oup, kernel_size=1, stride=1, act=False)
+        
+        # Ending depthwise conv.
+        # this not used
+        # _end_dw_kernel_size = 0
+        # self._end_dw = conv_2d(oup, oup, kernel_size=_end_dw_kernel_size, stride=stride, groups=inp, act=False)
+        
+    def forward(self, x):
+        if self.start_dw_kernel_size:
+            x = self._start_dw_(x)
+            # print("_start_dw_", x.shape)
+        x = self._expand_conv(x)
+        # print("_expand_conv", x.shape)
+        if self.middle_dw_kernel_size:
+            x = self._middle_dw(x)
+            # print("_middle_dw", x.shape)
+        x = self._proj_conv(x)
+        # print("_proj_conv", x.shape)
+        return x
+    
+    def conv_2d(self, inp, oup, kernel_size=3, stride=1, groups=1, bias=False, norm=True, act=True):
+        conv = nn.Sequential()
+        padding = (kernel_size - 1) // 2
+        conv.add_module('conv', nn.Conv2d(inp, oup, kernel_size, stride, padding, bias=bias, groups=groups))
+        if norm:
+            conv.add_module('BatchNorm2d', nn.BatchNorm2d(oup))
+        if act:
+            conv.add_module('Activation', nn.ReLU6())
+        return conv

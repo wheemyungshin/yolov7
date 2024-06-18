@@ -5,6 +5,8 @@ import tensorflow as tf
 import skimage.io
 
 
+COLORS = [[255,255,0], [255,0,255], [0,255,255]]
+
 def xywh2xyxy(x):
     # Convert bounding box (x, y, w, h) to bounding box (x1, y1, x2, y2)
     y = np.copy(x)
@@ -114,7 +116,6 @@ if __name__ == '__main__':
     vid_name = 'gnet_M_05_tf24.mp4'
     vid_writer = cv2.VideoWriter(vid_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, (1920, 1080))
     frame_id = 0
-    unique_confidences = []
     voting_que = [0] * 60
     voting_idx = 0
     while True :
@@ -140,11 +141,9 @@ if __name__ == '__main__':
 
             boxes, scores = nms(fd_output_0, conf_thres=0.5, iou_thres=0.45)
             
-            #boxes = fd_output_0[fd_output_0[:, -1] > 0.1, 1:5]
-            #scores = fd_output_0[fd_output_0[:, -1] > 0.1, -1]
-            
-            print(scores)
-            print(boxes)
+            classes = fd_output_1[fd_output_1[:, -1] > opt.conf, 5]
+            boxes = fd_output_1[fd_output_1[:, -1] > opt.conf, 1:5]
+            scores = fd_output_1[fd_output_1[:, -1] > opt.conf, -1]
 
             if len(scores) > 0:
                 voting_que[voting_idx] = 1#max(scores)
@@ -156,16 +155,18 @@ if __name__ == '__main__':
             max_fd = None
             max_size = -1
 
+            print(boxes)
             for idx in range(len(scores)) :
                 if scores[idx] > 0.1 :
+                    cls_ = int(classes[idx])
                     size = (boxes[idx][2] - boxes[idx][0]) * (boxes[idx][3] - boxes[idx][1])
                     max_fd = boxes[idx]
-                    max_fd[0] = int(max_fd[0] * (1920 / 256))
-                    max_fd[2] = int(max_fd[2] * (1920 / 256))
-                    max_fd[1] = int(max_fd[1] * (1080 / 128))
-                    max_fd[3] = int(max_fd[3] * (1080 / 128))
+                    max_fd[0] = int(max_fd[0] * (480 / fd_model.get_input_details()[0]["shape"][2]))
+                    max_fd[2] = int(max_fd[2] * (480 / fd_model.get_input_details()[0]["shape"][2]))
+                    max_fd[1] = int(max_fd[1] * (480 / fd_model.get_input_details()[0]["shape"][1]))
+                    max_fd[3] = int(max_fd[3] * (480 / fd_model.get_input_details()[0]["shape"][1]))
                     max_fd = max_fd.astype(np.int32)
-                    frame_vis = cv2.rectangle(frame_vis, (max_fd[0],max_fd[1]), (max_fd[2],max_fd[3]), (255,255,0), 2)            
+                    frame_vis = cv2.rectangle(frame_vis, (max_fd[0],max_fd[1]), (max_fd[2],max_fd[3]), COLORS[cls_], 2)            
                     cv2.putText(frame_vis, str(round(scores[idx], 5)), (max_fd[0],max_fd[1] - 2), 0, 1, [225, 255, 255], thickness=2, lineType=cv2.LINE_AA)
             
             voting_score = sum(voting_que) / len(voting_que) 
@@ -182,6 +183,4 @@ if __name__ == '__main__':
     vid_writer.release()
 
 cv2.destroyAllWindows()
-unique_confidences.sort()
-print("unique_confidences : ", unique_confidences)
 print(vid_name)
