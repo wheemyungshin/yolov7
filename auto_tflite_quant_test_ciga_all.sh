@@ -1,7 +1,7 @@
 source ~/.bashrc
 conda activate yolov7
 
-target="weights_DU"
+target="weights_GH"
 for w in $target/*; do
         if [[ "$w" == *epoch*.pt ]]; then
             weight=${w##*/}
