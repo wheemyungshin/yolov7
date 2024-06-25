@@ -1,0 +1,2 @@
+Looking in indexes: https://pypi.org/simple, https://pypi.ngc.nvidia.com
+Requirement already satisfied: sne4onnx in /ssd2/wmshin/miniconda3/envs/onnx2tf/lib/python3.10/site-packages (1.0.13)
