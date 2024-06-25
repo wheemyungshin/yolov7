@@ -1,0 +1,6 @@
+saved_model/modified_epoch_010_no_opt_128_128_integer_quant.tflite : 0.1323690222219408
+saved_model/modified_epoch_012_no_opt_128_128_integer_quant.tflite : 0.04527433995738452
+saved_model/modified_epoch_015_no_opt_128_128_integer_quant.tflite : 0.010184166526215921
+saved_model/modified_epoch_017_no_opt_128_128_integer_quant.tflite : 0.175106028109709
+saved_model/modified_epoch_019_no_opt_128_128_integer_quant.tflite : 0.058989274004454625
+saved_model/modified_epoch_020_no_opt_128_128_integer_quant.tflite : 0.2989367241318713
