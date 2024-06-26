@@ -83,9 +83,13 @@ def test(data,
         fd_output_0_0 = fd_model.get_tensor(fd_model.get_output_details()[0]['index'])
         fd_output_0_1 = fd_model.get_tensor(fd_model.get_output_details()[1]['index'])
         fd_output_0_2 = fd_model.get_tensor(fd_model.get_output_details()[2]['index'])
+
+        #print(fd_model2.get_input_details()[0]["shape"], fd_output_0_0.shape)
+        #print(fd_model2.get_input_details()[1]["shape"], fd_output_0_1.shape)
+        #print(fd_model2.get_input_details()[2]["shape"], fd_output_0_2.shape)
         
-        fd_model2.set_tensor(fd_model2.get_input_details()[0]['index'], fd_output_0_2)
-        fd_model2.set_tensor(fd_model2.get_input_details()[1]['index'], fd_output_0_0)
+        fd_model2.set_tensor(fd_model2.get_input_details()[0]['index'], fd_output_0_0)
+        fd_model2.set_tensor(fd_model2.get_input_details()[1]['index'], fd_output_0_2)
         fd_model2.set_tensor(fd_model2.get_input_details()[2]['index'], fd_output_0_1)
         fd_model2.invoke()
 
