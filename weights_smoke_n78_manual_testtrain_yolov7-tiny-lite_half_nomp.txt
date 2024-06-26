@@ -110,3 +110,5 @@ saved_model/modified_epoch_230_no_opt_128_128_integer_quant.tflite : 0.424407187
 saved_model/modified_epoch_232_no_opt_128_128_integer_quant.tflite : 0.4350730006847744
 saved_model/modified_epoch_235_no_opt_128_128_integer_quant.tflite : 0.418351408760235
 saved_model/modified_epoch_237_no_opt_128_128_integer_quant.tflite : 0.41543040856711694
+saved_model/modified_epoch_239_no_opt_128_128_integer_quant.tflite : 0.42753780080209625
+saved_model/modified_epoch_240_no_opt_128_128_integer_quant.tflite : 0.4298044781483608

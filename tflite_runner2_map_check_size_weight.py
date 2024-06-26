@@ -32,10 +32,8 @@ def test(data,
 
     fd_model = tf.lite.Interpreter(opt.weights)    
     fd_model2= tf.lite.Interpreter(opt.weights2)
-    nms_part = tf.lite.Interpreter("weights_n78_tflite_nms_sep/nms_float32.tflite")
     fd_model.allocate_tensors()
     fd_model2.allocate_tensors()
-    nms_part.allocate_tensors()
 
     # Configure
     if isinstance(data, str):
@@ -81,7 +79,7 @@ def test(data,
         img = img.permute(0,2,3,1)
         fd_model.set_tensor(fd_model.get_input_details()[0]['index'], img)
         fd_model.invoke()
-
+        
         fd_output_0_0 = fd_model.get_tensor(fd_model.get_output_details()[0]['index'])
         fd_output_0_1 = fd_model.get_tensor(fd_model.get_output_details()[1]['index'])
         fd_output_0_2= fd_model.get_tensor(fd_model.get_output_details()[2]['index'])
