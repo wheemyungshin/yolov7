@@ -176,7 +176,6 @@ if __name__ == '__main__':
 
         onnx.save(onnx_model, os.path.join(path, 'modified_'+model_name))
 
-
     elif opt.type == 'tiny-lite_half_nomp':
         graph.output.remove(graph.output[2])
         graph.output.remove(graph.output[1])
@@ -209,6 +208,44 @@ if __name__ == '__main__':
                 graph.node.remove(nodes[i])
             elif nodes[i].name == 'Conv_98':
                 graph.output.insert(i, output_225)
+
+        for node in nodes:
+            print(node.name, ' : ', node.output)
+
+        onnx.save(onnx_model, os.path.join(path, 'modified_'+model_name))
+
+    elif opt.type == 'mobilenetv4':
+        graph.output.remove(graph.output[2])
+        graph.output.remove(graph.output[1])
+        graph.output.remove(graph.output[0])
+
+        print(dir(onnx.TensorProto))
+
+        output_580 = onnx.helper.make_tensor_value_info('580', onnx.TensorProto.FLOAT, [1, 18, 16, 16])
+        output_600 = onnx.helper.make_tensor_value_info('600', onnx.TensorProto.FLOAT, [1, 18, 8, 8])
+        output_620 = onnx.helper.make_tensor_value_info('620', onnx.TensorProto.FLOAT, [1, 18, 4, 4])
+
+        for i in range(len(nodes)-1, 0, -1) :
+            if nodes[i].name == 'Transpose_211':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Reshape_210':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Conv_196':
+                graph.output.insert(i, output_620)
+
+            elif nodes[i].name == 'Transpose_195':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Reshape_194':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Conv_180':
+                graph.output.insert(i, output_600)
+
+            elif nodes[i].name == 'Transpose_179':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Reshape_178':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Conv_164':
+                graph.output.insert(i, output_580)
 
         for node in nodes:
             print(node.name, ' : ', node.output)

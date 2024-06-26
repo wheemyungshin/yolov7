@@ -32,10 +32,8 @@ def test(data,
 
     fd_model = tf.lite.Interpreter(opt.weights)    
     fd_model2= tf.lite.Interpreter(opt.weights2)
-    nms_part = tf.lite.Interpreter("weights_n78_tflite_nms_sep/nms_float32.tflite")
     fd_model.allocate_tensors()
     fd_model2.allocate_tensors()
-    nms_part.allocate_tensors()
 
     # Configure
     if isinstance(data, str):

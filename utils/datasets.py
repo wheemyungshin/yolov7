@@ -2270,7 +2270,8 @@ def load_image_and_label(self, index, ratio_maintain=True, hyp=None):
         img = cv2.imread(path)  # BGR
         
         if 'n78' not in path:
-            img = apply_brightness_contrast(img, brightness = -100-random.random()*100, contrast = 0)
+            img = apply_brightness_contrast(img, brightness = -160-random.random()*20, contrast = 0)
+            cur_frame[:, :, 1] = cur_frame[:, :, 1] + random.randint(4, 5)
             if random.random() < 0.5:
                 img = cv2.blur(img, (3, 3))
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
