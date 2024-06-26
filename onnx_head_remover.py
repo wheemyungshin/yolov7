@@ -175,3 +175,42 @@ if __name__ == '__main__':
             print(node.name, ' : ', node.output)
 
         onnx.save(onnx_model, os.path.join(path, 'modified_'+model_name))
+
+
+    elif opt.type == 'tiny-lite_half_nomp':
+        graph.output.remove(graph.output[2])
+        graph.output.remove(graph.output[1])
+        graph.output.remove(graph.output[0])
+
+        print(dir(onnx.TensorProto))
+
+        output_225 = onnx.helper.make_tensor_value_info('225', onnx.TensorProto.FLOAT, [1, 18, 16, 16])
+        output_245 = onnx.helper.make_tensor_value_info('245', onnx.TensorProto.FLOAT, [1, 18, 8, 8])
+        output_265 = onnx.helper.make_tensor_value_info('265', onnx.TensorProto.FLOAT, [1, 18, 4, 4])
+
+        for i in range(len(nodes)-1, 0, -1) :
+            if nodes[i].name == 'Transpose_145':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Reshape_144':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Conv_130':
+                graph.output.insert(i, output_265)
+
+            elif nodes[i].name == 'Transpose_129':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Reshape_128':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Conv_114':
+                graph.output.insert(i, output_245)
+
+            elif nodes[i].name == 'Transpose_113':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Reshape_112':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Conv_98':
+                graph.output.insert(i, output_225)
+
+        for node in nodes:
+            print(node.name, ' : ', node.output)
+
+        onnx.save(onnx_model, os.path.join(path, 'modified_'+model_name))

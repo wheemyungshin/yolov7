@@ -1,6 +1,7 @@
 # train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
 train: [
-../data/n78_tel_autodet/test.txt # 2499
+../data/n78_testvid_frames/train.txt,
+../data/n78_tel8070_application_frames/train.txt
 ] 
 
 val: [../data/n78_testvid_frames/train.txt, ../data/n78_tel8070_application_frames/train.txt] # 6450 + 2875
@@ -10,6 +11,6 @@ test: [../data/n78_testvid_frames/train.txt, ../data/n78_tel8070_application_fra
 nc: 2
 
 # class names
-names: ['cellphone', 'Nothing']
+names: ['phone', 'Nothing']
 
 valid_idx: [3, 999]
