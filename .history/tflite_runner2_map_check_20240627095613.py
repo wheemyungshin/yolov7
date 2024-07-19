@@ -22,14 +22,14 @@ import cv2
 import tensorflow as tf
 
 def output_matching(model2_input, fd_outputs):    
-    if model2_input["shape"][1] == fd_outputs[0].shape[1]:
+    if model2_input["shape"][1] == fd_outputs[0]["shape"][1]:
         fd_output = fd_outputs[0]
-    elif model2_input["shape"][1] == fd_outputs[1].shape[1]:
+    elif model2_input["shape"][1] == fd_outputs[1]["shape"][1]:
         fd_output = fd_outputs[1]
-    elif model2_input["shape"][1] == fd_outputs[2].shape[1]:
+    elif model2_input["shape"][1] == fd_outputs[2]["shape"][1]:
         fd_output = fd_outputs[2]
     else:
-        print("wrong input shape: ", model2_input.shape)
+        print("wrong input shape: ", model2_input["shape"])
     
     return fd_output
 

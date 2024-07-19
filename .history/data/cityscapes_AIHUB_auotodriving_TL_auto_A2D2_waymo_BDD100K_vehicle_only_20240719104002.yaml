@@ -19,13 +19,10 @@ test: [../data/small_ticket_testset_addition_ready/detection/small_ticket_testse
 #test: [/data/small_ticket_testset_all_full/small_ticket_det_testset_full/test.txt] #500
 
 # number of classes
-nc: 8
+nc: 5
 
 # class names
 names: [
-    'traffic light',
-    'traffic sign',
-    'person',
     'car',
     'truck',
     'bus',

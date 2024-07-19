@@ -22,16 +22,16 @@ import cv2
 import tensorflow as tf
 
 def output_matching(model2_input, fd_outputs):    
-    if model2_input["shape"][1] == fd_outputs[0].shape[1]:
-        fd_output = fd_outputs[0]
-    elif model2_input["shape"][1] == fd_outputs[1].shape[1]:
-        fd_output = fd_outputs[1]
-    elif model2_input["shape"][1] == fd_outputs[2].shape[1]:
-        fd_output = fd_outputs[2]
+    if model2_input["shape"][1] == fd_outputs[0]["shape"][1]:
+        fd_output_0_0 = fd_outputs[0]
+    elif model2_input["shape"][1] == fd_outputs[1]["shape"][1]:
+        fd_output_0_0 = fd_outputs[1]
+    elif model2_input["shape"][1] == fd_outputs[2]["shape"][1]:
+        fd_output_0_0 = fd_outputs[2]
     else:
-        print("wrong input shape: ", model2_input.shape)
+        print("wrong input shape: ", model2_input["shape"])
     
-    return fd_output
+    return fd_output_0_0
 
 def test(data,
          batch_size=32,
@@ -96,13 +96,12 @@ def test(data,
         fd_output_0_1_ = fd_model.get_tensor(fd_model.get_output_details()[1]['index'])
         fd_output_0_2_ = fd_model.get_tensor(fd_model.get_output_details()[2]['index'])
 
-        fd_output_0_0 = output_matching(fd_model2.get_input_details()[0], [fd_output_0_0_, fd_output_0_1_, fd_output_0_2_])
-        fd_output_0_1 = output_matching(fd_model2.get_input_details()[1], [fd_output_0_0_, fd_output_0_1_, fd_output_0_2_])
-        fd_output_0_2 = output_matching(fd_model2.get_input_details()[2], [fd_output_0_0_, fd_output_0_1_, fd_output_0_2_])
+        fd_output_0_0 = output_matching(fd_model2.get_input_details()[0], [fd_output_0_0_, fd_output_0_1_, fd_output_0_2_]):
 
-        fd_model2.set_tensor(fd_model2.get_input_details()[0]['index'], fd_output_0_0)
-        fd_model2.set_tensor(fd_model2.get_input_details()[1]['index'], fd_output_0_1)
-        fd_model2.set_tensor(fd_model2.get_input_details()[2]['index'], fd_output_0_2)
+        
+        fd_model2.set_tensor(fd_model2.get_input_details()[0]['index'], fd_output_0_2)
+        fd_model2.set_tensor(fd_model2.get_input_details()[1]['index'], fd_output_0_0)
+        fd_model2.set_tensor(fd_model2.get_input_details()[2]['index'], fd_output_0_1)
         fd_model2.invoke()
 
         fd_output_1 = fd_model2.get_tensor(fd_model2.get_output_details()[0]['index'])

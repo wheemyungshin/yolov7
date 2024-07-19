@@ -13,6 +13,7 @@ train: [../data/cityscapes/yolov7_det/train.txt, #2975
 ../data/AIHUB_traffic_lights_seoul_autolabeled/train.txt, #20398
 ../data/AIHUB_traffic_lights_seoul_autolabeled/val.txt, #2390
 ]
+
 val: [../data/small_ticket_testset_addition_ready/detection/small_ticket_testset_all_full_shuffle/test.txt] #4471
 test: [../data/small_ticket_testset_addition_ready/detection/small_ticket_testset_all_full_shuffle/test.txt] #4471
 #val: [/data/small_ticket_testset_all_full/small_ticket_det_testset_full/test.txt] #500
