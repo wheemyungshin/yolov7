@@ -1,0 +1,25 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+      ../data/Pitta2ND_DB/seatbelt/train.txt, # 23494                               # O
+      ../data/smoke_non_seatbelt_filter/smoke_data_BFC/train.txt, # 20720           # X
+      ../data/smoke_non_seatbelt_filter/valid_pitta_smoke_BFC2/train.txt, # 929     # X
+      ../data/AVATAR_Game_Beauty_Youtuber_body_crops/1-002/train.txt, # 5784        # X
+      ../data/AVATAR_Game_Beauty_Youtuber_body_crops/2-001/train.txt, # 17230       # X
+      ../data/seatbelt_TANG_after_inspection/train.txt, # 7712                      # O
+      ../data/auto_BF_checks/auto_BF_check_0/train.txt, # 1262                      # X
+      ../data/auto_BF_checks/auto_BF_check_2/train.txt, # 540                       # X
+      ../data/roboflow_seatbelt_merge_after_inspection/train.txt, # 14308           # O
+      ../data/auto_det_seatbelt1_after_inspection/train.txt, # 2214                 # O
+      ../data/auto_det_seatbelt3_after_inspection/train.txt, # 23                   # O
+      ../data/auto_det_seatbelt4_after_inspection/train.txt, # 1796                 # O
+      ] # 23494 + 14308 + 17482 : 20720 + 929 + 5784 + 17230 + 1262 + 1457 + 540 = 55284 : 47922
+val: [../data/Pitta2ND_DB/seatbelt/train.txt]   
+test: [../data/Pitta2ND_DB/seatbelt/train.txt]   
+
+# number of classes
+nc: 2
+
+# class names
+names: ['seatbelt', 'face']
+
+valid_idx: [0, 1]

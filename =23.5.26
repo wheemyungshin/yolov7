@@ -1,0 +1,2 @@
+Looking in indexes: https://pypi.org/simple, https://pypi.ngc.nvidia.com
+Requirement already satisfied: flatbuffers in /ssd2/wmshin/miniconda3/envs/onnx2tf/lib/python3.10/site-packages (24.3.25)

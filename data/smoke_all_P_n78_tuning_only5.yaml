@@ -1,6 +1,6 @@
 # train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
 train: [
-  [../data/BFcellphone/auto_PITTA_2ND_divided_cellphone_yolov7-e6e_s384_after_inspection/train.txt, 5], #6538
+[../data/BFcellphone/auto_PITTA_2ND_divided_cellphone_yolov7-e6e_s384_after_inspection/train.txt, 5], #6538
 [../data/BFcellphone/auto_TANG_phones_yolov7-e6e_s384_after_inspection/train.txt, 5], #2727
 
 [../data/valid_phone_data/phonecalls_crawling_grounding_dino/train.txt, 10], # 11517

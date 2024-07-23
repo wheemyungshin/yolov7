@@ -1,7 +1,7 @@
 source ~/.bashrc
 conda activate yolov7
 
-target="weights_FI"
+target="weights_phone_n78_manual_testtrain_yolov7-tiny-lite_half_nomp"
 for w in $target/*; do
         if [[ "$w" == *epoch*.pt ]]; then
             weight=${w##*/}

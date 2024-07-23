@@ -1,0 +1,17 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+/data/pedestrian_crop_data/train.txt, # 46608
+/data/MAFA_concat/val.txt, # 4935
+#/data/surreal_face/train_sampling10.txt, # 25000
+/data/surreal_filtering/train.txt, # 25000
+]
+val: [/data/wider_face_updated/val.txt]   # 5884 images
+test: [/data/wider_face_updated/val.txt]   # 5884
+
+# number of classes
+nc: 1
+
+# class names
+names: ['person']
+
+valid_idx: [0]
