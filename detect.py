@@ -131,7 +131,7 @@ def detect(save_img=False):
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
         if img.ndimension() == 3:
             img = img.unsqueeze(0)
-
+            
         if opt.frame_ratio > 0:
             frame_ratio = opt.frame_ratio
         else:
@@ -257,6 +257,8 @@ def detect(save_img=False):
                         if len(opt.valid_segment_labels) > 0:
                             if cls-1 in opt.valid_segment_labels:
                                 continue
+                        if (xyxy[3]-xyxy[1]) < opt.min_size:
+                            continue
                         if save_txt:  # Write to file
                             xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
                             line = (cls, *xywh, conf) if opt.save_conf else (cls, *xywh)  # label format
@@ -321,10 +323,10 @@ def detect(save_img=False):
                         if opt.save_frame:
                             print(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0]))
                             if len(det) > 0:
-                                cv2.imwrite(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'.jpg', im0)
-                                cv2.imwrite(os.path.join(save_dir, 'images_detected', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'.jpg', clean_im0)
+                                cv2.imwrite(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0])+'.jpg', im0)
+                                cv2.imwrite(os.path.join(save_dir, 'images_detected', p.name.split('.')[0])+'.jpg', clean_im0)
                             else:
-                                cv2.imwrite(os.path.join(save_dir, 'images_nothing', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'.jpg', clean_im0)
+                                cv2.imwrite(os.path.join(save_dir, 'images_nothing', p.name.split('.')[0])+'.jpg', clean_im0)
                     else:  # 'video' or 'stream'
                         if vid_path != save_path:  # new video
                             vid_path = save_path
@@ -405,6 +407,7 @@ if __name__ == '__main__':
     parser.add_argument('--square', action='store_true', help='do square cut for input')
     parser.add_argument('--objcam', action='store_true', help='visualize extracted objectness scores.')
     parser.add_argument('--no-ratio-maintain', action='store_true', help='maintain input ratio')
+    parser.add_argument('--min-size', default=0, type=int, help='save frame ratio')
     
     opt = parser.parse_args()
     print(opt)

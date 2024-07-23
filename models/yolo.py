@@ -633,7 +633,6 @@ class IAuxDetect(nn.Module):
         box @= convert_matrix                          
         return (box, score)
 
-
 class IBin(nn.Module):
     stride = None  # strides computed during build
     export = False  # onnx export
@@ -1330,7 +1329,9 @@ def parse_model(d, ch, nm):  # model_dict, input_channels(3)
                  SwinTransformerBlock, STCSPA, STCSPB, STCSPC,
                  SwinTransformer2Block, ST2CSPA, ST2CSPB, ST2CSPC,
                  conv_bn_relu_maxpool, Shuffle_Block, DWConvblock, DWConvblocknoBN, Hswish, SELayer, mobilev3_bneck,
-                 ADown, SPPELAN]:
+                 ADown, SPPELAN,
+                 C2f, SCDown, PSA, C2fCIB,
+                 UniversalInvertedBottleneckBlock]:
             print(m)
             c1, c2 = ch[f], args[0]
             if c2 != no:  # if not output

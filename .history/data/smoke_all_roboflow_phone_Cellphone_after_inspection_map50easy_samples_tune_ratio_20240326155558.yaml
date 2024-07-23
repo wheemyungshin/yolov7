@@ -1,0 +1,25 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+[../data/auto_PITTA_2ND_divided_cellphone_yolov7-e6e_s384_after_inspection_map50easy_samples.txt, 1.0], #6538 -> 6007
+[../data/auto_TANG_phones_yolov7-e6e_s384_after_inspection_map50easy_samples.txt, 1.0], #2727 -> 2332
+
+[../data/valid_phone_data_phonecalls_crawling_grounding_dino_map50easy_samples.txt, 0.1], # 11517 -> 6322
+[../data/valid_phone_data_roboflow_all_map50easy_samples.txt, 1.0], # 1454 -> 1069
+[../data/valid_phone_data_phonecalls_crawling2_auto_map50easy_samples.txt, 0.1], # 5415 -> 2587
+
+[../data/roboflow_phone_after_inspection_map50easy_samples.txt, 1.0], # 19282 -? 11999
+] 
+val: [
+/data/n78_video_auto_det_after_filter/test.txt
+] 
+test: [
+/data/n78_video_auto_det_after_filter/test.txt
+] 
+
+# number of classes
+nc: 2
+
+# class names
+names: ['cellphone', 'Nothing']
+
+valid_idx: [3, 999]
