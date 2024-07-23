@@ -7,6 +7,7 @@ if __name__ == '__main__':
     parser.add_argument('--type', type=str, default='mobilenet_128', help='model type')
     parser.add_argument('--dir', type=str, default='weights', help='initial weights path')
     parser.add_argument('--model-name', type=str, default='GF_phone_mobilenet_e099_no_opt_128_128.onnx', help='model name')
+    parser.add_argument('--save-tag', type=str, default='modified_', help='save file tag')
 
 
     opt = parser.parse_args()
@@ -60,7 +61,7 @@ if __name__ == '__main__':
         for node in nodes:
             print(node.name, ' : ', node.output)
 
-        onnx.save(onnx_model, os.path.join(path, 'modified_'+model_name))
+        onnx.save(onnx_model, os.path.join(path, opt.save_tag+model_name))
 
     elif opt.type == 'mobilenet_v2_192':
         graph.output.remove(graph.output[2])
@@ -98,7 +99,7 @@ if __name__ == '__main__':
         for node in nodes:
             print(node.name, ' : ', node.output)
 
-        onnx.save(onnx_model, os.path.join(path, 'modified_'+model_name))
+        onnx.save(onnx_model, os.path.join(path, opt.save_tag+model_name))
 
     elif opt.type == 'yolov10_no_psa':
         graph.output.remove(graph.output[2])
@@ -136,7 +137,7 @@ if __name__ == '__main__':
         for node in nodes:
             print(node.name, ' : ', node.output)
 
-        onnx.save(onnx_model, os.path.join(path, 'modified_'+model_name))
+        onnx.save(onnx_model, os.path.join(path, opt.save_tag+model_name))
         
     elif opt.type == 'yolov7-tiny-liter_nomp':
         graph.output.remove(graph.output[2])
@@ -174,7 +175,7 @@ if __name__ == '__main__':
         for node in nodes:
             print(node.name, ' : ', node.output)
 
-        onnx.save(onnx_model, os.path.join(path, 'modified_'+model_name))
+        onnx.save(onnx_model, os.path.join(path, opt.save_tag+model_name))
 
     elif opt.type == 'tiny-lite_half_nomp':
         graph.output.remove(graph.output[2])
@@ -212,7 +213,7 @@ if __name__ == '__main__':
         for node in nodes:
             print(node.name, ' : ', node.output)
 
-        onnx.save(onnx_model, os.path.join(path, 'modified_'+model_name))
+        onnx.save(onnx_model, os.path.join(path, opt.save_tag+model_name))
 
     elif opt.type == 'mobilenetv4':
         graph.output.remove(graph.output[2])
@@ -250,4 +251,42 @@ if __name__ == '__main__':
         for node in nodes:
             print(node.name, ' : ', node.output)
 
-        onnx.save(onnx_model, os.path.join(path, 'modified_'+model_name))
+        onnx.save(onnx_model, os.path.join(path, opt.save_tag+model_name))
+        
+    elif opt.type == 'tiny_n78':
+        graph.output.remove(graph.output[2])
+        graph.output.remove(graph.output[1])
+        graph.output.remove(graph.output[0])
+
+        print(dir(onnx.TensorProto))
+
+        output_282 = onnx.helper.make_tensor_value_info('282', onnx.TensorProto.FLOAT, [1, 18, 16, 16])
+        output_302 = onnx.helper.make_tensor_value_info('302', onnx.TensorProto.FLOAT, [1, 18, 8, 8])
+        output_322 = onnx.helper.make_tensor_value_info('322', onnx.TensorProto.FLOAT, [1, 18, 4, 4])
+
+        for i in range(len(nodes)-1, 0, -1) :
+            if nodes[i].name == 'Transpose_174':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Reshape_173':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Conv_159':
+                graph.output.insert(i, output_322)
+
+            elif nodes[i].name == 'Transpose_158':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Reshape_157':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Conv_143':
+                graph.output.insert(i, output_302)
+
+            elif nodes[i].name == 'Transpose_142':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Reshape_141':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Conv_127':
+                graph.output.insert(i, output_282)
+
+        for node in nodes:
+            print(node.name, ' : ', node.output)
+
+        onnx.save(onnx_model, os.path.join(path, opt.save_tag+model_name))
