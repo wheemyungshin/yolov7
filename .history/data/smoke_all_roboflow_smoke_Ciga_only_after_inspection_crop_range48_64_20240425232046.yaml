@@ -1,0 +1,18 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+../data/crop_ciga_data_range48_64/valid_ciga_data_cbf_for_training/train.txt, # 3722
+../data/crop_ciga_data_range48_64/smoke_data_BFC/train.txt, # 24474
+../data/crop_ciga_data_range48_64/valid_ciga_data_cbf_for_training/train.txt, # 3990
+../data/crop_ciga_data_range48_64/valid_pitta_smoke_BFC2/train.txt, # 2592
+] 
+
+val: [../data/valid_ciga_data_cbf_for_training/ncap.txt] # 967
+test: [../data/valid_ciga_data_cbf_for_training/ncap.txt] # 967
+
+# number of classes
+nc: 1
+
+# class names
+names: ['smoke']
+
+valid_idx: [2]

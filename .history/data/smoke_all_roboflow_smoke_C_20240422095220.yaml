@@ -1,0 +1,21 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+/data/smoke_data_BFC/train.txt, 
+/data/valid_ciga_data_cbf_for_training/tang.txt,
+/data/valid_ciga_data_cbf_for_training/ncap.txt,
+/data/valid_ciga_data_cbf_for_training/pitta_1st.txt,
+/data/PITTA_2ND_ir_smoke_frames_after_inspection/train.txt,
+/data/valid_pitta_smoke_BFC2/train.txt,
+/data/roboflow_smoke/train.txt
+] # 43,297 + 2,754 + ~115,000
+val: [/data/PITTA_2ND_ir_smoke_frames_after_inspection/train.txt] # 2391
+test: [/data/PITTA_2ND_ir_smoke_frames_after_inspection/train.txt]   
+
+# number of classes
+nc: 1
+
+# class names
+names: ['smoke']
+
+valid_idx: [2]
+
