@@ -407,7 +407,6 @@ if __name__ == '__main__':
     parser.add_argument('--square', action='store_true', help='do square cut for input')
     parser.add_argument('--objcam', action='store_true', help='visualize extracted objectness scores.')
     parser.add_argument('--no-ratio-maintain', action='store_true', help='maintain input ratio')
-    parser.add_argument('--min-size', default=0, type=int, help='save frame ratio')
     
     opt = parser.parse_args()
     print(opt)
