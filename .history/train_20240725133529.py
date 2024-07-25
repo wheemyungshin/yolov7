@@ -691,8 +691,7 @@ def train(hyp, opt, device, tb_writer=None):
                                           plots=False,
                                           is_coco=is_coco,
                                           v5_metric=opt.v5_metric,
-                                          opt_seg=opt.seg,
-                                          merge_label=opt.merge_label)
+                                          opt_seg=opt.seg)
 
         # Strip optimizers
         final = best if best.exists() else last  # final model
