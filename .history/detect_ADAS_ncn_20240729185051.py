@@ -162,8 +162,6 @@ def detect(save_img=False):
         os.makedirs(os.path.join(save_dir, 'vis_frames'), exist_ok=True)
         os.makedirs(os.path.join(save_dir, 'images'), exist_ok=True)
 
-    distance_thr = 5
-
     max_prev_frame = 5
     prev_boxes_list = [np.array([]) for _ in range(max_prev_frame)]
     prev_distances_list = [[] for _ in range(max_prev_frame)]
@@ -288,16 +286,8 @@ def detect(save_img=False):
                                 label = f'{names[int(cls)]} {conf:.2f} {distance_str}'
                                 plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
                             else:
-                                if distance < distance_thr and len(all_prev_distances):
-                                    if max(all_prev_distances) - distance > 1:
-                                        warning_color = [16, 16, 128]
-                                    else:
-                                        warning_color = [16, 96, 128]
-                                else:
-                                    warning_color = [64, 128, 16]
-
                                 label = distance_str
-                                plot_one_box(xyxy, im0, label=label, color=warning_color, line_thickness=3)
+                                plot_one_box(xyxy, im0, label=label, color=[64, 128, 16], line_thickness=3)
 
                     
                     prev_boxes = temp_boxes
@@ -309,6 +299,8 @@ def detect(save_img=False):
                 prev_distances_list = update_list(prev_distances_list, prev_distances)
                 prev_boxes_list = update_list(prev_boxes_list, prev_boxes)
 
+                if 
+                for prev_distances in reversed(prev_distances_list):
 
 
                 # Stream results

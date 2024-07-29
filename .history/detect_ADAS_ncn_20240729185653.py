@@ -288,11 +288,11 @@ def detect(save_img=False):
                                 label = f'{names[int(cls)]} {conf:.2f} {distance_str}'
                                 plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
                             else:
-                                if distance < distance_thr and len(all_prev_distances):
-                                    if max(all_prev_distances) - distance > 1:
+                                if distance < distance_thr:
+                                    if distance - min(prev_distances_list) > 1:
                                         warning_color = [16, 16, 128]
                                     else:
-                                        warning_color = [16, 96, 128]
+                                        warning_color = [0, 64, 128]
                                 else:
                                     warning_color = [64, 128, 16]
 

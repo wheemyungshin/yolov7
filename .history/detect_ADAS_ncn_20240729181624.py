@@ -38,10 +38,12 @@ OVERALL_HEIGHT_DICT = { # meter
 def investigate_prev_distance(match_box_ids_y_list, prev_distances_list, idx, maxiter):
     for i in range(maxiter):
         i = -i-1
+        print("i: ", i)
+        print("idx: ", idx)
         if len(match_box_ids_y_list[i]):
             idx = match_box_ids_y_list[i][idx]
         else:
-            distance = prev_distances_list[i+1][idx]
+            distance = prev_distances_list[len(prev_distances_list)-maxiter][idx]
             return idx, distance
     distance = prev_distances_list[len(prev_distances_list)-maxiter][idx]
     return idx, distance
@@ -162,8 +164,6 @@ def detect(save_img=False):
         os.makedirs(os.path.join(save_dir, 'vis_frames'), exist_ok=True)
         os.makedirs(os.path.join(save_dir, 'images'), exist_ok=True)
 
-    distance_thr = 5
-
     max_prev_frame = 5
     prev_boxes_list = [np.array([]) for _ in range(max_prev_frame)]
     prev_distances_list = [[] for _ in range(max_prev_frame)]
@@ -266,19 +266,17 @@ def detect(save_img=False):
                         temp_distance = calculate_distance([int(cls), float(xywh[0]), float(xywh[1]), float(xywh[2]), float(xywh[3])])
                         temp_distances.append(temp_distance)
                         
-                        all_prev_distances = []
                         if temp_box_id in valid_idx:
                             distance_weights = []
                             for prev_frame_idx in range(max_prev_frame,0,-1):
                                 prev_box_id, prev_distance = investigate_prev_distance(match_box_ids_y_list, prev_distances_list, temp_box_id, maxiter=prev_frame_idx)
-                                distance_weights.append(prev_distance*((max_prev_frame-prev_frame_idx+1)/(max_prev_frame*(max_prev_frame+1)/2)))
-                                all_prev_distances.append(prev_distance)
+                                distance_weights.append(prev_distance*(1-prev_frame_idx/(max_prev_frame+1)))
                             distance = round(sum(distance_weights)*0.3 + temp_distance*0.7, 3)
 
-                            xyxy = np.array([prev_boxes[prev_box_id][0]*0.3 + xyxy[0].detach().cpu().float()*0.7,
-                                             prev_boxes[prev_box_id][1]*0.3 + xyxy[1].detach().cpu().float()*0.7,
-                                             prev_boxes[prev_box_id][2]*0.3 + xyxy[2].detach().cpu().float()*0.7,
-                                             prev_boxes[prev_box_id][3]*0.3 + xyxy[3].detach().cpu().float()*0.7])
+                            xyxy = np.array([prev_boxes[prev_box_id][0]*0.34 + xyxy[0].detach().cpu().float()*0.66,
+                                             prev_boxes[prev_box_id][1]*0.34 + xyxy[1].detach().cpu().float()*0.66,
+                                             prev_boxes[prev_box_id][2]*0.34 + xyxy[2].detach().cpu().float()*0.66,
+                                             prev_boxes[prev_box_id][3]*0.34 + xyxy[3].detach().cpu().float()*0.66])
                         else:
                             distance = round(temp_distance, 3)
 
@@ -288,16 +286,8 @@ def detect(save_img=False):
                                 label = f'{names[int(cls)]} {conf:.2f} {distance_str}'
                                 plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
                             else:
-                                if distance < distance_thr and len(all_prev_distances):
-                                    if max(all_prev_distances) - distance > 1:
-                                        warning_color = [16, 16, 128]
-                                    else:
-                                        warning_color = [16, 96, 128]
-                                else:
-                                    warning_color = [64, 128, 16]
-
                                 label = distance_str
-                                plot_one_box(xyxy, im0, label=label, color=warning_color, line_thickness=3)
+                                plot_one_box(xyxy, im0, label=label, color=[64, 128, 16], line_thickness=3)
 
                     
                     prev_boxes = temp_boxes
@@ -308,8 +298,6 @@ def detect(save_img=False):
                 
                 prev_distances_list = update_list(prev_distances_list, prev_distances)
                 prev_boxes_list = update_list(prev_boxes_list, prev_boxes)
-
-
 
                 # Stream results
                 if view_img:

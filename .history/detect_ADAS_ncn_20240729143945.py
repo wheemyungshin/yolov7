@@ -35,23 +35,6 @@ OVERALL_HEIGHT_DICT = { # meter
     3 : 1.6, # 사람, 길지 않아서 왜곡 정도 낮음, 그러나 자세 등으로 오히려 작아질 가능성 큼
 }
 
-def investigate_prev_distance(match_box_ids_y_list, prev_distances_list, idx, maxiter):
-    for i in range(maxiter):
-        i = -i-1
-        if len(match_box_ids_y_list[i]):
-            idx = match_box_ids_y_list[i][idx]
-        else:
-            distance = prev_distances_list[i+1][idx]
-            return idx, distance
-    distance = prev_distances_list[len(prev_distances_list)-maxiter][idx]
-    return idx, distance
-
-def update_list(input_list, item):
-    for i in range(len(input_list)-1):
-        input_list[i] = input_list[i+1]
-    input_list[-1] = item
-    return input_list
-
 def _iou(A,B):
     low = np.s_[...,:2]
     high = np.s_[...,2:4]
@@ -162,13 +145,7 @@ def detect(save_img=False):
         os.makedirs(os.path.join(save_dir, 'vis_frames'), exist_ok=True)
         os.makedirs(os.path.join(save_dir, 'images'), exist_ok=True)
 
-    distance_thr = 5
-
-    max_prev_frame = 5
-    prev_boxes_list = [np.array([]) for _ in range(max_prev_frame)]
-    prev_distances_list = [[] for _ in range(max_prev_frame)]
-    valid_idx_list = [np.array([]) for _ in range(max_prev_frame)]
-    match_box_ids_y_list = [np.array([]) for _ in range(max_prev_frame)]
+    prev_boxes = np.array([])
 
     t0 = time.time()
     for path, img, im0s, vid_cap in dataset:
@@ -211,8 +188,6 @@ def detect(save_img=False):
         gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
         gn_to = torch.tensor(img.shape)[[3, 2, 3, 2]]
 
-        prev_boxes = prev_boxes_list[-1]
-
         if dataset.mode != 'image' and frame % frame_ratio != 0:
             continue
         else:
@@ -226,25 +201,10 @@ def detect(save_img=False):
 
                     temp_boxes = det[:, :4].detach().cpu().float().numpy()
                     if len(prev_boxes) and len(temp_boxes):
-                        iou_matrix = _iou(prev_boxes, temp_boxes)
+                        iou_matrix = _iou(temp_boxes, prev_boxes)
                     else:
                         iou_matrix = np.array([])
-                    
-                    if len(iou_matrix):
-                        thr_score = 0.5
-                        valid_idx = np.nonzero(np.max(iou_matrix, axis=0)>=thr_score)[0]
-                        match_box_ids_y = np.argmax(iou_matrix, axis=0)
-                    else:
-                        valid_idx = np.array([])
-                        match_box_ids_y = np.array([])
-                    
-                    valid_idx_list = update_list(valid_idx_list, valid_idx)
-                    match_box_ids_y_list = update_list(match_box_ids_y_list, match_box_ids_y)
-                    print("temp_boxes: \n", temp_boxes)
-                    print("prev_boxes: \n", prev_boxes)
-                    print("iou_matrix: \n", iou_matrix)
-                    print("match_box_ids_y_list: \n", match_box_ids_y_list)
-                    print("valid_idx_list: \n", valid_idx_list)
+                    print(iou_matrix)
 
                     # Print results
                     for c in det[:, 5].unique():
@@ -252,64 +212,23 @@ def detect(save_img=False):
                         s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
                     
                     # Write results
-                    temp_distances = []
-                    print("prev_boxes: \n", prev_boxes)
-                    print("prev_distances_list: \n", prev_distances_list)
-                    for temp_box_id, (*xyxy, conf, cls) in enumerate(det[:, :6]):
-                        print(temp_box_id)
+                    for *xyxy, conf, cls in reversed(det[:, :6]):
                         xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
                         if save_txt:  # Write to file                                
                             line = (cls, *xywh, conf) if opt.save_conf else (cls, *xywh)  # label format
                             with open(txt_path + '.txt', 'a') as f:
                                 f.write(('%g ' * len(line)).rstrip() % line + '\n')
 
-                        temp_distance = calculate_distance([int(cls), float(xywh[0]), float(xywh[1]), float(xywh[2]), float(xywh[3])])
-                        temp_distances.append(temp_distance)
-                        
-                        all_prev_distances = []
-                        if temp_box_id in valid_idx:
-                            distance_weights = []
-                            for prev_frame_idx in range(max_prev_frame,0,-1):
-                                prev_box_id, prev_distance = investigate_prev_distance(match_box_ids_y_list, prev_distances_list, temp_box_id, maxiter=prev_frame_idx)
-                                distance_weights.append(prev_distance*((max_prev_frame-prev_frame_idx+1)/(max_prev_frame*(max_prev_frame+1)/2)))
-                                all_prev_distances.append(prev_distance)
-                            distance = round(sum(distance_weights)*0.3 + temp_distance*0.7, 3)
-
-                            xyxy = np.array([prev_boxes[prev_box_id][0]*0.3 + xyxy[0].detach().cpu().float()*0.7,
-                                             prev_boxes[prev_box_id][1]*0.3 + xyxy[1].detach().cpu().float()*0.7,
-                                             prev_boxes[prev_box_id][2]*0.3 + xyxy[2].detach().cpu().float()*0.7,
-                                             prev_boxes[prev_box_id][3]*0.3 + xyxy[3].detach().cpu().float()*0.7])
-                        else:
-                            distance = round(temp_distance, 3)
-
                         if save_img or view_img:  # Add bbox to image
-                            distance_str = str(distance) + 'm'
+                            distance_str = str(calculate_distance([int(cls), float(xywh[0]), float(xywh[1]), float(xywh[2]), float(xywh[3])])) + 'm'
                             if opt.debug:
                                 label = f'{names[int(cls)]} {conf:.2f} {distance_str}'
-                                plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
                             else:
-                                if distance < distance_thr and len(all_prev_distances):
-                                    if max(all_prev_distances) - distance > 1:
-                                        warning_color = [16, 16, 128]
-                                    else:
-                                        warning_color = [16, 96, 128]
-                                else:
-                                    warning_color = [64, 128, 16]
+                                label = f'{names[int(cls)]} {conf:.2f} {distance_str}'
 
-                                label = distance_str
-                                plot_one_box(xyxy, im0, label=label, color=warning_color, line_thickness=3)
-
+                            plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
                     
                     prev_boxes = temp_boxes
-                    prev_distances = temp_distances
-                else:
-                    prev_boxes = np.array([])
-                    prev_distances = []
-                
-                prev_distances_list = update_list(prev_distances_list, prev_distances)
-                prev_boxes_list = update_list(prev_boxes_list, prev_boxes)
-
-
 
                 # Stream results
                 if view_img:
