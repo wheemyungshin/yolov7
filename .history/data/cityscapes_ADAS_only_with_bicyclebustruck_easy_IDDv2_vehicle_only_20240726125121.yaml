@@ -1,0 +1,23 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+    ../data/ADAS_only_with_bicycle_and_bustruck_vehicle_only_easy_samples.txt, #37500
+    ../data/IDD_Detection_v2/train.txt # 41265
+]
+val: [../data/small_ticket_testset_addition_ready/detection/small_ticket_testset_all_full_shuffle/test.txt] #4471
+test: [../data/small_ticket_testset_addition_ready/detection/small_ticket_testset_all_full_shuffle/test.txt] #4471
+#val: [/data/small_ticket_testset_all_full/small_ticket_det_testset_full/test.txt] #500
+#test: [/data/small_ticket_testset_all_full/small_ticket_det_testset_full/test.txt] #500
+
+# number of classes
+nc: 5
+
+# class names
+names: [
+    'car',
+    'truck',
+    'bus',
+    'motorcycle',
+    'bicycle'
+]
+    
+valid_idx: [8, 9, 10, 12, 13]
