@@ -1,0 +1,12 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [/data/IDD_FGVD/train.txt]  # 99575 images
+val: [/data/2024assignment_full_shuffle/2024assignment_full_shuffle/test.txt]   # 5884 images
+test: [/data/2024assignment_full_shuffle/2024assignment_full_shuffle/test.txt]  # 5884
+
+# number of classes
+nc: 2
+
+# class names
+names: ['off_seatbelt', 'on_seatbelt']
+
+valid_idx: [0, 1]
