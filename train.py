@@ -23,9 +23,8 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 import test  # import test.py to get mAP after each epoch
-from models.experimental import attempt_load
+from models.experimental import attempt_load, fuse_modules
 from models.yolo import Model
-from models.common import Conv
 from utils.autoanchor import check_anchors
 from utils.datasets import create_dataloader
 from utils.general import labels_to_class_weights, increment_path, labels_to_image_weights, init_seeds, \
@@ -61,6 +60,8 @@ def fuse_modules(model):
                                             ['conv2', 'relu2'],
                                             ['fc1', 'relu3'],
                                             ['fc2', 'relu4']], inplace=True)
+     
+
      
 
 def train(hyp, opt, device, tb_writer=None):
@@ -126,7 +127,7 @@ def train(hyp, opt, device, tb_writer=None):
         with torch_distributed_zero_first(rank):
             attempt_download(weights)  # download if not found locally
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
-        model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create#, nm=nm).to(device)  # create
+        model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors'), qat=opt.qat).to(device)  # create#, nm=nm).to(device)  # create
         exclude = ['anchor'] if not (opt.load_head_weight) and not opt.resume else []  # exclude keys
         if type(ckpt['model']) is Model:
             state_dict = ckpt['model'].float().state_dict()  # to FP32
@@ -154,9 +155,12 @@ def train(hyp, opt, device, tb_writer=None):
             print('freezing %s' % k)
             v.requires_grad = False
         
+<<<<<<< HEAD
     if opt.qat:
         model = QuantizedModel(model)
 
+=======
+>>>>>>> 8f4fbb90ee70a60cc1ac6260cb72ac22f41330ff
     # Optimizer
     nbs = 64  # nominal batch size
     accumulate = max(round(nbs / total_batch_size), 1)  # accumulate loss before optimizing
@@ -247,7 +251,17 @@ def train(hyp, opt, device, tb_writer=None):
     scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)
     # plot_lr_scheduler(optimizer, scheduler, epochs)
 
-    # EMA
+    #fuse models
+    if opt.qat:
+        model.eval()
+        fuse_modules(model)
+        
+        # The old 'fbgemm' is still available but 'x86' is the recommended default.
+        model.qconfig = torch.quantization.get_default_qat_qconfig('x86')
+
+        torch.quantization.prepare_qat(model, inplace=True)
+        print('Qauntization-Aware-Training')
+    
     ema = ModelEMA(model) if rank in [-1, 0] else None
 
     # Resume
@@ -286,7 +300,6 @@ def train(hyp, opt, device, tb_writer=None):
         imgsz = tuple(imgsz)
     else:
         imgsz = check_img_size(opt.img_size, gs)  # verify imgsz are gs-multiples
-
 
     # DP mode
     if cuda and rank == -1 and torch.cuda.device_count() > 1:
@@ -355,6 +368,7 @@ def train(hyp, opt, device, tb_writer=None):
             # Anchors
             if not opt.noautoanchor:
                 check_anchors(dataset, model=model, thr=hyp['anchor_t'], imgsz=imgsz)
+<<<<<<< HEAD
             model.half().float()  # pre-reduce anchor precision
 
     if opt.qat:        
@@ -366,6 +380,11 @@ def train(hyp, opt, device, tb_writer=None):
 
         torch.quantization.prepare_qat(model, inplace=True)
         print('Qauntization-Aware-Training')
+=======
+            
+            if not opt.qat:
+                model.half().float()  # pre-reduce anchor precision
+>>>>>>> 8f4fbb90ee70a60cc1ac6260cb72ac22f41330ff
 
     # DDP mode
     if cuda and rank != -1:
@@ -620,21 +639,22 @@ def train(hyp, opt, device, tb_writer=None):
             if (not opt.notest or final_epoch) and epoch % opt.test_ratio == 0:  # Calculate mAP
                 wandb_logger.current_epoch = epoch + 1
                 results, maps, times = test.test(data_dict,
-                                                 batch_size=batch_size * 2,
-                                                 imgsz=imgsz,
-                                                 conf_thres=0.5,
-                                                 model=ema.ema,
-                                                 single_cls=opt.single_cls,
-                                                 dataloader=testloader,
-                                                 save_dir=save_dir,
-                                                 verbose=nc < 50 and final_epoch,
-                                                 plots=plots and final_epoch,
-                                                 wandb_logger=wandb_logger,
-                                                 compute_loss=compute_loss,
-                                                 is_coco=is_coco,
-                                                 v5_metric=opt.v5_metric,
-                                                 opt_seg=opt.seg,
-                                                 merge_label=opt.merge_label)
+                                                batch_size=batch_size * 2,
+                                                imgsz=imgsz,
+                                                conf_thres=0.5,
+                                                model=ema.ema,
+                                                single_cls=opt.single_cls,
+                                                dataloader=testloader,
+                                                save_dir=save_dir,
+                                                verbose=nc < 50 and final_epoch,
+                                                plots=plots and final_epoch,
+                                                wandb_logger=wandb_logger,
+                                                compute_loss=compute_loss,
+                                                is_coco=is_coco,
+                                                v5_metric=opt.v5_metric,
+                                                opt_seg=opt.seg,
+                                                merge_label=opt.merge_label,
+                                                qat=opt.qat)
 
             # Write
             with open(results_file, 'a') as f:
@@ -661,14 +681,24 @@ def train(hyp, opt, device, tb_writer=None):
 
             # Save model
             if (not opt.nosave) or (final_epoch and not opt.evolve):  # if save
-                ckpt = {'epoch': epoch,
-                        'best_fitness': best_fitness,
-                        'training_results': results_file.read_text(),
-                        'model': deepcopy(model.module if is_parallel(model) else model).half().float().state_dict(),
-                        'ema': deepcopy(ema.ema).half(),
-                        'updates': ema.updates,
-                        'optimizer': optimizer.state_dict(),
-                        'wandb_id': wandb_logger.wandb_run.id if wandb_logger.wandb else None}
+                if opt.qat:
+                    ckpt = {'epoch': epoch,
+                            'best_fitness': best_fitness,
+                            'training_results': results_file.read_text(),
+                            'model': deepcopy(model.module if is_parallel(model) else model).state_dict(),
+                            'ema': deepcopy(ema.ema).state_dict(),
+                            'updates': ema.updates,
+                            'optimizer': optimizer.state_dict(),
+                            'wandb_id': wandb_logger.wandb_run.id if wandb_logger.wandb else None}
+                else:
+                    ckpt = {'epoch': epoch,
+                            'best_fitness': best_fitness,
+                            'training_results': results_file.read_text(),
+                            'model': deepcopy(model.module if is_parallel(model) else model).half().float().state_dict(),
+                            'ema': deepcopy(ema.ema).half(),
+                            'updates': ema.updates,
+                            'optimizer': optimizer.state_dict(),
+                            'wandb_id': wandb_logger.wandb_run.id if wandb_logger.wandb else None}
 
                 # Save last, best and delete
                 torch.save(ckpt, last)
@@ -702,7 +732,25 @@ def train(hyp, opt, device, tb_writer=None):
         logger.info('%g epochs completed in %.3f hours.\n' % (epoch - start_epoch + 1, (time.time() - t0) / 3600))
         if opt.data.endswith('coco.yaml') and nc == 80:  # if COCO
             for m in (last, best) if best.exists() else (last):  # speed, mAP tests
-                results, _, _ = test.test(opt.data,
+                if opt.qat:
+                    results, _, _ = test.test(opt.data,
+                                          batch_size=batch_size * 2,
+                                          imgsz=imgsz,
+                                          conf_thres=0.5,
+                                          iou_thres=0.7,
+                                          model=attempt_load(m, device),
+                                          single_cls=opt.single_cls,
+                                          dataloader=testloader,
+                                          save_dir=save_dir,
+                                          save_json=True,
+                                          plots=False,
+                                          is_coco=is_coco,
+                                          v5_metric=opt.v5_metric,
+                                          opt_seg=opt.seg,
+                                          merge_label=opt.merge_label,
+                                          qat=opt.qat)
+                else:
+                    results, _, _ = test.test(opt.data,
                                           batch_size=batch_size * 2,
                                           imgsz=imgsz,
                                           conf_thres=0.5,
@@ -716,7 +764,8 @@ def train(hyp, opt, device, tb_writer=None):
                                           is_coco=is_coco,
                                           v5_metric=opt.v5_metric,
                                           opt_seg=opt.seg,
-                                          merge_label=opt.merge_label)
+                                          merge_label=opt.merge_label,
+                                          qat=opt.qat)
 
         # Strip optimizers
         final = best if best.exists() else last  # final model
