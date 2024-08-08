@@ -41,6 +41,9 @@ import skimage
 
 logger = logging.getLogger(__name__)
 
+
+     
+
 def train(hyp, opt, device, tb_writer=None):
     print("device: ", device)
     logger.info(colorstr('hyperparameters: ') + ', '.join(f'{k}={v}' for k, v in hyp.items()))
