@@ -42,6 +42,26 @@ import skimage
 
 logger = logging.getLogger(__name__)
 
+class QuantizedModel(torch.nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model_fp32 = model
+        self.quant = torch.quantization.QuantStub()
+        self.dequant = torch.quantization.DeQuantStub()
+                                  
+    def forward(self, x):
+        x = self.quant(x)
+        x = self.model_fp32(x)
+        x = self.dequant(x)
+        return x
+
+def fuse_modules(model):
+    """ Fuse together convolutions/linear layers and ReLU """
+    torch.quantization.fuse_modules(model, [['conv1', 'relu1'], 
+                                            ['conv2', 'relu2'],
+                                            ['fc1', 'relu3'],
+                                            ['fc2', 'relu4']], inplace=True)
+     
 
 def train(hyp, opt, device, tb_writer=None):
     print("device: ", device)
@@ -133,6 +153,9 @@ def train(hyp, opt, device, tb_writer=None):
         if any(x in k for x in freeze):
             print('freezing %s' % k)
             v.requires_grad = False
+        
+    if opt.qat:
+        model = QuantizedModel(model)
 
     # Optimizer
     nbs = 64  # nominal batch size
@@ -335,12 +358,13 @@ def train(hyp, opt, device, tb_writer=None):
             model.half().float()  # pre-reduce anchor precision
 
     if opt.qat:        
-        #model.fuse()
+        with torch.no_grad():
+            model.fuse()
 
         # The old 'fbgemm' is still available but 'x86' is the recommended default.
         model.qconfig = torch.quantization.get_default_qat_qconfig('x86')
 
-        model = torch.quantization.prepare_qat(model, inplace=True)
+        torch.quantization.prepare_qat(model, inplace=True)
         print('Qauntization-Aware-Training')
 
     # DDP mode
