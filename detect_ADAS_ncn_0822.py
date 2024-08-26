@@ -283,6 +283,7 @@ def detect(save_img=False):
             pred[0] = pred[0][pred[0][:,4] >= opt.conf_thres]
         else:
             pred[0][:, 4] = pred[0][:, 4]+0.4
+        # score 보정 끝
         
         print("scores: ", pred[0][:, 4])
         
@@ -514,7 +515,6 @@ def detect(save_img=False):
                     for temp_box_id, (*xyxy, conf, cls) in enumerate(det[:, :6]):
                         warning = "Safe"
                         xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
-
                         temp_distance = calculate_distance([int(cls), float(xywh[0]), float(xywh[1]), float(xywh[2]), float(xywh[3])],
                             [crop_x1/imgsz[1], crop_y1/imgsz[0], crop_x2/imgsz[1], crop_y2/imgsz[0]])
                         temp_distances.append(temp_distance)

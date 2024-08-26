@@ -265,7 +265,9 @@ def detect(save_img=False):
                         image_masks = masks.detach().cpu().numpy().astype(float)#[label_indexing]
                         
                         resize_ratio = im0.shape[1] / img.shape[3]
-                        image_masks = image_masks[int((image_masks.shape[0]-(im0.shape[0]/resize_ratio))*2/3):-int((image_masks.shape[0]-(im0.shape[0]/resize_ratio))/3)]
+                        if int(image_masks.shape[0]-(im0.shape[0]/resize_ratio)) > 3:
+                            image_masks = image_masks[int((image_masks.shape[0]-(im0.shape[0]/resize_ratio))*2/3):-int((image_masks.shape[0]-(im0.shape[0]/resize_ratio))/3)]
+                        
                         image_masks = cv2.resize(image_masks, (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
 
                         if opt.save_npy:
@@ -274,8 +276,13 @@ def detect(save_img=False):
 
                         vis_mask = im0.copy()
                         
-                        for image_mask_idx in opt.valid_segment_labels:
-                            vis_mask[image_masks==image_mask_idx] = np.array(seg_colors[image_mask_idx])
+                        if len(opt.valid_segment_labels) > 0:
+                            for image_mask_idx in opt.valid_segment_labels:
+                                vis_mask[image_masks==image_mask_idx] = np.array(seg_colors[image_mask_idx])
+                        else:
+                            for image_mask_idx in range(1, nm):
+                                vis_mask[image_masks==image_mask_idx] = np.array(seg_colors[image_mask_idx])
+
                         alpha = 0.5
                         im0 = cv2.addWeighted(im0, alpha, vis_mask, 1 - alpha, 0)
                     # Mask plotting ----------------------------------------------------------------------------------------

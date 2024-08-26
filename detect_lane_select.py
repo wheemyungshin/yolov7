@@ -83,7 +83,8 @@ def detect(save_img=False):
     names = model.module.names if hasattr(model, 'module') else model.names
     print(names)
     
-    colors = [[255, 255, 100]]#[[random.randint(0, 255) for _ in range(3)] for _ in names]
+    colors = [[0, 255, 0]]#[[random.randint(0, 255) for _ in range(3)] for _ in names]
+
     if opt.seg:
         if len(opt.valid_segment_labels) > 0:
             nm = len(opt.valid_segment_labels)+1
@@ -268,13 +269,15 @@ def detect(save_img=False):
                         w = lane_box[2]-lane_box[0]
                         h = lane_box[3]-lane_box[1]
                         if x >= im0.shape[1]/2:
-                            if h*h/w > best_ratio_right :
-                                best_ratio_right = h*h/w 
+                            if (im0.shape[1]-lane_box[0])*h/w > best_ratio_right :
+                                best_ratio_right = (im0.shape[1]-lane_box[0])*h/w
                                 best_ratio_right_idx = i
+                                right_xyxy = [lane_box[0], lane_box[1], lane_box[2], lane_box[3]]
                         else:
-                            if h*h/w > best_ratio_left :
-                                best_ratio_left = h*h/w 
+                            if lane_box[2]*h/w > best_ratio_left :
+                                best_ratio_left = lane_box[2]*h/w
                                 best_ratio_left_idx = i
+                                left_xyxy = [lane_box[0], lane_box[1], lane_box[2], lane_box[3]]
 
                     det_i = len(det)
                     for (*xyxy, conf, cls) in reversed(det[:, :6]):

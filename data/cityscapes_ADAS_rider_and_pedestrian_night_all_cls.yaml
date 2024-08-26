@@ -1,0 +1,33 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+    ../data/crowd_6cls/train.txt, # included in best of gnet
+    ../data/crowd_6cls/val.txt, # included in best of gnet
+
+    ../data/cityscapes/yolov7_det/train.txt, # rider
+    ../data/cityscapes/yolov7_det/val.txt, # rider
+    ../data/bdd100k/train.txt, # rider
+    ../data/bdd100k/val.txt, # rider
+    ../data/AIHUB_left_only_pedestrian_including_night.txt, # 10000
+
+    ../data/IDD_Detection_v2/train.txt, # main
+]
+val: [../data/small_ticket_testset_addition_ready/detection/small_ticket_testset_all_full_shuffle/test.txt] #4471
+test: [../data/small_ticket_testset_addition_ready/detection/small_ticket_testset_all_full_shuffle/test.txt] #4471
+#val: [/data/small_ticket_testset_all_full/small_ticket_det_testset_full/test.txt] #500
+#test: [/data/small_ticket_testset_all_full/small_ticket_det_testset_full/test.txt] #500
+
+# number of classes
+nc: 7
+
+# class names
+names: [
+    'pedestrian',
+    'rider',
+    'car',
+    'truck',
+    'bus',
+    'motorcycle',
+    'bicycle'
+]
+    
+valid_idx: [6, 7, 8, 9, 10, 12, 13]

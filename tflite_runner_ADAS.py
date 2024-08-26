@@ -5,7 +5,7 @@ import tensorflow as tf
 import skimage.io
 import argparse
 
-COLORS = [[255,255,0], [255,0,255], [0,255,255]]
+colors = [[20,20,255], [20,255,20], [255,20,20], [255,20,255], [20,255,255], [255,255,20]]
 
 def output_matching(model2_input, fd_outputs):    
     if model2_input["shape"][1] == fd_outputs[0].shape[1]:
@@ -16,6 +16,7 @@ def output_matching(model2_input, fd_outputs):
         fd_output = fd_outputs[2]
     else:
         print("wrong input shape: ", model2_input.shape)
+    
     return fd_output
 
 def xywh2xyxy(x):
@@ -120,6 +121,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', type=str, default='../onnx2tf/saved_model/modified_phone_mobilenet_n78_tuning_only3_e089_no_opt_128_128_integer_quant.tflite', help='initial weights path')
     parser.add_argument('--weights2', type=str, default='../onnx2tf/saved_model/NMS_mobilenet_s128_128_float32.tflite', help='initial weights path')
+    
+    parser.add_argument('--weights3', type=str, default='../onnx2tf/saved_model/modified_phone_mobilenet_n78_tuning_only3_e089_no_opt_128_128_integer_quant.tflite', help='initial weights path')
+    parser.add_argument('--weights4', type=str, default='../onnx2tf/saved_model/NMS_mobilenet_s128_128_float32.tflite', help='initial weights path')
+
     parser.add_argument('--source', type=str, default='../data/n78_tel8070_application.mp4', help='initial weights path')
     parser.add_argument('--save', type=str, default='n78_tuning3_phone_s128_e089_tel_c05.mp4', help='initial weights path')
     parser.add_argument('--conf', type=float, default=0.4, help='Confidence threshold')
@@ -128,28 +133,27 @@ if __name__ == '__main__':
     
     fd_model = tf.lite.Interpreter(opt.weights)    
     fd_model2= tf.lite.Interpreter(opt.weights2)
-    nms_part = tf.lite.Interpreter("weights_n78_tflite_nms_sep/nms_float32.tflite")
     fd_model.allocate_tensors()
     fd_model2.allocate_tensors()
-    nms_part.allocate_tensors()
 
-    #cap = cv2.VideoCapture("../data/n78_testvid.mp4")
+    fd_model3 = tf.lite.Interpreter(opt.weights3)    
+    fd_model4 = tf.lite.Interpreter(opt.weights4)
+    fd_model3.allocate_tensors()
+    fd_model4.allocate_tensors()
+
     cap = cv2.VideoCapture(opt.source)
 
-    vis_h = 1080
-    vis_w = 1920
     vid_name = opt.save
-    vid_writer = cv2.VideoWriter(vid_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, (vis_w, vis_h))#, (480, 480))
+    vid_writer = cv2.VideoWriter(vid_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, (1296, 1080))
     frame_id = 0
-    unique_confidences = []
     voting_que = [0] * 60
     voting_idx = 0
     while True :
         _, frame = cap.read()
 
         if frame is not None:
-            #frame = frame[:, 500:1580]
-            frame = frame[:, :, :]#.transpose(1, 0, 2)
+            frame = frame[:, 312:1608]
+            #frame = frame[:, :, :]#.transpose(1, 0, 2)
             frame_vis = frame.copy()
 
             print(fd_model.get_input_details()[0]["shape"])
@@ -157,6 +161,8 @@ if __name__ == '__main__':
             crop_img = (crop_img / 255).astype(np.float32)
             print(np.min(crop_img),np.max(crop_img))
             crop_img = np.expand_dims(crop_img.astype(np.float32), axis=0)
+
+            # vehicle detection
             fd_model.set_tensor(fd_model.get_input_details()[0]['index'], crop_img)
             fd_model.invoke()
 
@@ -167,35 +173,61 @@ if __name__ == '__main__':
             fd_output_0_0 = output_matching(fd_model2.get_input_details()[0], [fd_output_0_0_, fd_output_0_1_, fd_output_0_2_])
             fd_output_0_1 = output_matching(fd_model2.get_input_details()[1], [fd_output_0_0_, fd_output_0_1_, fd_output_0_2_])
             fd_output_0_2 = output_matching(fd_model2.get_input_details()[2], [fd_output_0_0_, fd_output_0_1_, fd_output_0_2_])
-            
 
             fd_model2.set_tensor(fd_model2.get_input_details()[0]['index'], fd_output_0_0)
             fd_model2.set_tensor(fd_model2.get_input_details()[1]['index'], fd_output_0_1)
             fd_model2.set_tensor(fd_model2.get_input_details()[2]['index'], fd_output_0_2)
             fd_model2.invoke()
 
-            fd_output_1 = fd_model2.get_tensor(fd_model2.get_output_details()[0]['index'])
-            
-            for unique_c in np.unique(fd_output_1[:,-1]):
-                if unique_c not in unique_confidences:
-                    unique_confidences.append(unique_c)
-            #fd_output_0 = np.expand_dims(fd_output_0, 0)
-            #boxes, scores = nms(fd_output_0)
+            fd_output_1 = fd_model2.get_tensor(fd_model2.get_output_details()[0]['index'])            
 
-            #boxes = fd_output_0[fd_output_0[:, -1] > 0]
-            #scores = fd_output_0[fd_output_0[:, -1] > 0, -1]
-            #fd_output_1 = np.expand_dims(fd_output_1[:, 1:], 0)
-            print(fd_output_1)
+            # person detection            
+            fd_model3.set_tensor(fd_model3.get_input_details()[0]['index'], crop_img)
+            fd_model3.invoke()
+
+            fd_output_3_0_ = fd_model3.get_tensor(fd_model3.get_output_details()[0]['index'])
+            fd_output_3_1_ = fd_model3.get_tensor(fd_model3.get_output_details()[1]['index'])
+            fd_output_3_2_ = fd_model3.get_tensor(fd_model3.get_output_details()[2]['index'])
+
+            fd_output_3_0 = output_matching(fd_model4.get_input_details()[0], [fd_output_3_0_, fd_output_3_1_, fd_output_3_2_])
+            fd_output_3_1 = output_matching(fd_model4.get_input_details()[1], [fd_output_3_0_, fd_output_3_1_, fd_output_3_2_])
+            fd_output_3_2 = output_matching(fd_model4.get_input_details()[2], [fd_output_3_0_, fd_output_3_1_, fd_output_3_2_])
+
+            fd_model4.set_tensor(fd_model4.get_input_details()[0]['index'], fd_output_3_0)
+            fd_model4.set_tensor(fd_model4.get_input_details()[1]['index'], fd_output_3_1)
+            fd_model4.set_tensor(fd_model4.get_input_details()[2]['index'], fd_output_3_2)
+            fd_model4.invoke()
+
+            fd_output_3 = fd_model4.get_tensor(fd_model4.get_output_details()[0]['index'])
+            
             print(fd_output_1.shape)
-            #print(nms_part.get_input_details()[0]['shape'])
+                        
+            boxes1 = fd_output_1[fd_output_1[:, -1] > opt.conf, 1:5]
+            scores1 = fd_output_1[fd_output_1[:, -1] > opt.conf, -1]
+            cls_ids1 = fd_output_1[fd_output_1[:, -1] > opt.conf, 5]
+            cls_ids1 = cls_ids1+1
+
+            boxes3 = fd_output_3[fd_output_3[:, -1] > opt.conf, 1:5]
+            scores3 = fd_output_3[fd_output_3[:, -1] > opt.conf, -1]
+            cls_ids3 = fd_output_3[fd_output_3[:, -1] > opt.conf, 5]
+
+            if len(scores1) and len(scores3):
+                scores = np.concatenate((scores1, scores3), axis=0)
+                boxes = np.concatenate((boxes1, boxes3), axis=0)
+                cls_ids = np.concatenate((cls_ids1, cls_ids3), axis=0)
+            elif len(scores1):
+                scores = scores1
+                boxes = boxes1
+                cls_ids = cls_ids1
+            else:
+                scores = scores3
+                boxes = boxes3
+                cls_ids = cls_ids3
+
             
-            #nms_part.set_tensor(nms_part.get_input_details()[0]['index'], np.transpose(fd_output_0, (0,2,1)))
-            #nms_part.invoke()
-            #nms_output = nms_part.get_tensor(nms_part.get_output_details()[0]['index'])
-            
-            classes = fd_output_1[fd_output_1[:, -1] > opt.conf, 5]
-            boxes = fd_output_1[fd_output_1[:, -1] > opt.conf, 1:5]
-            scores = fd_output_1[fd_output_1[:, -1] > opt.conf, -1]            
+            print(scores)
+            print(boxes)
+            print(cls_ids)
             
             #if len(boxes) > 0:
             #    boxes = merge_overlapping_boxes(boxes, scores, overlap_num_thr=0)
@@ -218,18 +250,16 @@ if __name__ == '__main__':
             max_fd = None
             max_size = -1
 
-            print(boxes)
             for idx in range(len(scores)) :
                 if scores[idx] > 0.1 :
-                    cls_ = int(classes[idx])
                     size = (boxes[idx][2] - boxes[idx][0]) * (boxes[idx][3] - boxes[idx][1])
                     max_fd = boxes[idx]
-                    max_fd[0] = int(max_fd[0] * (vis_w / fd_model.get_input_details()[0]["shape"][2]))
-                    max_fd[2] = int(max_fd[2] * (vis_w / fd_model.get_input_details()[0]["shape"][2]))
-                    max_fd[1] = int(max_fd[1] * (vis_h / fd_model.get_input_details()[0]["shape"][1]))
-                    max_fd[3] = int(max_fd[3] * (vis_h / fd_model.get_input_details()[0]["shape"][1]))
+                    max_fd[0] = int(max_fd[0] * (1296 / fd_model.get_input_details()[0]["shape"][2]))
+                    max_fd[2] = int(max_fd[2] * (1296 / fd_model.get_input_details()[0]["shape"][2]))
+                    max_fd[1] = int(max_fd[1] * (1080 / fd_model.get_input_details()[0]["shape"][1]))
+                    max_fd[3] = int(max_fd[3] * (1080 / fd_model.get_input_details()[0]["shape"][1]))
                     max_fd = max_fd.astype(np.int32)
-                    frame_vis = cv2.rectangle(frame_vis, (max_fd[0],max_fd[1]), (max_fd[2],max_fd[3]), COLORS[cls_], 2)            
+                    frame_vis = cv2.rectangle(frame_vis, (max_fd[0],max_fd[1]), (max_fd[2],max_fd[3]), colors[int(cls_ids[idx])], 2)
                     cv2.putText(frame_vis, str(round(scores[idx], 5)), (max_fd[0],max_fd[1] - 2), 0, 1, [225, 255, 255], thickness=2, lineType=cv2.LINE_AA)
             
             voting_score = sum(voting_que) / len(voting_que) 
@@ -245,6 +275,4 @@ if __name__ == '__main__':
 
     vid_writer.release()
 
-unique_confidences.sort()
-print("unique_confidences : ", unique_confidences)
 print(vid_name)

@@ -1,0 +1,9 @@
+saved_model/modified_epoch_002_no_opt_128_128_integer_quant.tflite : 2.255800969522722e-05
+saved_model/modified_epoch_005_no_opt_128_128_integer_quant.tflite : 0.09488016420082784
+saved_model/modified_epoch_009_no_opt_128_128_integer_quant.tflite : 0.0003682660802079725
+saved_model/modified_epoch_012_no_opt_128_128_integer_quant.tflite : 0.0004971375906128169
+saved_model/modified_epoch_015_no_opt_128_128_integer_quant.tflite : 0.002564346700019706
+saved_model/modified_epoch_022_no_opt_128_128_integer_quant.tflite : 0.00020391485603501433
+saved_model/modified_epoch_032_no_opt_128_128_integer_quant.tflite : 0.000985142238549982
+saved_model/modified_epoch_039_no_opt_128_128_integer_quant.tflite : 9.882296255040799e-05
+saved_model/modified_epoch_042_no_opt_128_128_integer_quant.tflite : 2.735476119066907e-05
