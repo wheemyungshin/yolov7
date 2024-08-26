@@ -81,7 +81,9 @@ def detect(save_img=False):
 
     # Get names and colors
     names = model.module.names if hasattr(model, 'module') else model.names
-    colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
+    print(names)
+    
+    colors = [[0, 255, 0]]#[[random.randint(0, 255) for _ in range(3)] for _ in names]
     if opt.seg:
         if len(opt.valid_segment_labels) > 0:
             nm = len(opt.valid_segment_labels)+1
@@ -209,6 +211,8 @@ def detect(save_img=False):
                 gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
                 gn_to = torch.tensor(img.shape)[[3, 2, 3, 2]] 
                 if len(det):
+                    print(det)
+
                     if opt.seg:
                         #masks = process_mask(proto[i], det[:, 6:], det[:, :4], img.shape[2:], upsample=True)
                         masks = process_semantic_mask(proto[i], det[:, 6:], det[:, :6], img.shape[2:], upsample=True)
@@ -238,9 +242,7 @@ def detect(save_img=False):
                         image_masks = masks.detach().cpu().numpy().astype(float)#[label_indexing]
                         
                         resize_ratio = im0.shape[1] / img.shape[3]
-                        if int(image_masks.shape[0]-(im0.shape[0]/resize_ratio)) > 3:
-                            image_masks = image_masks[int((image_masks.shape[0]-(im0.shape[0]/resize_ratio))*2/3):-int((image_masks.shape[0]-(im0.shape[0]/resize_ratio))/3)]
-                        
+                        image_masks = image_masks[int((image_masks.shape[0]-(im0.shape[0]/resize_ratio))*2/3):-int((image_masks.shape[0]-(im0.shape[0]/resize_ratio))/3)]
                         image_masks = cv2.resize(image_masks, (im0.shape[1], im0.shape[0]), interpolation = cv2.INTER_NEAREST)
 
                         if opt.save_npy:
@@ -249,19 +251,46 @@ def detect(save_img=False):
 
                         vis_mask = im0.copy()
                         
-                        if len(opt.valid_segment_labels) > 0:
-                            for image_mask_idx in opt.valid_segment_labels:
-                                vis_mask[image_masks==image_mask_idx] = np.array(seg_colors[image_mask_idx])
-                        else:
-                            for image_mask_idx in range(1, nm):
-                                vis_mask[image_masks==image_mask_idx] = np.array(seg_colors[image_mask_idx])
-
+                        for image_mask_idx in opt.valid_segment_labels:
+                            vis_mask[image_masks==image_mask_idx] = np.array(seg_colors[image_mask_idx])
                         alpha = 0.5
                         im0 = cv2.addWeighted(im0, alpha, vis_mask, 1 - alpha, 0)
                     # Mask plotting ----------------------------------------------------------------------------------------
                     
                     # Write results
-                    for *xyxy, conf, cls in reversed(det[:, :6]):
+                    best_ratio_left = 0
+                    best_ratio_left_idx = None
+                    best_ratio_right = 0
+                    best_ratio_right_idx = None
+                    for i, lane_box in enumerate(det[:, :4]):                        
+                        x = (lane_box[0]+lane_box[2])/2
+                        y = (lane_box[1]+lane_box[3])/2
+                        w = lane_box[2]-lane_box[0]
+                        h = lane_box[3]-lane_box[1]
+                        '''
+                        if x >= im0.shape[1]/2:
+                            if h*h/w > best_ratio_right :
+                                best_ratio_right = h*h/w 
+                                best_ratio_right_idx = i
+                        else:
+                            if h*h/w > best_ratio_left :
+                                best_ratio_left = h*h/w 
+                                best_ratio_left_idx = i
+                        '''
+                        if x >= im0.shape[1]/2:
+                            if (im0.shape[1]-lane_box[0])*h/w > best_ratio_right :
+                                best_ratio_right = (im0.shape[1]-lane_box[0])*h/w
+                                best_ratio_right_idx = i
+                                right_xyxy = [lane_box[0], lane_box[1], lane_box[2], lane_box[3]]
+                        else:
+                            if lane_box[2]*h/w > best_ratio_left :
+                                best_ratio_left = lane_box[2]*h/w
+                                best_ratio_left_idx = i
+                                left_xyxy = [lane_box[0], lane_box[1], lane_box[2], lane_box[3]]
+
+                    det_i = len(det)
+                    for (*xyxy, conf, cls) in reversed(det[:, :6]):
+                        det_i = det_i - 1
                         if len(opt.valid_segment_labels) > 0:
                             if cls-1 in opt.valid_segment_labels:
                                 continue
@@ -281,9 +310,14 @@ def detect(save_img=False):
 
                         if save_img or view_img:  # Add bbox to image
                             size = (xyxy[2]-xyxy[0])*(xyxy[3]-xyxy[1])
-                            label = f'{names[int(cls)]} {conf:.2f}'
+                            label = f'{names[int(cls)]} {conf:.2f} {size}'
                             plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
-                        
+
+                        if best_ratio_left_idx is not None and det_i == best_ratio_left_idx:
+                            cv2.line(im0, (int(xyxy[2]),int(xyxy[1])), (int(xyxy[0]),int(xyxy[3])), [255, 0, 255], 3)
+                        if best_ratio_right_idx is not None and det_i == best_ratio_right_idx:
+                            cv2.line(im0, (int(xyxy[0]),int(xyxy[1])), (int(xyxy[2]),int(xyxy[3])), [255, 0, 255], 3)
+                                                
                         if opt.save_json:
                             if dataset.mode == 'image':
                                 if int(cls.detach().cpu().numpy())==0:

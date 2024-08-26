@@ -16,7 +16,9 @@ from utils.general import coco80_to_coco91_class, check_dataset, check_file, che
     mask_iou, masks_iou, process_semantic_mask
 from utils.metrics import ap_per_class, ConfusionMatrix
 from utils.plots import plot_images, output_to_target, plot_study_txt
-from utils.torch_utils import select_device, time_synchronized, TracedModel
+from utils.torch_utils import select_device, time_synchronized, TracedModel, intersect_dicts
+from models.yolo import Model
+import collections
 from collections import defaultdict
 import cv2
 
@@ -63,9 +65,33 @@ def test(data,
         # Directories
         save_dir = Path(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
         (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
+        
+        if opt.cfg:
+            nc = len(merge_label)
+            ckpt = torch.load(weights[0], map_location=device)  # load checkpoint
+            if type(ckpt['model']) is Model:
+                state_dict = ckpt['model'].float().state_dict()  # to FP32
+            elif type(ckpt['model']) is collections.OrderedDict:
+                state_dict = ckpt['model']  # to FP32
+            else:
+                assert (type(ckpt['model']) is Model or type(ckpt['model']) is collections.OrderedDict), "Invalid model types to load"
 
+            model = Model(opt.cfg, ch=3, nc=nc, qat=qat).to(device)  # create#, nm=nm).to(device)  # create
+            if qat:
+                model.eval()
+                fuse_modules(model)
+                
+                # The old 'fbgemm' is still available but 'x86' is the recommended default.
+                model.qconfig = torch.quantization.get_default_qconfig('x86')
+                torch.quantization.prepare(model, inplace=True)
+
+            state_dict = intersect_dicts(state_dict, model.state_dict(), exclude=[])  # intersect
+            #print(state_dict.keys())
+            model.load_state_dict(state_dict, strict=False)  # load
+        else:
         # Load model
-        model = attempt_load(weights, map_location=device)  # load FP32 model
+            model = attempt_load(weights, map_location=device)  # load FP32 model
+
         gs = max(int(model.stride.max()), 32)  # grid size (max stride)
         if len(imgsz) == 2:
             imgsz = [check_img_size(x, gs) for x in imgsz]  # verify imgsz are gs-multiples
@@ -95,11 +121,11 @@ def test(data,
     niou = iouv.numel()
 
     #fuse models
-    if qat:
+    if qat and not training:
         fuse_modules(model)
         
         # The old 'fbgemm' is still available but 'x86' is the recommended default.
-        model.qconfig = torch.quantization.get_default_qat_qconfig('x86')
+        model.qconfig = torch.quantization.get_default_qconfig('x86')
 
         torch.quantization.prepare(model, inplace=True)
         torch.quantization.convert(model, inplace=True)
@@ -474,9 +500,10 @@ def test(data,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='test.py')
     parser.add_argument('--weights', nargs='+', type=str, default='yolov7.pt', help='model.pt path(s)')
+    parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
     parser.add_argument('--data', type=str, default='data/coco.yaml', help='*.data path')
     parser.add_argument('--batch-size', type=int, default=32, help='size of each image batch')
-    parser.add_argument('--img-size', nargs='+', type=int, default=[640, 640], help='[train, test] image sizes')
+    parser.add_argument('--img-size', nargs='+', type=int, default=[640, 640], help='[height, width] image sizes')
     parser.add_argument('--conf-thres', type=float, default=0.001, help='object confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.65, help='IOU threshold for NMS')
     parser.add_argument('--task', default='val', help='train, val, test, speed or study')

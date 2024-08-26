@@ -10,11 +10,15 @@ import torch.nn as nn
 from torch.utils.mobile_optimizer import optimize_for_mobile
 
 import models
-from models.experimental import attempt_load, End2End, End2End_seg
+from models.experimental import attempt_load, attempt_load_v2, End2End, End2End_seg, fuse_modules
 from utils.activations import Hardswish, SiLU
 from utils.general import set_logging, check_img_size
-from utils.torch_utils import select_device
+from utils.torch_utils import select_device, intersect_dicts
 from utils.add_nms import RegisterNMS
+from models.yolo import Model
+import collections
+
+from models.common import Conv, DWConv
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -36,6 +40,10 @@ if __name__ == '__main__':
     parser.add_argument('--int8', action='store_true', help='CoreML INT8 quantization')
     parser.add_argument('--agnostic-nms', action='store_true', help='Use Agnostic NMS')
     parser.add_argument('--seg', action='store_true', help='Segmentation-Training')
+    parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
+    parser.add_argument('--nc', type=int, default=0, help='number of class')
+    parser.add_argument('--qat', action='store_true', help='Quantization-Aware-Training')
+    
     opt = parser.parse_args()
     opt.img_size *= 2 if len(opt.img_size) == 1 else 1  # expand
     opt.dynamic = opt.dynamic and not opt.end2end
@@ -46,8 +54,28 @@ if __name__ == '__main__':
 
     # Load PyTorch model
     device = select_device(opt.device)
-    model = attempt_load(opt.weights, map_location=device)  # load FP32 model
+    if opt.cfg and opt.nc:
+        ckpt_weights = torch.load(opt.weights, map_location=device)  # load checkpoint
+        if type(ckpt_weights['model']) is Model:
+            state_dict = ckpt_weights['model'].float().state_dict()  # to FP32
+        elif type(ckpt_weights['model']) is collections.OrderedDict:
+            state_dict = ckpt_weights['model']  # to FP32
+        else:
+            assert (type(ckpt_weights['model']) is Model or type(ckpt_weights['model']) is collections.OrderedDict), "Invalid model types to load"
+
+        ckpt = Model(opt.cfg, ch=3, nc=opt.nc, qat=opt.qat).to(device)  # create#, nm=nm).to(device)  # create
+        #if opt.qat:
+        #    fuse_modules(ckpt)
+        model = attempt_load_v2(ckpt, state_dict, map_location=device)  # load FP32 model
+    else:
+        assert not opt.cfg and not opt.nc
+        model = attempt_load(opt.weights, map_location=device)  # load FP32 model
+        if not hasattr(model, 'qat'):
+            setattr(model, 'qat', False)
     labels = model.names
+
+    print("Model is ", model)
+    print("Model is ", type(model))
 
     # Checks
     gs = int(max(model.stride))  # grid size (max stride)

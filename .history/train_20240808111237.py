@@ -39,7 +39,10 @@ import collections
 import shutil
 import skimage
 
-logger = logging.getLogger(__name__)     
+logger = logging.getLogger(__name__)
+
+
+     
 
 def train(hyp, opt, device, tb_writer=None):
     print("device: ", device)
@@ -224,16 +227,16 @@ def train(hyp, opt, device, tb_writer=None):
 
     #fuse models
     if opt.qat:
-        #model.eval()
+        model.eval()
+        fuse_modules(model)
+        
         # The old 'fbgemm' is still available but 'x86' is the recommended default.
         model.qconfig = torch.quantization.get_default_qat_qconfig('x86')
-
-        #fuse_modules(model)
 
         torch.quantization.prepare_qat(model, inplace=True)
         print('Qauntization-Aware-Training')
     
-    ema = ModelEMA(model) if (rank in [-1, 0]) else None
+    ema = ModelEMA(model) if rank in [-1, 0] else None
 
     # Resume
     start_epoch, best_fitness = 0, 0.0
@@ -348,9 +351,6 @@ def train(hyp, opt, device, tb_writer=None):
         model = DDP(model, device_ids=[opt.local_rank], output_device=opt.local_rank,
                     # nn.MultiheadAttention incompatibility with DDP https://github.com/pytorch/pytorch/issues/26698
                     find_unused_parameters=True)
-        model_without_ddp = model.module
-    else:        
-        model_without_ddp = model
 
     # Model parameters
     hyp['box'] *= 3. / nl  # scale to layers
@@ -385,9 +385,7 @@ def train(hyp, opt, device, tb_writer=None):
                 f'Starting training for {epochs} epochs...')
     torch.save(model.float().state_dict(), wdir / 'init.pt')
 
-    #if opt.qat:
-    #    model.apply(torch.quantization.enable_observer)
-    #    model.apply(torch.quantization.enable_fake_quant)
+    
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         model.train()
         
@@ -649,7 +647,7 @@ def train(hyp, opt, device, tb_writer=None):
                             'training_results': results_file.read_text(),
                             'model': deepcopy(model.module if is_parallel(model) else model).state_dict(),
                             'ema': deepcopy(ema.ema).state_dict(),
-                            'updates': None,
+                            'updates': ema.updates,
                             'optimizer': optimizer.state_dict(),
                             'wandb_id': wandb_logger.wandb_run.id if wandb_logger.wandb else None}
                 else:

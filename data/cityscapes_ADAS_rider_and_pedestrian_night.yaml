@@ -9,7 +9,7 @@ train: [
     ../data/bdd100k/val.txt, # rider
     ../data/AIHUB_left_only_pedestrian_including_night.txt, # 10000
 
-    ../data/IDD_Detection_v2/train.txt, # main
+    ../data/IDD_Detection_v3/train.txt, # main
 ]
 val: [../data/small_ticket_testset_addition_ready/detection/small_ticket_testset_all_full_shuffle/test.txt] #4471
 test: [../data/small_ticket_testset_addition_ready/detection/small_ticket_testset_all_full_shuffle/test.txt] #4471

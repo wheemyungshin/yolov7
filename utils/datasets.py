@@ -45,6 +45,40 @@ for orientation in ExifTags.TAGS.keys():
     if ExifTags.TAGS[orientation] == 'Orientation':
         break
 
+def fix_label(l):
+    #fix label out of bounds
+    l_fix = []
+    for x_line in l:
+        line_fixed_temp = [(round(float(x_item),6)) for x_item in x_line[1:]]
+        x_temp, y_temp, w_temp, h_temp = line_fixed_temp
+        x1_temp = max(min(x_temp - w_temp/2,1),0)
+        y1_temp = max(min(y_temp - h_temp/2,1),0)
+        x2_temp = max(min(x_temp + w_temp/2,1),0)
+        y2_temp = max(min(y_temp + h_temp/2,1),0)
+        x_fixed = str(round(float((x1_temp+x2_temp)/2),6))
+        y_fixed = str(round(float((y1_temp+y2_temp)/2),6))
+        w_fixed = str(round(float(x2_temp-x1_temp),6))
+        h_fixed = str(round(float(y2_temp-y1_temp),6))
+        line_fixed = [x_line[0], x_fixed, y_fixed, w_fixed, h_fixed]
+
+        l_fix.append(line_fixed)
+    l = l_fix
+    return l
+
+def fix_segment(l):
+    #fix label out of bounds
+    l_fix = []
+    for x_line in l:
+        line_fixed = [x_line[0]]
+        line_fixed_temp = [(round(float(x_item),6)) for x_item in x_line[1:]]
+        for item in line_fixed_temp:
+            item_fixed = str(round(float(max(min(item,1),0)),6))
+            line_fixed.append(item_fixed)
+
+        l_fix.append(line_fixed)
+    l = l_fix
+    return l
+
 def natural_minmax_crop(image, targets, base_size, min_label_size_limit=None, max_label_size_limit=None):#16, 96
     base_h, base_w = base_size
     height, width = image.shape[:2]
@@ -997,32 +1031,17 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 if os.path.isfile(lb_file):
                     nf += 1  # label found
                     with open(lb_file, 'r') as f:
-                        l = [x.split() for x in f.read().strip().splitlines()]       
+                        l = [x.split() for x in f.read().strip().splitlines()]
 
-                        #fix label out of bounds
-                        l_fix = []
-                        for x_line in l:
-                            line_fixed_temp = [(round(float(x_item),6)) for x_item in x_line[1:]]
-                            x_temp, y_temp, w_temp, h_temp = line_fixed_temp
-                            x1_temp = max(min(x_temp - w_temp/2,1),0)
-                            y1_temp = max(min(y_temp - h_temp/2,1),0)
-                            x2_temp = max(min(x_temp + w_temp/2,1),0)
-                            y2_temp = max(min(y_temp + h_temp/2,1),0)
-                            x_fixed = str(round(float((x1_temp+x2_temp)/2),6))
-                            y_fixed = str(round(float((y1_temp+y2_temp)/2),6))
-                            w_fixed = str(round(float(x2_temp-x1_temp),6))
-                            h_fixed = str(round(float(y2_temp-y1_temp),6))
-                            line_fixed = [x_line[0], x_fixed, y_fixed, w_fixed, h_fixed]
-
-                            l_fix.append(line_fixed)
-                        l = l_fix
 
                         if load_seg:  # is segment
                             if any([len(x) > 8 for x in l]):  # is segment
                                 classes = np.array([x[0] for x in l], dtype=np.float32)
                                 segments = [np.array(x[1:], dtype=np.float32).reshape(-1, 2) for x in l]  # (cls, xy1...)
                                 l = np.concatenate((classes.reshape(-1, 1), segments2boxes(segments)), 1)  # (cls, xywh)
+                                l = fix_segment(l)
                             else:
+                                l = fix_label(l)
                                 segments = [np.array([
                                     [float(x_line[1])-float(x_line[3])/2, float(x_line[2])-float(x_line[4])/2], 
                                     [float(x_line[1])+float(x_line[3])/2, float(x_line[2])-float(x_line[4])/2],  
@@ -1030,6 +1049,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                     [float(x_line[1])-float(x_line[3])/2, float(x_line[2])+float(x_line[4])/2]
                                     ]) for x_line in l]
                         else:
+                            l = fix_label(l)
                             segments = [np.array([
                                     [float(x_line[1])-float(x_line[3])/2, float(x_line[2])-float(x_line[4])/2], 
                                     [float(x_line[1])+float(x_line[3])/2, float(x_line[2])-float(x_line[4])/2],  
@@ -1990,7 +2010,23 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         segments_after_filter.append(segments[ciga_idx])
                 labels = np.array(labels_after_filter)
                 segments = segments_after_filter
-                        
+        
+        if hyp is not None and hyp.get('remove_horizontal_lanes', None):
+            nL = len(labels)  # number of labels
+            if nL:
+                labels_after_filter = []
+                segments_after_filter = []
+                
+                for lane_idx, lane_label in enumerate(labels):#enumerate(labels[labels[:, 0]==2]):
+                    lane_w = lane_label[3] - lane_label[1]
+                    lane_h = lane_label[4] - lane_label[2]
+                    if lane_w > 0:
+                        lane_ratio = lane_h / lane_w
+                        if lane_ratio > hyp['remove_horizontal_lanes']:
+                            labels_after_filter.append(lane_label)
+                            segments_after_filter.append(segments[lane_idx])
+                labels = np.array(labels_after_filter)
+                segments = segments_after_filter
                         
         if hyp is not None and hyp.get('render_fire', None) is not None:
             nL = len(labels)  # number of labels
@@ -2294,6 +2330,10 @@ def load_image_and_label(self, index, ratio_maintain=True, hyp=None):
         if hyp is not None and 'contrast' in hyp:                
             img = apply_brightness_contrast(img, brightness = 0, contrast = random.random()*(hyp['contrast'][1]-hyp['contrast'][0])+hyp['contrast'][0])
 
+        if hyp is not None and 'color_inversion' in hyp:
+            if random.random() < hyp['color_inversion']:
+                img = 255 - img
+                
         if self.gray:
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)

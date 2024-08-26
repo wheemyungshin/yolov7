@@ -290,3 +290,41 @@ if __name__ == '__main__':
             print(node.name, ' : ', node.output)
 
         onnx.save(onnx_model, os.path.join(path, opt.save_tag+model_name))
+
+    elif opt.type == 'mobilenet_128_224':
+        graph.output.remove(graph.output[2])
+        graph.output.remove(graph.output[1])
+        graph.output.remove(graph.output[0])
+
+        print(dir(onnx.TensorProto))
+
+        output_666 = onnx.helper.make_tensor_value_info('666', onnx.TensorProto.FLOAT, [1, 18, 32, 56])
+        output_686 = onnx.helper.make_tensor_value_info('686', onnx.TensorProto.FLOAT, [1, 18, 16, 28])
+        output_706 = onnx.helper.make_tensor_value_info('706', onnx.TensorProto.FLOAT, [1, 18, 8, 14])
+
+        for i in range(len(nodes)-1, 0, -1) :
+            if nodes[i].name == 'Transpose_242':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Reshape_241':
+                graph.node.remove(nodes[i])        
+            elif nodes[i].name == 'Conv_227':        
+                graph.output.insert(i, output_706)
+
+            elif nodes[i].name == 'Transpose_226':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Reshape_225':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Conv_211':
+                graph.output.insert(i, output_686)
+
+            elif nodes[i].name == 'Transpose_210':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Reshape_209':
+                graph.node.remove(nodes[i])
+            elif nodes[i].name == 'Conv_195':
+                graph.output.insert(i, output_666)
+
+        for node in nodes:
+            print(node.name, ' : ', node.output)
+
+        onnx.save(onnx_model, os.path.join(path, opt.save_tag+model_name))

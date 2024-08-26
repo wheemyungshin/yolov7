@@ -20,10 +20,10 @@ def fuse_modules(model):
                 if type(m.conv[idx]) == nn.Conv2d:
                     if idx + 2 < len(m.conv):
                         torch.quantization.fuse_modules(m.conv, [str(idx), str(idx + 1), str(idx + 2)], inplace=True)
-                    else:
-                        torch.quantization.fuse_modules(m.conv, [str(idx), str(idx + 1)], inplace=True)
-        elif type(m) == DWConvblock:
-            torch.quantization.fuse_modules(m, [['conv1', 'bn1'], ['conv2', 'bn2']], inplace=True)
+                    #else:
+                    #    torch.quantization.fuse_modules(m.conv, [str(idx), str(idx + 1)], inplace=True)
+        #elif type(m) == DWConvblock:
+        #    torch.quantization.fuse_modules(m, [['conv1', 'bn1'], ['conv2', 'bn2']], inplace=True)
 
 class CrossConv(nn.Module):
     # Cross Convolution Downsample
@@ -343,3 +343,28 @@ def attempt_load(weights, map_location=None):
         return model  # return ensemble
 
 
+def attempt_load_v2(ckpt, state_dict, map_location=None):
+    model = Ensemble()
+
+    state_dict = intersect_dicts(state_dict, ckpt.state_dict(), exclude=[])  # intersect
+    ckpt.load_state_dict(state_dict, strict=False)  # load
+    
+    with torch.no_grad():
+        model.append(ckpt.float().fuse().eval())  # FP32 model
+
+    # Compatibility updates
+    for m in model.modules():
+        if type(m) in [nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU]:
+            m.inplace = True  # pytorch 1.7.0 compatibility
+        elif type(m) is nn.Upsample:
+            m.recompute_scale_factor = None  # torch 1.11.0 compatibility
+        elif type(m) is Conv:
+            m._non_persistent_buffers_set = set()  # pytorch 1.6.0 compatibility
+            
+    if len(model) == 1:
+        return model[-1]  # return model
+    else:
+        print('Ensemble created with %s\n' % weights)
+        for k in ['names', 'stride']:
+            setattr(model, k, getattr(model[-1], k))
+        return model  # return ensemble

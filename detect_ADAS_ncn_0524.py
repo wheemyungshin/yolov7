@@ -26,6 +26,35 @@ from torchvision.models import resnet101
 from PIL import Image
 import math
 
+def is_in_polygon(full_shape, roi_polygon, xyxy):
+    polygons = np.asarray([roi_polygon])
+    polygons = polygons.astype(np.int32)
+    polygons = polygons.reshape(1, -1, 2)
+
+    box = np.asarray([[
+        [xyxy[0].item(), xyxy[1].item()],
+        [xyxy[2].item(), xyxy[1].item()],
+        [xyxy[2].item(), xyxy[3].item()],
+        [xyxy[0].item(), xyxy[3].item()],
+    ]]).astype(np.int32)
+    # full_shape : (1080, 1920)
+    # roi_polygons : [x1, y1, x2, y2, x3, y3, ...]
+    # point: [x,y]
+    counts = []
+
+    roi_mask = np.zeros((full_shape[0], full_shape[1]))
+    roi_mask = cv2.fillPoly(roi_mask, pts=polygons, color=1)
+
+    box_mask = np.zeros((full_shape[0], full_shape[1]))
+    box_mask = cv2.fillPoly(box_mask, pts=box, color=1)
+
+    result_points = []
+    count = 0
+    if np.sum(roi_mask*box_mask) > 0:
+        return True
+    else:
+        return False
+    
 CAMERA_LENS_ANGLE = 57
 CAMERA_RATIO = math.tan((CAMERA_LENS_ANGLE*math.pi/180)/2)*2 # 57 -> 1.0859113992768736 # 90 -> 2.0
 OVERALL_HEIGHT_DICT = { # meter
@@ -35,23 +64,9 @@ OVERALL_HEIGHT_DICT = { # meter
     3 : 1.6, # 사람, 길지 않아서 왜곡 정도 낮음, 그러나 자세 등으로 오히려 작아질 가능성 큼
 }
 
-def calculate_distance(cxywh):
-    c = cxywh[0]
-    x = cxywh[1]
-    y = cxywh[2]
-    w = cxywh[3]
-    h = cxywh[4]
-
-    pixel_ratio = h # box height / 전체 이미지 height (0~1 사이 비율)
-
-    distance = (OVERALL_HEIGHT_DICT[c]) / (pixel_ratio) / CAMERA_RATIO # 거리 (m)
-    distance = round(distance, 3)
-
-    return distance
-
 def prev_weighted_value(prev_values, temp_value):
     max_prev_frame = len(prev_values)
-    temp_weight_ratio = 0.7
+    temp_weight_ratio = 0.3
     return sum([prev_values[-prev_frame_idx]*((max_prev_frame-prev_frame_idx+1)/(max_prev_frame*(max_prev_frame+1)/2)) 
             for prev_frame_idx in range(max_prev_frame,0,-1)])*(1-temp_weight_ratio) + temp_value*temp_weight_ratio
 
@@ -84,6 +99,19 @@ def _iou(A,B):
                         -np.maximum(A[low],B[low]))).prod(-1)
     return intrs / ((A[high]-A[low]).prod(-1)+(B[high]-B[low]).prod(-1)-intrs)
 
+def calculate_distance(cxywh):
+    c = cxywh[0]
+    x = cxywh[1]
+    y = cxywh[2]
+    w = cxywh[3]
+    h = cxywh[4]
+
+    pixel_ratio = h
+
+    distance = (OVERALL_HEIGHT_DICT[c]) / (pixel_ratio) / CAMERA_RATIO # 거리 (m)
+    distance = round(distance, 3)
+
+    return distance
 
 # Lane 데이터 Resize 전처리 정의
 class GroupRandomScale(object):
@@ -120,8 +148,8 @@ class GroupNormalize(object):
         return out_images
 
 
-def detect(save_img=False):    
-    source, weights, weights_person, view_img, save_txt, imgsz = opt.source, opt.weights, opt.weights_person, opt.view_img, opt.save_txt, opt.img_size
+def detect(save_img=False):
+    source, weights, weights_person, weights_lane, view_img, save_txt, imgsz = opt.source, opt.weights, opt.weights_person, opt.weights_lane, opt.view_img, opt.save_txt, opt.img_size
     save_img = not opt.nosave and not source.endswith('.txt')  # save inference images
 
     # Directories
@@ -151,6 +179,12 @@ def detect(save_img=False):
     elif len(opt.img_size)==1:
         model_person = TracedModel(model_person, device, tuple([opt.img_size[0], opt.img_size[0]]))
         
+    # Load model
+    model_lane = attempt_load(weights_lane, map_location=device)  # load FP32 model
+    if len(opt.img_size)==2:
+        model_lane = TracedModel(model_lane, device, tuple(opt.img_size))
+    elif len(opt.img_size)==1:
+        model_lane = TracedModel(model_lane, device, tuple([opt.img_size[0], opt.img_size[0]]))
 
     # Lane detection 데이터 전처리 정의
     data_mean = [0.485, 0.456, 0.406] #[103.939, 116.779, 123.68]
@@ -190,15 +224,19 @@ def detect(save_img=False):
     valid_idx_list = [np.array([]) for _ in range(max_prev_frame)]
     match_box_ids_y_list = [np.array([]) for _ in range(max_prev_frame)]
 
+    left_xyxy = []
+    right_xyxy = []
+    prev_left_xyxy = []
+    prev_right_xyxy = []
+
     t0 = time.time()
     for path, img, im0s, vid_cap in dataset:
-        if opt.square:
-            if img.shape[1] == square_size:
-                square_crop_margin = int((img.shape[2] - square_size) / 2)
-                img = img[:, :, square_crop_margin : square_crop_margin+square_size]
-            elif img.shape[2] == square_size:
-                square_crop_margin = int((img.shape[1] - square_size) / 2)
-                img = img[:, square_crop_margin : square_crop_margin+square_size, :]
+        img_shape_bef_crop = img.shape
+
+        square_crop_margin = int((img.shape[2] - img.shape[1]) / 2)
+        crop_x1 = int(img.shape[2]/2 - 96)
+        crop_x2 = int(img.shape[2]/2 + 96)
+        img = img[:, :, crop_x1 : crop_x2]
 
         t0_each = time.time()
         img = torch.from_numpy(img).to(device)
@@ -212,23 +250,85 @@ def detect(save_img=False):
         else:
             fps = 30
 
+        # Process detections
+        p, s, im0, frame = path, '', im0s, getattr(dataset, 'frame', 0)
+        clean_im0 = im0.copy()
+
         # Inference
         pred = model(img, augment=opt.augment)[0]
         pred_person = model_person(img, augment=opt.augment)[0]
+        pred_lane = model_lane(img, augment=opt.augment)[0]
 
         pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
         pred_person = non_max_suppression(pred_person, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
         pred_person[0][:, 5] = 3
 
+        pred_lane = non_max_suppression(pred_lane, conf_thres=0.15, iou_thres=0.85, classes=opt.classes, agnostic=opt.agnostic_nms)
+        pred_lane[0][:, 0] = pred_lane[0][:, 0] + crop_x1
+        pred_lane[0][:, 2] = pred_lane[0][:, 2] + crop_x1
+        
+        default_left_xyxy = [im0s.shape[1]*0.1, im0s.shape[0]*0.65, im0s.shape[1]*0.4, im0s.shape[0]-1]
+        default_right_xyxy = [im0s.shape[1]*0.6, im0s.shape[0]*0.65, im0s.shape[1]*0.9, im0s.shape[0]-1]
+        if len(left_xyxy) == 0:
+            left_xyxy = default_left_xyxy
+        if len(right_xyxy) == 0:
+            right_xyxy = default_right_xyxy
+        if len(prev_left_xyxy) == 0:
+            prev_left_xyxy = default_left_xyxy
+        if len(prev_right_xyxy) == 0:
+            prev_right_xyxy = default_right_xyxy
+        for i, det in enumerate(pred_lane):
+            if len(det):
+                scores = det[:, 4]
+                # Rescale boxes from img_size to im0 size
+                det[:, :4] = scale_coords(img_shape_bef_crop[1:], det[:, :4], im0.shape)#.round()d
+                    
+                best_ratio_left = 0
+                best_ratio_left_idx = None
+                best_ratio_right = 0
+                best_ratio_right_idx = None
+                for i, lane_box in enumerate(det[:, :4]):                        
+                    x = (lane_box[0]+lane_box[2])/2
+                    y = (lane_box[1]+lane_box[3])/2
+                    w = lane_box[2]-lane_box[0]
+                    h = lane_box[3]-lane_box[1]
+                    if x >= im0.shape[1]/2:
+                        if (im0.shape[1]-lane_box[0])*h/w > best_ratio_right :
+                            best_ratio_right = (im0.shape[1]-lane_box[0])*h/w
+                            best_ratio_right_idx = i
+                            right_xyxy = [lane_box[0], lane_box[1], lane_box[2], lane_box[3]]
+                    else:
+                        if lane_box[2]*h/w > best_ratio_left :
+                            best_ratio_left = lane_box[2]*h/w
+                            best_ratio_left_idx = i
+                            left_xyxy = [lane_box[0], lane_box[1], lane_box[2], lane_box[3]]
+
         if len(pred[0]) and len(pred_person[0]):
             pred = [torch.cat((pred[0], pred_person[0]), 0)]
         elif len(pred_person[0]):
             pred = pred_person
+        
+        pred[0][:, 0] = pred[0][:, 0] + crop_x1
+        pred[0][:, 2] = pred[0][:, 2] + crop_x1
 
-        # Process detections
-        p, s, im0, frame = path, '', im0s, getattr(dataset, 'frame', 0)
-
-        clean_im0 = im0.copy()
+        
+        '''
+        cv2.line(im0, (int(roi_polygon[0]),
+                        int(roi_polygon[1])), 
+                        (int(roi_polygon[2]),
+                        int(roi_polygon[3])),
+                        (255,0,255), thickness=1) 
+        cv2.line(im0, (int(roi_polygon[0]),
+                        int(roi_polygon[1])), 
+                        (int(roi_polygon[4]),
+                        int(roi_polygon[5])),
+                        (255,0,255), thickness=1) 
+        cv2.line(im0, (int(roi_polygon[2]),
+                        int(roi_polygon[3])), 
+                        (int(roi_polygon[4]),
+                        int(roi_polygon[5])),
+                        (255,0,255), thickness=1) 
+        '''
 
         if opt.frame_ratio <= 0:
             frame_ratio = fps
@@ -237,7 +337,84 @@ def detect(save_img=False):
         save_path = str(save_dir / p.name)  # img.jpg
         txt_path = str(save_dir / 'labels' / p.stem) + ('' if dataset.mode == 'image' else f'_{frame}')  # img.txt
         gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
-        gn_to = torch.tensor(img.shape)[[3, 2, 3, 2]]
+
+        lines_rightxyxy_origin = [str(int(right_xyxy[0])), str(int(right_xyxy[1])), str(int(right_xyxy[2])), str(int(right_xyxy[3]))]
+        lines_leftxyxy_origin = [str(int(left_xyxy[0])), str(int(left_xyxy[1])), str(int(left_xyxy[2])), str(int(left_xyxy[3]))]
+
+        # prev tracking
+        #left_xyxy = [l_item*0.1 + prev_l_item*0.9 for l_item, prev_l_item in zip(left_xyxy, prev_left_xyxy)]
+        #right_xyxy = [r_item*0.1 + prev_r_item*0.9 for r_item, prev_r_item in zip(right_xyxy, prev_right_xyxy)]
+
+
+        a_l = (left_xyxy[3] - left_xyxy[1]) / (left_xyxy[0] - left_xyxy[2])
+        b_l = left_xyxy[1] - a_l*left_xyxy[2]
+        left_x_intercept = -b_l/a_l
+
+        a_r = (right_xyxy[3] - right_xyxy[1]) / (right_xyxy[2] - right_xyxy[0])
+        b_r = right_xyxy[1] - a_r*right_xyxy[0]
+        right_x_intercept = -b_r/a_r
+
+        left_xyxy[1] = im0s.shape[0]*0.6
+        left_xyxy[0] = (left_xyxy[1] - b_l) / a_l
+        right_xyxy[1] = im0s.shape[0]*0.6
+        right_xyxy[2] = (right_xyxy[1] - b_r) / a_r
+
+        #temp
+        if left_xyxy[1] < right_xyxy[1]:
+            left_xyxy[1] = right_xyxy[1]
+            left_xyxy[2] = (left_xyxy[1] - b_l) / a_l
+        else:
+            right_xyxy[1] = left_xyxy[1]
+            right_xyxy[0] = (right_xyxy[1] - b_r) / a_r
+
+        left_xyxy[3] = im0s.shape[0]-1
+        left_xyxy[0] = (left_xyxy[3] - b_l) / a_l
+        right_xyxy[3] = im0s.shape[0]-1
+        right_xyxy[2] = (right_xyxy[3] - b_r) / a_r
+            
+        if left_xyxy[2] > right_xyxy[0]:
+            #left_xyxy = default_left_xyxy
+            #right_xyxy = default_right_xyxy
+            x_cross = (b_r - b_l) / (a_l - a_r)
+            y_cross = a_l * x_cross + b_l
+            left_xyxy[2] = x_cross
+            left_xyxy[1] = y_cross
+            right_xyxy[0] = x_cross
+            right_xyxy[1] = y_cross
+            print(x_cross, y_cross)
+
+        roi_polygon = [
+            int(left_xyxy[0]), int(left_xyxy[3]),
+            int(left_xyxy[2]), int(left_xyxy[1]),
+            int(right_xyxy[0]), int(right_xyxy[1]),
+            int(right_xyxy[2]), int(right_xyxy[3]),
+        ]
+
+        prev_left_xyxy = left_xyxy
+        prev_right_xyxy = right_xyxy
+        
+        draw_polygons = np.asarray([roi_polygon])
+        draw_polygons = draw_polygons.astype(np.int32)
+        draw_polygons = draw_polygons.reshape(1, -1, 2)
+        fill_image = im0.copy()
+        fill_image = cv2.fillPoly(fill_image, pts=draw_polygons, color=(255, 0, 255))
+        alpha = 0.5
+        im0 = cv2.addWeighted(fill_image, alpha, im0, 1 - alpha, 0)
+        cv2.line(im0, (int(right_xyxy[0]),int(right_xyxy[1])), (int(right_xyxy[2]),int(right_xyxy[3])), [255, 0, 255], 3)
+        cv2.line(im0, (int(left_xyxy[2]),int(left_xyxy[1])), (int(left_xyxy[0]),int(left_xyxy[3])), [255, 0, 255], 3)
+
+        if save_txt:
+            lines_rightxyxy_to_draw = [str(int(right_xyxy[0])), str(int(right_xyxy[1])), str(int(right_xyxy[2])), str(int(right_xyxy[3]))]
+            lines_leftxyxy_to_draw = [str(int(left_xyxy[0])), str(int(left_xyxy[1])), str(int(left_xyxy[2])), str(int(left_xyxy[3]))]
+            with open(txt_path + '.txt', 'a') as f:
+                f.write('Right line before processing : ' + ' '.join(lines_rightxyxy_origin))
+                f.write('\n')
+                f.write('Left line before processing : ' + ' '.join(lines_leftxyxy_origin))
+                f.write('\n')
+                f.write('Right line after processing : ' + ' '.join(lines_rightxyxy_to_draw))
+                f.write('\n')
+                f.write('Left line after processing : ' + ' '.join(lines_leftxyxy_to_draw))
+                f.write('\n')
 
         prev_boxes = prev_boxes_list[-1]
 
@@ -259,7 +436,7 @@ def detect(save_img=False):
                 if len(det):
                     scores = det[:, 4]
                     # Rescale boxes from img_size to im0 size
-                    det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape)
+                    det[:, :4] = scale_coords(img_shape_bef_crop[1:], det[:, :4], im0.shape)
 
                     temp_boxes = det[:, :4].detach().cpu().float().numpy()
                     if len(prev_boxes) and len(temp_boxes):
@@ -286,12 +463,8 @@ def detect(save_img=False):
                     # Write results
                     temp_distances = []
                     for temp_box_id, (*xyxy, conf, cls) in enumerate(det[:, :6]):
-                        print(temp_box_id)
+                        warning = "Safe"
                         xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
-                        if save_txt:  # Write to file                                
-                            line = (cls, *xywh, conf) if opt.save_conf else (cls, *xywh)  # label format
-                            with open(txt_path + '.txt', 'a') as f:
-                                f.write(('%g ' * len(line)).rstrip() % line + '\n')
 
                         temp_distance = calculate_distance([int(cls), float(xywh[0]), float(xywh[1]), float(xywh[2]), float(xywh[3])])
                         temp_distances.append(temp_distance)
@@ -337,17 +510,30 @@ def detect(save_img=False):
                             if opt.debug:
                                 label = f'{names[int(cls)]} {conf:.2f} {distance_str}'
                                 plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
-                            else:
-                                if distance < distance_thr and len(all_prev_distances):
-                                    if max(all_prev_distances) - distance > 1:
-                                        warning_color = [16, 16, 128]
+                            else:                           
+                                if is_in_polygon(im0.shape[:2], roi_polygon, xyxy):
+                                    if distance < distance_thr and len(all_prev_distances):
+                                        warning_color = [16, 32, 160]
+                                        warning = "Warning"
                                     else:
-                                        warning_color = [16, 96, 128]
+                                        warning_color = [64, 128, 16]
+                                        warning = "Safe"
                                 else:
-                                    warning_color = [64, 128, 16]
+                                    warning_color = [160, 48, 16]
+                                    warning = "Out"
 
                                 label = distance_str
                                 plot_one_box(xyxy, im0, label=label, color=warning_color, line_thickness=3)
+
+                                line = [str(xyxy[0].item()), 
+                                    str(xyxy[1].item()),
+                                    str(xyxy[2].item()),
+                                    str(xyxy[3].item()),
+                                    str(cls.item()), distance_str, warning]
+                                if save_txt:
+                                    with open(txt_path + '.txt', 'a') as f:
+                                        f.write(' '.join(line))
+                                        f.write('\n')
 
                     
                     prev_boxes = temp_boxes
@@ -410,6 +596,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', nargs='+', type=str, default='yolov7.pt', help='model.pt path(s)')
     parser.add_argument('--weights-person', nargs='+', type=str, default='yolov7.pt', help='model.pt path(s)')
+    parser.add_argument('--weights-lane', nargs='+', type=str, default='yolov7.pt', help='model.pt path(s)')
     parser.add_argument('--source', type=str, default='inference/images', help='source')  # file/folder
     parser.add_argument('--img-size', nargs='+', type=int, default=[192,256], help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
