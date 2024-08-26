@@ -26,6 +26,7 @@ from torchvision.models import resnet101
 from PIL import Image
 import math
 
+MAPY = np.load('../data/mapy.npy')
 CAMERA_LENS_ANGLE = 57
 CAMERA_RATIO = math.tan((CAMERA_LENS_ANGLE*math.pi/180)/2)*2 # 57 -> 1.0859113992768736 # 90 -> 2.0
 OVERALL_HEIGHT_DICT = { # meter
@@ -35,7 +36,7 @@ OVERALL_HEIGHT_DICT = { # meter
     3 : 1.6, # 사람, 길지 않아서 왜곡 정도 낮음, 그러나 자세 등으로 오히려 작아질 가능성 큼
 }
 
-def calculate_distance(cxywh):
+def calculate_distance(cxywh, shape):
     c = cxywh[0]
     x = cxywh[1]
     y = cxywh[2]
@@ -43,6 +44,15 @@ def calculate_distance(cxywh):
     h = cxywh[4]
 
     pixel_ratio = h # box height / 전체 이미지 height (0~1 사이 비율)
+
+    x1 = min(int((x-w/2)*shape[1]), shape[1]-1)
+    y1 = min(int((y-h/2)*shape[0]), shape[0]-1)
+    x2 = min(int((x+w/2)*shape[1]), shape[1]-1)
+    y2 = min(int((y+h/2)*shape[0]), shape[0]-1)
+    y1_dist = (MAPY[y1, x1]+MAPY[y1, x2])/2
+    y2_dist = (MAPY[y2, x1]+MAPY[y2, x2])/2
+    pixel_ratio = (y2_dist - y1_dist) / shape[0]
+    print("Bef : ", h , " / Aft : ", pixel_ratio)
 
     distance = (OVERALL_HEIGHT_DICT[c]) / (pixel_ratio) / CAMERA_RATIO # 거리 (m)
     distance = round(distance, 3)
@@ -293,7 +303,7 @@ def detect(save_img=False):
                             with open(txt_path + '.txt', 'a') as f:
                                 f.write(('%g ' * len(line)).rstrip() % line + '\n')
 
-                        temp_distance = calculate_distance([int(cls), float(xywh[0]), float(xywh[1]), float(xywh[2]), float(xywh[3])])
+                        temp_distance = calculate_distance([int(cls), float(xywh[0]), float(xywh[1]), float(xywh[2]), float(xywh[3])], im0.shape[:2])
                         temp_distances.append(temp_distance)
                         
                         all_prev_distances = []

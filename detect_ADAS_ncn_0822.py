@@ -100,17 +100,21 @@ def _iou(A,B):
                         -np.maximum(A[low],B[low]))).prod(-1)
     return intrs / ((A[high]-A[low]).prod(-1)+(B[high]-B[low]).prod(-1)-intrs)
 
-def calculate_distance(cxywh):
+def calculate_distance(cxywh, crop_window=[0,0,1,1]):
+    #crop window : [x1, y1, x2, y2]
     c = cxywh[0]
     x = cxywh[1]
     y = cxywh[2]
     w = cxywh[3]
     h = cxywh[4]
 
-    pixel_ratio = h
+    if y + h/2 > crop_window[3]-0.001 and (crop_window[0]+0.01 < x-w/2 and x+w/2 < crop_window[2]-0.01):
+        distance = 2
+    else:
+        pixel_ratio = h
 
-    distance = (OVERALL_HEIGHT_DICT[c]) / (pixel_ratio) / CAMERA_RATIO # 거리 (m)
-    distance = round(distance, 3)
+        distance = (OVERALL_HEIGHT_DICT[c]) / (pixel_ratio) / CAMERA_RATIO # 거리 (m)
+        distance = round(distance, 3)
 
     return distance
 
@@ -264,12 +268,11 @@ def detect(save_img=False):
         pred_person = model_person(img, augment=opt.augment)[0]
         pred_lane = model_lane(img, augment=opt.augment)[0]
 
-        #NMS
-        pred = non_max_suppression(pred, opt.conf_thres-0.4, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms) # threshold-0.4 적용
+        pred = non_max_suppression(pred, opt.conf_thres-0.4, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
         pred_person = non_max_suppression(pred_person, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
         pred_person[0][:, 5] = 3
         
-        # score 보정 시작
+        # score 보정
         if prev_det is not None:
             pred_xyxy = pred[0][:, :4].clone().detach().cpu().float().numpy()
 
@@ -512,8 +515,8 @@ def detect(save_img=False):
                     for temp_box_id, (*xyxy, conf, cls) in enumerate(det[:, :6]):
                         warning = "Safe"
                         xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
-
-                        temp_distance = calculate_distance([int(cls), float(xywh[0]), float(xywh[1]), float(xywh[2]), float(xywh[3])])
+                        temp_distance = calculate_distance([int(cls), float(xywh[0]), float(xywh[1]), float(xywh[2]), float(xywh[3])],
+                            [crop_x1/imgsz[1], crop_y1/imgsz[0], crop_x2/imgsz[1], crop_y2/imgsz[0]])
                         temp_distances.append(temp_distance)
                         
                         all_prev_distances = []
@@ -624,7 +627,7 @@ def detect(save_img=False):
                             if opt.square:
                                 w = min(w, h)
                                 h = min(w, h)
-                            vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
+                            vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (im0.shape[1], im0.shape[0]))
                         if opt.save_frame:
                             cv2.imwrite(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'.jpg', im0)
                             if len(det) > 0:

@@ -79,6 +79,60 @@ def fix_segment(l):
     l = l_fix
     return l
 
+def random_distortion(im, label, size, k1_range=0.2, k2_range=0.1):
+    k1 = random.random()*k1_range*2 - k1_range
+    k2 = random.random()*k2_range
+    k3 = 0
+
+    h, w = size
+
+    # 매핑 배열 생성 ---②
+    mapy, mapx = np.indices((h, w),dtype=np.float32)
+
+    # 중앙점 좌표로 -1~1 정규화 및 극좌표 변환 ---③
+    mapx = 2*mapx/(w-1)-1
+    mapy = 2*mapy/(h-1)-1
+    r, theta = cv2.cartToPolar(mapx, mapy)
+
+    # 방사 왜곡 변영 연산 ---④
+    ru = r*(1+k1*(r**2) + k2*(r**4) + k3*(r**6)) 
+
+    # 직교좌표 및 좌상단 기준으로 복원 ---⑤
+    mapx, mapy = cv2.polarToCart(ru, theta)
+    mapx = ((mapx + 1)*w-1)/2
+    mapy = ((mapy + 1)*h-1)/2
+    # 리매핑 ---⑥
+    im = cv2.remap(im,mapx,mapy,cv2.INTER_LINEAR)
+
+    xywhs = label[:, 1:].copy()
+    xyxys = label[:, 1:].copy()
+    xyxys[:, 0] = (xywhs[:, 0] - xywhs[:, 2]*0.5) * w
+    xyxys[:, 1] = (xywhs[:, 1] - xywhs[:, 3]*0.5) * h
+    xyxys[:, 2] = (xywhs[:, 0] + xywhs[:, 2]*0.5) * w 
+    xyxys[:, 3] = (xywhs[:, 1] + xywhs[:, 3]*0.5) * h
+
+    '''
+    for i, xyxy in enumerate(xyxys):
+        x1 = max(min(int(xyxy[0]), w-1), 0)
+        y1 = max(min(int(xyxy[1]), h-1), 0)
+        x2 = max(min(int(xyxy[2]), w-1), 0)
+        y2 = max(min(int(xyxy[3]), h-1), 0)
+        x1_dist = max(min((mapx[y1, x1]+mapx[y2, x1])/2, w-1), 0)
+        y1_dist = max(min((mapy[y1, x1]+mapy[y1, x2])/2, h-1), 0)
+        x2_dist = max(min((mapx[y1, x2]+mapx[y2, x2])/2, w-1), 0)
+        y2_dist = max(min((mapy[y2, x1]+mapy[y2, x2])/2, h-1), 0)
+        x_dist = ((x1_dist + x2_dist)/2) / w
+        y_dist = ((y1_dist + y2_dist)/2) / h
+        w_dist = (x2_dist - x1_dist) / w
+        h_dist = (y2_dist - y1_dist) / h
+        label[i, 1] = x_dist
+        label[i, 2] = y_dist
+        label[i, 3] = w_dist
+        label[i, 4] = h_dist
+    '''
+
+    return im, label
+
 def natural_minmax_crop(image, targets, base_size, min_label_size_limit=None, max_label_size_limit=None):#16, 96
     base_h, base_w = base_size
     height, width = image.shape[:2]
@@ -520,7 +574,6 @@ class LoadImages:  # for inference
             img = letterbox(img0, self.img_size, stride=self.stride)[0]
         else:
             img = cv2.resize(img0, (self.img_size[1], self.img_size[0]))
-
 
         # Convert
         img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
@@ -1032,8 +1085,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     nf += 1  # label found
                     with open(lb_file, 'r') as f:
                         l = [x.split() for x in f.read().strip().splitlines()]
-
-
                         if load_seg:  # is segment
                             if any([len(x) > 8 for x in l]):  # is segment
                                 classes = np.array([x[0] for x in l], dtype=np.float32)
@@ -1151,6 +1202,9 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             #img, (h0, w0), (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
             img, (h0, w0), (h, w), labels = load_image_and_label(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
+
+            if hyp is not None and 'distortion' in hyp: 
+                img, labels = random_distortion(img, labels, (h, w), k1_range=hyp['distortion'][0], k2_range=hyp['distortion'][1])
 
             segments = self.segments[index].copy()
             #labels = self.labels[index].copy()
@@ -2200,6 +2254,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                 img[crop_y1:crop_y2,crop_x1:crop_x2, 1] = (1-random_mask)*img[crop_y1:crop_y2,crop_x1:crop_x2, 1] + random_mask*burn_crop[:,:,1]
                                 img[crop_y1:crop_y2,crop_x1:crop_x2, 2] = (1-random_mask)*img[crop_y1:crop_y2,crop_x1:crop_x2, 2] + random_mask*burn_crop[:,:,2]
                             labels[idx][0] = 0
+        
+
 
         nL = len(labels)  # number of labels
         if nL:
@@ -2457,6 +2513,9 @@ def load_mosaic(self, hyp, index):
 
         img, _, (h, w), labels = load_image_and_label(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
+        if hyp is not None and 'distortion' in hyp: 
+            img, labels = random_distortion(img, labels, (h, w), k1_range=hyp['distortion'][0], k2_range=hyp['distortion'][1])
+
         # Labels
         #labels, segments = self.labels[index].copy(), self.segments[index].copy()
         segments = self.segments[index].copy()
@@ -2684,6 +2743,10 @@ def load_mosaic9(self, hyp, index):
         #img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
         img, _, (h, w), labels = load_image_and_label(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
+
+        if hyp is not None and 'distortion' in hyp: 
+            img, labels = random_distortion(img, labels, (h, w), k1_range=hyp['distortion'][0], k2_range=hyp['distortion'][1])
+
         # Labels
         #labels, segments = self.labels[index].copy(), self.segments[index].copy()
         segments = self.segments[index].copy()

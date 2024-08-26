@@ -84,6 +84,7 @@ def detect(save_img=False):
     print(names)
     
     colors = [[0, 255, 0]]#[[random.randint(0, 255) for _ in range(3)] for _ in names]
+
     if opt.seg:
         if len(opt.valid_segment_labels) > 0:
             nm = len(opt.valid_segment_labels)+1
@@ -267,16 +268,6 @@ def detect(save_img=False):
                         y = (lane_box[1]+lane_box[3])/2
                         w = lane_box[2]-lane_box[0]
                         h = lane_box[3]-lane_box[1]
-                        '''
-                        if x >= im0.shape[1]/2:
-                            if h*h/w > best_ratio_right :
-                                best_ratio_right = h*h/w 
-                                best_ratio_right_idx = i
-                        else:
-                            if h*h/w > best_ratio_left :
-                                best_ratio_left = h*h/w 
-                                best_ratio_left_idx = i
-                        '''
                         if x >= im0.shape[1]/2:
                             if (im0.shape[1]-lane_box[0])*h/w > best_ratio_right :
                                 best_ratio_right = (im0.shape[1]-lane_box[0])*h/w

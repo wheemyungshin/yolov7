@@ -7,12 +7,14 @@ import torch
 import torch.backends.cudnn as cudnn
 from numpy import random
 
-from models.experimental import attempt_load
+from models.experimental import attempt_load, attempt_load_v2
 from utils.datasets import LoadStreams, LoadImages
 from utils.general import check_img_size, check_requirements, check_imshow, non_max_suppression, apply_classifier, \
     scale_coords, xyxy2xywh, strip_optimizer, set_logging, increment_path, non_max_suppression_seg, process_mask, scale_masks, process_semantic_mask
 from utils.plots import plot_one_box, plot_masks
 from utils.torch_utils import select_device, load_classifier, time_synchronized, TracedModel
+from models.yolo import Model
+import collections
 
 import json
 import os
@@ -32,6 +34,7 @@ def detect(save_img=False):
     print(bbox_num_per_size)
     '''
     source, weights, view_img, save_txt, imgsz, trace = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, not opt.no_trace
+    cfg, nc = opt.cfg, opt.nc
     save_img = not opt.nosave and not source.endswith('.txt')  # save inference images
     webcam = source.isnumeric() or source.endswith('.txt') or source.lower().startswith(
         ('rtsp://', 'rtmp://', 'http://', 'https://'))
@@ -47,7 +50,28 @@ def detect(save_img=False):
     print("HALF: ", half)
 
     # Load model
-    model = attempt_load(weights, map_location=device)  # load FP32 model
+    if cfg and nc:
+        nc = nc
+        ckpt_weights = torch.load(weights[0], map_location=device)  # load checkpoint
+
+        if type(ckpt_weights['ema']) is Model:
+            state_dict = ckpt_weights['ema'].float().state_dict()  # to FP32
+        elif type(ckpt_weights['ema']) is collections.OrderedDict:
+            state_dict = ckpt_weights['ema']  # to FP32
+        else:
+            assert (type(ckpt_weights['ema']) is Model or type(ckpt_weights['ema']) is collections.OrderedDict), "Invalid model types to load"
+
+        ckpt = Model(cfg, ch=3, nc=nc, qat=False).to(device)  # create#, nm=nm).to(device)  # create
+        #if opt.qat:
+        #    fuse_modules(ckpt)
+        model = attempt_load_v2(ckpt, state_dict, map_location=device)  # load FP32 model
+    else:
+        assert not cfg and not nc
+        model = attempt_load(weights, map_location=device)  # load FP32 model
+        if not hasattr(model, 'qat'):
+            setattr(model, 'qat', False)
+
+    #model = attempt_load(weights, map_location=device)  # load FP32 model
     stride = int(model.stride.max())  # model stride
     #imgsz = check_img_size(imgsz, s=stride)  # check img_size
 
@@ -81,6 +105,7 @@ def detect(save_img=False):
 
     # Get names and colors
     names = model.module.names if hasattr(model, 'module') else model.names
+    
     colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
     if opt.seg:
         if len(opt.valid_segment_labels) > 0:
@@ -209,6 +234,8 @@ def detect(save_img=False):
                 gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
                 gn_to = torch.tensor(img.shape)[[3, 2, 3, 2]] 
                 if len(det):
+                    print(det)
+
                     if opt.seg:
                         #masks = process_mask(proto[i], det[:, 6:], det[:, :4], img.shape[2:], upsample=True)
                         masks = process_semantic_mask(proto[i], det[:, 6:], det[:, :6], img.shape[2:], upsample=True)
@@ -416,6 +443,8 @@ if __name__ == '__main__':
     parser.add_argument('--objcam', action='store_true', help='visualize extracted objectness scores.')
     parser.add_argument('--no-ratio-maintain', action='store_true', help='maintain input ratio')
     parser.add_argument('--min-size', default=0, type=int, help='save frame ratio')
+    parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
+    parser.add_argument('--nc', type=int, default=0, help='number of class')
     
     opt = parser.parse_args()
     print(opt)
