@@ -83,7 +83,7 @@ def detect(save_img=False):
     names = model.module.names if hasattr(model, 'module') else model.names
     print(names)
     
-    colors = [[255, 255, 100]]#[[random.randint(0, 255) for _ in range(3)] for _ in names]
+    colors = [255, 255, 100]#[[random.randint(0, 255) for _ in range(3)] for _ in names]
     if opt.seg:
         if len(opt.valid_segment_labels) > 0:
             nm = len(opt.valid_segment_labels)+1
