@@ -9,7 +9,7 @@ import torch
 import yaml
 from tqdm import tqdm
 
-from models.experimental import attempt_load, fuse_modules
+from models.experimental import attempt_load, attempt_load_v2, fuse_modules
 from utils.datasets import create_dataloader
 from utils.general import coco80_to_coco91_class, check_dataset, check_file, check_img_size, check_requirements, \
     box_iou, non_max_suppression, scale_coords, xyxy2xywh, xywh2xyxy, set_logging, increment_path, colorstr, non_max_suppression_seg, \
@@ -53,6 +53,7 @@ def test(data,
          merge_label=[],
          opt_infinite_names=False,
          qat=False):
+    
     # Initialize/load model and set device
     training = model is not None
     if training:  # called by train.py
@@ -68,23 +69,24 @@ def test(data,
         
         if opt.cfg:
             nc = len(merge_label)
-            ckpt = torch.load(weights[0], map_location=device)  # load checkpoint
-            if type(ckpt['model']) is Model:
-                state_dict = ckpt['model'].float().state_dict()  # to FP32
-            elif type(ckpt['model']) is collections.OrderedDict:
-                state_dict = ckpt['model']  # to FP32
+            ckpt_weights = torch.load(opt.weights[0], map_location=device)  # load checkpoint
+
+            if type(ckpt_weights['ema']) is Model:
+                state_dict = ckpt_weights['ema'].float().state_dict()  # to FP32
+            elif type(ckpt_weights['ema']) is collections.OrderedDict:
+                state_dict = ckpt_weights['ema']  # to FP32
             else:
-                assert (type(ckpt['model']) is Model or type(ckpt['model']) is collections.OrderedDict), "Invalid model types to load"
+                assert (type(ckpt_weights['ema']) is Model or type(ckpt_weights['ema']) is collections.OrderedDict), "Invalid model types to load"
 
-            model = Model(opt.cfg, ch=3, nc=nc, qat=qat).to(device)  # create#, nm=nm).to(device)  # create
-
-            state_dict = intersect_dicts(state_dict, model.state_dict(), exclude=[])  # intersect
-            #print(state_dict.keys())
-            model.load_state_dict(state_dict, strict=False)  # load
+            ckpt = Model(opt.cfg, ch=3, nc=nc, qat=qat).to(device)  # create#, nm=nm).to(device)  # create
+            #if opt.qat:
+            #    fuse_modules(ckpt)
+            model = attempt_load_v2(ckpt, state_dict, map_location=device)  # load FP32 model
         else:
-        # Load model
-            model = attempt_load(weights, map_location=device)  # load FP32 model
-
+            model = attempt_load(opt.weights, map_location=device)  # load FP32 model
+            if not hasattr(model, 'qat'):
+                setattr(model, 'qat', False)
+        
         gs = max(int(model.stride.max()), 32)  # grid size (max stride)
         if len(imgsz) == 2:
             imgsz = [check_img_size(x, gs) for x in imgsz]  # verify imgsz are gs-multiples
@@ -114,8 +116,11 @@ def test(data,
     niou = iouv.numel()
 
     #fuse models
+    '''
     if qat and not training:
-        #fuse_modules(model)
+        
+        print(device)
+        #model = model.cpu()
         
         # The old 'fbgemm' is still available but 'x86' is the recommended default.
         model.qconfig = torch.quantization.get_default_qconfig('x86')
@@ -123,6 +128,7 @@ def test(data,
         torch.quantization.prepare(model, inplace=True)
         torch.quantization.convert(model, inplace=True)
         print('Qauntization-Test')
+    '''
 
     # Logging
     log_imgs = 0
@@ -501,7 +507,7 @@ if __name__ == '__main__':
     parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
     parser.add_argument('--data', type=str, default='data/coco.yaml', help='*.data path')
     parser.add_argument('--batch-size', type=int, default=32, help='size of each image batch')
-    parser.add_argument('--img-size', nargs='+', type=int, default=[640, 640], help='[train, test] image sizes')
+    parser.add_argument('--img-size', nargs='+', type=int, default=[640, 640], help='[height, width] image sizes')
     parser.add_argument('--conf-thres', type=float, default=0.001, help='object confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.65, help='IOU threshold for NMS')
     parser.add_argument('--task', default='val', help='train, val, test, speed or study')

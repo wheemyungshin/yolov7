@@ -42,6 +42,15 @@ def test(data,
          merge_label=[]):         
     gs = 32  
 
+    if len(imgsz) == 2:
+        imgsz = [check_img_size(x, gs) for x in imgsz]  # verify imgsz are gs-multiples
+        imgsz = tuple(imgsz)
+    else:
+        imgsz = check_img_size(imgsz[0], gs)  # verify imgsz are gs-multiples
+        imgsz = tuple([imgsz, imgsz])
+    
+    print(imgsz)
+
     fd_model = tf.lite.Interpreter(opt.weights)    
     fd_model2= tf.lite.Interpreter(opt.weights2)
     fd_model.allocate_tensors()
@@ -61,7 +70,7 @@ def test(data,
     
     valid_idx = data.get('valid_idx', None)
     
-    dataloader = create_dataloader(data[task], tuple([imgsz, imgsz]), batch_size, gs, opt, rect=False,
+    dataloader = create_dataloader(data[task], imgsz, batch_size, gs, opt, rect=False,
                                     prefix=colorstr(f'{task}: '), valid_idx=valid_idx, load_seg=False, ratio_maintain=True)[0]
 
     seen = 0
@@ -107,7 +116,10 @@ def test(data,
 
         fd_output_1 = fd_model2.get_tensor(fd_model2.get_output_details()[0]['index'])
         fd_output_1 = fd_output_1[fd_output_1[:, -1] > conf]
-        fd_output_1 = fd_output_1.clip(0, imgsz)
+        fd_output_1[:, 1] = fd_output_1[:, 1].clip(0, imgsz[1])
+        fd_output_1[:, 2] = fd_output_1[:, 2].clip(0, imgsz[0])
+        fd_output_1[:, 3] = fd_output_1[:, 3].clip(0, imgsz[1])
+        fd_output_1[:, 4] = fd_output_1[:, 4].clip(0, imgsz[0])
 
         out = np.zeros((fd_output_1.shape[0], 6))
         out[:, 0] = fd_output_1[:, 1]
@@ -203,7 +215,7 @@ if __name__ == '__main__':
     parser.add_argument('--conf', type=float, default=0.4, help='Confidence threshold')
     parser.add_argument('--data', type=str, default='data/coco.yaml', help='*.data path')
     parser.add_argument('--batch-size', type=int, default=32, help='size of each image batch')
-    parser.add_argument('--img-size', type=int, default=128, help='image sizes')
+    parser.add_argument('--img-size', nargs='+', type=int, default=[128, 128], help='[height, width] image sizes')
     parser.add_argument('--iou-thres', type=float, default=0.65, help='IOU threshold for NMS')
     
     parser.add_argument('--single-cls', action='store_true', help='treat as single-class dataset')

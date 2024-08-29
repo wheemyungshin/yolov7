@@ -66,7 +66,7 @@ OVERALL_HEIGHT_DICT = { # meter
 
 def prev_average_value(prev_values, temp_value):
     return (sum(prev_values)+temp_value) / (len(prev_values)+1)
-
+    
 def prev_weighted_value(prev_values, temp_value):
     max_prev_frame = len(prev_values)
     temp_weight_ratio = 0.3
@@ -164,8 +164,6 @@ def detect(save_img=False):
     device = select_device(opt.device)
 
     square_size = min(opt.img_size)
-
-    prev_det = None
 
     # Load model
     model = attempt_load(weights, map_location=device)  # load FP32 model
@@ -265,20 +263,6 @@ def detect(save_img=False):
         pred = model(img, augment=opt.augment)[0]
         pred_person = model_person(img, augment=opt.augment)[0]
         pred_lane = model_lane(img, augment=opt.augment)[0]
-
-        # score 보정
-        if prev_det is not None:
-            pred_xywh = pred[0, :, :4].detach().cpu().float().numpy()
-            pred_xyxy = pred_xywh.copy()
-            pred_xyxy[:, 0] = pred_xywh[:, 0] - pred_xywh[:, 2]*0.5
-            pred_xyxy[:, 1] = pred_xywh[:, 1] - pred_xywh[:, 3]*0.5
-            pred_xyxy[:, 2] = pred_xywh[:, 0] + pred_xywh[:, 2]*0.5
-            pred_xyxy[:, 3] = pred_xywh[:, 1] + pred_xywh[:, 3]*0.5
-
-            tracking_iou_matrix = _iou(prev_det, pred_xyxy)
-            tracking_thr_score = 0.7
-            tracking_valid_idx = np.nonzero(np.max(tracking_iou_matrix, axis=0)>=tracking_thr_score)[0]
-            pred[0, tracking_valid_idx, 4:] = pred[0, tracking_valid_idx, 4:]*0.5+0.5
 
         pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
         pred_person = non_max_suppression(pred_person, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
@@ -406,6 +390,7 @@ def detect(save_img=False):
             left_xyxy[1] = y_cross
             right_xyxy[0] = x_cross
             right_xyxy[1] = y_cross
+            print(x_cross, y_cross)
 
         roi_polygon = [
             int(left_xyxy[0]), int(left_xyxy[3]),
@@ -458,13 +443,6 @@ def detect(save_img=False):
                         im0 = im0[square_crop_margin : square_crop_margin+short_side, :, :]
                         
                 if len(det):
-                    prev_det = det[:, :4].clone().detach().cpu().float().numpy()
-
-                    prev_det[:, 0] = prev_det[:, 0] - crop_x1
-                    prev_det[:, 1] = prev_det[:, 1] - crop_y1
-                    prev_det[:, 2] = prev_det[:, 2] - crop_x1
-                    prev_det[:, 3] = prev_det[:, 3] - crop_y1
-
                     scores = det[:, 4]
                     # Rescale boxes from img_size to im0 size
                     det[:, :4] = scale_coords(img_shape_bef_crop[1:], det[:, :4], im0.shape)
@@ -483,23 +461,8 @@ def detect(save_img=False):
                         valid_idx = np.array([])
                         match_box_ids_y = np.array([])
                     
-                    '''
-                    if len(prev_boxes) > len(valid_idx):
-                        for box_idx in range(len(prev_boxes)):
-                            if box_idx not in valid_idx:
-                                temp_boxes.append(prev_boxes[box_idx])
-                    '''
-
                     valid_idx_list = update_list(valid_idx_list, valid_idx)
                     match_box_ids_y_list = update_list(match_box_ids_y_list, match_box_ids_y)
-
-
-                    print("temp_boxes")
-                    print(len(temp_boxes))
-                    print("valid_idx_list")
-                    print(valid_idx_list)
-                    print("match_box_ids_y_list")
-                    print(match_box_ids_y_list)
 
                     # Print results
                     for c in det[:, 5].unique():
@@ -526,7 +489,7 @@ def detect(save_img=False):
                                 else:
                                     prev_box_ids.append(prev_box_id)
                                     all_prev_distances.append(prev_distance)
-                            distance = round(prev_average_value(all_prev_distances, temp_distance), 3)
+                            distance = round(prev_weighted_value(all_prev_distances, temp_distance), 3)
                             
                             x1_list, y1_list, x2_list,y2_list = [], [], [], []
                             for prev_frame_idx in range(max_prev_frame,0,-1):
@@ -543,10 +506,10 @@ def detect(save_img=False):
                                     y2_list.append(xyxy[3].item())
 
                             xyxy = np.array([
-                                prev_average_value(x1_list, xyxy[0].item()),
-                                prev_average_value(y1_list, xyxy[1].item()),
-                                prev_average_value(x2_list, xyxy[2].item()),
-                                prev_average_value(y2_list, xyxy[3].item()),
+                                prev_weighted_value(x1_list, xyxy[0].item()),
+                                prev_weighted_value(y1_list, xyxy[1].item()),
+                                prev_weighted_value(x2_list, xyxy[2].item()),
+                                prev_weighted_value(y2_list, xyxy[3].item()),
                                 ])
                         else:
                             distance = round(temp_distance, 3)

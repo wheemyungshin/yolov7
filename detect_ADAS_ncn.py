@@ -42,7 +42,8 @@ def calculate_distance(cxywh, shape):
     y = cxywh[2]
     w = cxywh[3]
     h = cxywh[4]
-    #pixel_ratio = h
+
+    pixel_ratio = h # box height / 전체 이미지 height (0~1 사이 비율)
 
     x1 = min(int((x-w/2)*shape[1]), shape[1]-1)
     y1 = min(int((y-h/2)*shape[0]), shape[0]-1)
