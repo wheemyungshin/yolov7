@@ -2293,6 +2293,10 @@ def load_image_and_label(self, index, ratio_maintain=True, hyp=None):
 
         if hyp is not None and 'contrast' in hyp:                
             img = apply_brightness_contrast(img, brightness = 0, contrast = random.random()*(hyp['contrast'][1]-hyp['contrast'][0])+hyp['contrast'][0])
+        
+        if hyp is not None and 'color_inversion' in hyp:
+            if random.random() < hyp['color_inversion']:
+                img = 255 - img
 
         if self.gray:
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)

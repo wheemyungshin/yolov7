@@ -1,0 +1,32 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [/data/cityscapes/yolov7_det/train.txt, #2975
+/data/cityscapes/yolov7_det/val.txt, #500
+/data/waymo_data_yolo_v3/train.txt, #4080
+/data/AIHUB_AI_ADAS_yolo_sampling/train.txt, # 10433
+/data/KITTI/train.txt, #4767
+/data/A2D2_det_with_seg/train.txt, # 11000
+/data/bdd100k/train.txt, #69863
+/data/bdd100k/val.txt, #10000
+]
+val: [/data/AIHUB_AI_ADAS_yolo_sampling/val.txt] # 1179
+test: [/data/AIHUB_AI_ADAS_yolo_sampling/val.txt] # 1179
+
+# number of classes
+nc: 12
+
+# class names
+names: ['fence',
+    'guard rail',
+    'traffic light',
+    'traffic sign',
+    'person',
+    'rider',
+    'car',
+    'truck',
+    'bus',
+    'train',
+    'motorcycle',
+    'bicycle'
+]
+    
+valid_idx: [0, 1, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13]

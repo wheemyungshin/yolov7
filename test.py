@@ -9,14 +9,16 @@ import torch
 import yaml
 from tqdm import tqdm
 
-from models.experimental import attempt_load
+from models.experimental import attempt_load, fuse_modules
 from utils.datasets import create_dataloader
 from utils.general import coco80_to_coco91_class, check_dataset, check_file, check_img_size, check_requirements, \
     box_iou, non_max_suppression, scale_coords, xyxy2xywh, xywh2xyxy, set_logging, increment_path, colorstr, non_max_suppression_seg, \
     mask_iou, masks_iou, process_semantic_mask
 from utils.metrics import ap_per_class, ConfusionMatrix
 from utils.plots import plot_images, output_to_target, plot_study_txt
-from utils.torch_utils import select_device, time_synchronized, TracedModel
+from utils.torch_utils import select_device, time_synchronized, TracedModel, intersect_dicts
+from models.yolo import Model
+import collections
 from collections import defaultdict
 import cv2
 import skimage.io
@@ -49,7 +51,8 @@ def test(data,
          opt_seg=False,
          valid_cls_idx=[],
          merge_label=[],
-         opt_infinite_names=False):
+         opt_infinite_names=False,
+         qat=False):
     # Initialize/load model and set device
     training = model is not None
     if training:  # called by train.py
@@ -62,9 +65,26 @@ def test(data,
         # Directories
         save_dir = Path(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
         (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
+        
+        if opt.cfg:
+            nc = len(merge_label)
+            ckpt = torch.load(weights[0], map_location=device)  # load checkpoint
+            if type(ckpt['model']) is Model:
+                state_dict = ckpt['model'].float().state_dict()  # to FP32
+            elif type(ckpt['model']) is collections.OrderedDict:
+                state_dict = ckpt['model']  # to FP32
+            else:
+                assert (type(ckpt['model']) is Model or type(ckpt['model']) is collections.OrderedDict), "Invalid model types to load"
 
+            model = Model(opt.cfg, ch=3, nc=nc, qat=qat).to(device)  # create#, nm=nm).to(device)  # create
+
+            state_dict = intersect_dicts(state_dict, model.state_dict(), exclude=[])  # intersect
+            #print(state_dict.keys())
+            model.load_state_dict(state_dict, strict=False)  # load
+        else:
         # Load model
-        model = attempt_load(weights, map_location=device)  # load FP32 model
+            model = attempt_load(weights, map_location=device)  # load FP32 model
+
         gs = max(int(model.stride.max()), 32)  # grid size (max stride)
         if len(imgsz) == 2:
             imgsz = [check_img_size(x, gs) for x in imgsz]  # verify imgsz are gs-multiples
@@ -78,7 +98,7 @@ def test(data,
             model = TracedModel(model, device, imgsz)
 
     # Half
-    half = device.type != 'cpu' and half_precision  # half precision only supported on CUDA
+    half = device.type != 'cpu' and (not qat) and half_precision  # half precision only supported on CUDA
     if half:
         model.half()
 
@@ -92,6 +112,17 @@ def test(data,
     nc = 1 if single_cls else int(data['nc'])  # number of classes
     iouv = torch.linspace(0.5, 0.95, 10).to(device)  # iou vector for mAP@0.5:0.95
     niou = iouv.numel()
+
+    #fuse models
+    if qat and not training:
+        #fuse_modules(model)
+        
+        # The old 'fbgemm' is still available but 'x86' is the recommended default.
+        model.qconfig = torch.quantization.get_default_qconfig('x86')
+
+        torch.quantization.prepare(model, inplace=True)
+        torch.quantization.convert(model, inplace=True)
+        print('Qauntization-Test')
 
     # Logging
     log_imgs = 0
@@ -467,6 +498,7 @@ def test(data,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='test.py')
     parser.add_argument('--weights', nargs='+', type=str, default='yolov7.pt', help='model.pt path(s)')
+    parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
     parser.add_argument('--data', type=str, default='data/coco.yaml', help='*.data path')
     parser.add_argument('--batch-size', type=int, default=32, help='size of each image batch')
     parser.add_argument('--img-size', nargs='+', type=int, default=[640, 640], help='[train, test] image sizes')
@@ -493,6 +525,7 @@ if __name__ == '__main__':
     parser.add_argument('--valid-cls-idx', nargs='+', type=int, default=[], help='labels to include when calculating mAP')
     parser.add_argument('--merge-label', type=int, nargs='+', action='append', default=[], help='list of merge label list chunk. --merge-label 0 1 --merge-label 2 3 4')
     parser.add_argument('--infinite-names', action='store_true', help='Do not use saved names in model')
+    parser.add_argument('--qat', action='store_true', help='Quantization-Aware-Training')
 
     opt = parser.parse_args()
     opt.save_json |= opt.data.endswith('coco.yaml')
@@ -521,7 +554,8 @@ if __name__ == '__main__':
              opt_seg=opt.seg,
              valid_cls_idx=opt.valid_cls_idx,
              merge_label=opt.merge_label,
-             opt_infinite_names=opt.infinite_names
+             opt_infinite_names=opt.infinite_names,
+             qat=opt.qat
              )
 
     elif opt.task == 'speed':  # speed benchmarks
