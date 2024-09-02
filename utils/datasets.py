@@ -63,6 +63,7 @@ def fix_label(l):
 
         l_fix.append(line_fixed)
     l = l_fix
+    l = np.unique(l, axis=0)
     return l
 
 def fix_segment(l):
@@ -77,6 +78,7 @@ def fix_segment(l):
 
         l_fix.append(line_fixed)
     l = l_fix
+    l = np.unique(l, axis=0)
     return l
 
 def random_distortion(im, label, size, k1_range=0.2, k2_range=0.1):
