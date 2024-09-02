@@ -21,7 +21,7 @@ from models.yolo import Model
 import collections
 from collections import defaultdict
 import cv2
-import skimage.io
+
 
 def test(data,
          weights=None,
@@ -118,9 +118,9 @@ def test(data,
     #fuse models
     '''
     if qat and not training:
-        
         print(device)
         #model = model.cpu()
+        #fuse_modules(model)
         
         # The old 'fbgemm' is still available but 'x86' is the recommended default.
         model.qconfig = torch.quantization.get_default_qconfig('x86')
@@ -182,11 +182,6 @@ def test(data,
 
         img = img.to(device, non_blocking=True)
         img = img.half() if half else img.float()  # uint8 to fp16/32
-
-        #vis__img = np.transpose(img.detach().cpu().numpy()[0], (1,2,0)).astype(np.uint8)
-        #print(vis__img.shape)
-        #skimage.io.imsave('save_'+str(batch_i)+'.jpg', vis__img)
-
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
         targets = targets.to(device)
         masks = masks.to(device)
