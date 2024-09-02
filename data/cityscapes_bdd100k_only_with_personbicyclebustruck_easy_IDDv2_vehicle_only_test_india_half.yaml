@@ -1,0 +1,21 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+    [../data/bdd100k_cityscapes_only_with_person_bicycle_and_bustruck.txt, 15000], #47084
+    [../data/IDD_Detection_v2/train.txt, 20000] # 41265
+]
+val: [../data/IDD_FGVD/train.txt]   # 787 images
+test: [../data/IDD_FGVD/train.txt]  # 787
+
+# number of classes
+nc: 5
+
+# class names
+names: [
+    'car',
+    'truck',
+    'bus',
+    'motorcycle',
+    'bicycle'
+]
+    
+valid_idx: [8, 9, 10, 12, 13]

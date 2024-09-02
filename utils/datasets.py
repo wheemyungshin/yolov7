@@ -1257,7 +1257,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                                  translate=hyp['translate'],
                                                  scale=hyp['scale'],
                                                  shear=hyp['shear'],
-                                                 perspective=hyp['perspective'])
+                                                 perspective=hyp['perspective'],
+                                                 rot90=hyp.get('rot90', 0))
             
             
             #img, labels = self.albumentations(img, labels)
@@ -2385,6 +2386,10 @@ def load_image_and_label(self, index, ratio_maintain=True, hyp=None):
 
         if hyp is not None and 'contrast' in hyp:                
             img = apply_brightness_contrast(img, brightness = 0, contrast = random.random()*(hyp['contrast'][1]-hyp['contrast'][0])+hyp['contrast'][0])
+        
+        if hyp is not None and 'color_inversion' in hyp:
+            if random.random() < hyp['color_inversion']:
+                img = 255 - img
 
         if hyp is not None and 'color_inversion' in hyp:
             if random.random() < hyp['color_inversion']:
@@ -2722,7 +2727,8 @@ def load_mosaic(self, hyp, index):
                                         scale=self.hyp['scale'],
                                         shear=self.hyp['shear'],
                                         perspective=self.hyp['perspective'],
-                                        border=self.mosaic_border)  # border to remove
+                                        border=self.mosaic_border,
+                                        rot90=hyp.get('rot90', 0))  # border to remove
 
 
     return img4, labels4, poses4, segments4
@@ -2965,7 +2971,8 @@ def load_mosaic9(self, hyp, index):
                                         scale=self.hyp['scale'],
                                         shear=self.hyp['shear'],
                                         perspective=self.hyp['perspective'],
-                                        border=self.mosaic_border)  # border to remove
+                                        border=self.mosaic_border,
+                                        rot90=hyp.get('rot90', 0))  # border to remove
 
 
     return img9, labels9, poses9, segments9
@@ -3153,7 +3160,7 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
 
 
 def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, translate=.1, scale=.1, shear=10, perspective=0.0,
-                       border=(0, 0)):
+                       border=(0, 0), rot90=0.0):
     # torchvision.transforms.RandomAffine(degrees=(-10, 10), translate=(.1, .1), scale=(.9, 1.1), shear=(-10, 10))
     # targets = [cls, xyxy]
 
@@ -3172,7 +3179,10 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
 
     # Rotation and Scale
     R = np.eye(3)
-    a = random.uniform(-degrees, degrees)
+    if random.random() < rot90:
+        a = random.uniform(90-degrees, 90+degrees)
+    else:
+        a = random.uniform(-degrees, degrees)
     # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
 
     if isinstance(scale, float):
