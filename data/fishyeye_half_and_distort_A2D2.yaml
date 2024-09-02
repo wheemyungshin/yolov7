@@ -1,0 +1,22 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+    [../data/ADAS_only_with_bicycle_and_bustruck_vehicle_only_easy_samples.txt, 12000], #37500 -> 31359
+    ../data/A2D2_det_with_seg_distortion/train.txt, # 10000
+
+    ../data/fisheye240829/train.txt # 12000
+]
+val: [../data/fisheye240829/val.txt]   # 2743
+test: [../data/fisheye240829/val.txt]  # 2743
+
+# number of classes
+nc: 4
+
+# class names
+names: [
+    'fisheye_car',
+    'car',
+    'truck',
+    'bus',
+]
+
+valid_idx: [0, 8, 9, 10]
