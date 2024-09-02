@@ -266,11 +266,11 @@ def train(hyp, opt, device, tb_writer=None):
     # Image sizes
     gs = max(int(model.stride.max()), 32)  # grid size (max stride)
     nl = model.model[-1].nl  # number of detection layers (used for scaling hyp['obj'])
-    if isinstance(opt.img_size, list):
-        imgsz = [check_img_size(x, gs) for x in opt.img_size]  # verify imgsz are gs-multiples
+    if isinstance(opt.train_size, list):
+        imgsz = [check_img_size(x, gs) for x in opt.train_size]  # verify imgsz are gs-multiples
         imgsz = tuple(imgsz)
     else:
-        imgsz = check_img_size(opt.img_size, gs)  # verify imgsz are gs-multiples
+        imgsz = check_img_size(opt.train_size, gs)  # verify imgsz are gs-multiples
 
     # DP mode
     if cuda and rank == -1 and torch.cuda.device_count() > 1:
@@ -320,7 +320,7 @@ def train(hyp, opt, device, tb_writer=None):
 
     # Process 0
     if rank in [-1, 0]:
-        testloader = create_dataloader(test_path, tuple([128, 224]), batch_size * 2, gs, opt,  # testloader
+        testloader = create_dataloader(test_path, tuple(opt.test_size), batch_size * 2, gs, opt,  # testloader
                                        cache=opt.cache_images and not opt.notest, rect=opt.rect, rank=-1,
                                        world_size=opt.world_size, workers=opt.workers,
                                        prefix=colorstr('val: '), valid_idx=valid_idx, load_seg=opt.seg, gray=opt.gray,
@@ -755,7 +755,8 @@ if __name__ == '__main__':
     parser.add_argument('--hyp', type=str, default='data/hyp.scratch.p5.yaml', help='hyperparameters path')
     parser.add_argument('--epochs', type=int, default=300)
     parser.add_argument('--batch-size', type=int, default=16, help='total batch size for all GPUs')
-    parser.add_argument('--img-size', nargs='+', type=int, default=[640, 640], help='[train, test] image sizes')
+    parser.add_argument('--train-size', nargs='+', type=int, default=[640, 640], help='[height, width] image sizes')
+    parser.add_argument('--test-size', nargs='+', type=int, default=[128, 224], help='[height, width] image sizes')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
     parser.add_argument('--resume', nargs='?', const=True, default=False, help='resume most recent training')
     parser.add_argument('--nosave', action='store_true', help='only save final checkpoint')
@@ -826,7 +827,7 @@ if __name__ == '__main__':
         # opt.hyp = opt.hyp or ('hyp.finetune.yaml' if opt.weights else 'hyp.scratch.yaml')
         opt.data, opt.cfg, opt.hyp = check_file(opt.data), check_file(opt.cfg), check_file(opt.hyp)  # check files
         assert len(opt.cfg) or len(opt.weights), 'either --cfg or --weights must be specified'
-        opt.img_size.extend([opt.img_size[-1]] * (2 - len(opt.img_size)))  # extend to 2 sizes (train, test)
+        opt.train_size.extend([opt.train_size[-1]] * (2 - len(opt.train_size)))  # extend to 2 sizes (train, test)
         opt.name = 'evolve' if opt.evolve else opt.name
         opt.save_dir = increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok | opt.evolve)  # increment run
 
