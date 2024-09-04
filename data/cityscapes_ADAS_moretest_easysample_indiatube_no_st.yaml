@@ -1,10 +1,10 @@
 # train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
 train: [
-    ../data/cityscapes_ADAS_AInight_dirtroad_nothing_datapool_samples_for_easy.txt
     [../data/nvn_0822_auto/train.txt, 500], # 10000  
     [../data/AIHUB_dirtroad_nothing/train.txt, 3000], # 19568    
     ../data/ADAS_india_youtubes_nothing/train.txt, # 933
     ../data/ADAS_india_youtubes_only_3cls/train.txt, # ~19000
+    ../data/cityscapes_ADAS_no_st_datapool_samples_for_easy.txt # 96950
 ]
 val: [../data/IDD_FGVD/train.txt, # 787 images
         ../data/IDDAW/train.txt, # 3905

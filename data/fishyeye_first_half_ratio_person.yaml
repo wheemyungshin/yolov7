@@ -3,7 +3,6 @@ train: [
     ../data/crowd_6cls/val.txt, # 788
     ../data/AIHUB_autodriving_humans.txt, # 827
     ../data/bdd100k_humans.txt, #1491
-    ../data/cityscapes_others_humans.txt, # 691
     ../data/small_ticket_testset_humans.txt, # 971
     #~8000
     #[../data/AIHUB_CCTV_city_yolo_valid_crop_sampling/train.txt, 15000], # 72864
