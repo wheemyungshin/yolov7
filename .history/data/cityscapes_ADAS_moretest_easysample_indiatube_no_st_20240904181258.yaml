@@ -1,0 +1,42 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+    [../data/IDD_Detection_v3/train.txt, 15000], # 40949
+    [../data/IDD_Detection_v3_rain/train.txt, 2000], # 20000
+    [../data/IDD_Detection_v3_night/train.txt, 5000], # 40949
+    [../data/AIHUB_special_vehicle_val/train.txt, 5000], # 6796
+    [../data/nvn_0822_auto/train.txt, 500], # 10000  
+
+    #../data/ADAS_only_with_bicycle_and_bustruck_vehicle_only_easy_samples.txt, #37500 -> 31359
+    #[../data/small_ticket_testset_addition_ready_only_with_bicycle_and_bustruck.txt, 2000], #12000
+    #[../data/AIHUB_nights_later0827.txt, 10000], #26900
+    ../data/AIHUB_nights_later0828_no_smallticket_onlyif_personbikes.txt, # 13437
+    [../data/AIHUB_dirtroad_nothing/train.txt, 5000], # 19568
+    ../data/roboflow_autorickshaw/train.txt, # 957
+    ../data/ADAS_india_youtubes_nothing/train.txt, # 933
+    ../data/ADAS_india_youtubes_only_3cls/train.txt, # ~19000
+    [../data/false_inside_youtubes_hard/train.txt, 50000], # 71006
+]
+val: [../data/IDD_FGVD/train.txt, # 787 images
+        ../data/IDDAW/train.txt, # 3905
+    ../data/idd20kII_v2/test.txt, # 8089
+    ../data/IDD_Segmentation_v2/test.txt] # 7974
+test: [../data/IDD_FGVD/train.txt, # 787 images
+        ../data/IDDAW/train.txt, # 3905
+    ../data/idd20kII_v2/test.txt, # 8089
+    ../data/IDD_Segmentation_v2/test.txt] # 7974
+
+# number of classes
+nc: 7
+
+# class names
+names: [
+    'person',
+    'car',
+    'truck',
+    'bus',
+    'motorcycle',
+    'bicycle',
+    'nothing'
+]
+
+valid_idx: [6, 8, 9, 10, 12, 13, 999]
