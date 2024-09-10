@@ -889,7 +889,11 @@ if __name__ == '__main__':
                 'mosaic': (1, 0.0, 1.0),  # image mixup (probability)
                 'mixup': (1, 0.0, 1.0),   # image mixup (probability)
                 'copy_paste': (1, 0.0, 1.0),  # segment copy-paste (probability)
-                'paste_in': (1, 0.0, 1.0)}    # segment copy-paste (probability)
+                'paste_in': (1, 0.0, 1.0),
+                'loss_ota': (0, 0.0, 1.0),
+                'min_size': (0, 0.0, 50.0),
+                'min_scale_up': (0, 0.0, 50.0),
+                }    # segment copy-paste (probability)
         
         with open(opt.hyp, errors='ignore') as f:
             hyp = yaml.safe_load(f)  # load hyps dict
