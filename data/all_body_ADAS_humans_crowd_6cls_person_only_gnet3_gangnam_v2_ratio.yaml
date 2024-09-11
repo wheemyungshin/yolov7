@@ -6,10 +6,10 @@ train: [
   ../data/bdd100k_humans.txt, #1491
   ../data/cityscapes_others_humans.txt, # 691
   ../data/small_ticket_testset_humans.txt, # 971
-  [../data/auto_det_s384_640_back/train.txt, 5000], #45462
-  [../data/auto_det_s384_640_right/train.txt, 5000], #45461
-  [../data/auto_det_s384_640_left/train.txt, 5000], #45466
-  [../data/gangnam_street_BH_cls6/train.txt, 600], #31766  
+  [../data/auto_det_s384_640_back/train.txt, 6000], #45462
+  [../data/auto_det_s384_640_right/train.txt, 6000], #45461
+  [../data/auto_det_s384_640_left/train.txt, 6000], #45466
+  [../data/gangnam_street_BH_cls6/train.txt, 600], #31766
 ]
 val: [
   ../data/auto_det_gnet_test1/test.txt # 54

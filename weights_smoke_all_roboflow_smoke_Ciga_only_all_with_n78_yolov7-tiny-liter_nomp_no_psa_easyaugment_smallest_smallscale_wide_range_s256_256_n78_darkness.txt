@@ -1,0 +1,2 @@
+saved_model/modified_epoch_005_no_opt_128_128_integer_quant.tflite : 7.1492116003973896e-06
+saved_model/modified_epoch_015_no_opt_128_128_integer_quant.tflite : 1.3445889383427723e-06

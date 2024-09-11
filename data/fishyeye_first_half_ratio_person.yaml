@@ -1,0 +1,32 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+    ../data/crowd_6cls/val.txt, # 788
+    ../data/AIHUB_autodriving_humans.txt, # 827
+    ../data/bdd100k_humans.txt, #1491
+    ../data/small_ticket_testset_humans.txt, # 971
+    #~8000
+    #[../data/AIHUB_CCTV_city_yolo_valid_crop_sampling/train.txt, 15000], # 72864
+    #../data/AIHUB_CCTV_city_yolo_valid_crop_sampling/val.txt, # 9119
+    [../data/coco_face_from_kpts_wholebody/train.txt, 25000], # 56673
+    ../data/coco_face_from_kpts_wholebody/val.txt, # 2355
+
+    ../data/wider_face_updated/train.txt, #5224
+    ../data/wider_face_updated/val.txt, #1171
+
+
+    ../data/fisheye_person_telebit/train.txt, # 39336
+]
+val: [../data/fisheye_person_telebit/val.txt]  # 13644
+test: [../data/fisheye_person_telebit/val.txt]  # 13644
+
+# number of classes
+nc: 3
+
+# class names
+names: [
+    'fisheye_person',
+    'person',
+    'rider'
+]
+
+valid_idx: [0, 6, 7]

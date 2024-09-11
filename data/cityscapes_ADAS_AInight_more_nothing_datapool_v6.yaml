@@ -1,0 +1,33 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+    [../data/IDD_Detection_v3/train.txt, 5000], # 40949
+    [../data/IDD_Detection_v3_rain/train.txt, 1000], # 20000
+    [../data/IDD_Detection_v3_night/train.txt, 2000], # 40949
+    [../data/IDDAW/train.txt, 2000], # 3905
+    [../data/AIHUB_special_vehicle_val/train.txt, 2000], # 6796
+    [../data/nvn_0822_auto/train.txt, 100], # 10000  
+
+    #../data/ADAS_only_with_bicycle_and_bustruck_vehicle_only_easy_samples.txt, #37500 -> 31359
+    #[../data/small_ticket_testset_addition_ready_only_with_bicycle_and_bustruck.txt, 2000], #12000
+    #[../data/AIHUB_nights_later0827.txt, 10000], #26900
+    [../data/AIHUB_nights_later0828_onlyif_bikes.txt, 5000], #6561
+    ../data/AIHUB_dirtroad_nothing/train.txt, # 19568
+    ../data/ADAS_india_youtubes_nothing/train.txt # 933
+]
+val: [../data/IDD_FGVD/train.txt]   # 787 images
+test: [../data/IDD_FGVD/train.txt]  # 787
+
+# number of classes
+nc: 6
+
+# class names
+names: [
+    'car',
+    'truck',
+    'bus',
+    'motorcycle',
+    'bicycle',
+    'nothing'
+]
+
+valid_idx: [8, 9, 10, 12, 13, 999]

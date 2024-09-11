@@ -496,6 +496,9 @@ class ComputeLoss:
             lobj += obji * self.balance[i]  # obj loss
             if self.autobalance:
                 self.balance[i] = self.balance[i] * 0.9999 + 0.0001 / obji.detach().item()
+            
+            #if not n:
+            #    print("No Positive : ", obji * self.balance[i])
 
         if self.autobalance:
             self.balance = [x / self.balance[self.ssi] for x in self.balance]

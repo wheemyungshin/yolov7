@@ -15,6 +15,7 @@ train: [
 val: [../data/n78_testvid_frames/train.txt, ../data/n78_tel8070_application_frames/train.txt] # 6450 + 2875
 test: [../data/n78_testvid_frames/train.txt, ../data/n78_tel8070_application_frames/train.txt] # 6450 + 2875
 
+
 # number of classes
 nc: 3
 

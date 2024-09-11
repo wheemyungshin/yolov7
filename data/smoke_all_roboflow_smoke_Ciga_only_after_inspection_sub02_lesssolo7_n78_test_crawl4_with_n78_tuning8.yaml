@@ -17,8 +17,8 @@ train: [
 ../data/auto_phone_n78_tuning/train.txt, # 1335
 ] 
 
-val: [../data/n78_testvid_autodet_ciga/test.txt, ../data/n78_tel_autodet_ciga/test.txt] # 2347 + 6086
-test: [../data/n78_testvid_autodet_ciga/test.txt, ../data/n78_tel_autodet_ciga/test.txt] # 2347 + 6086
+val: [../data/n78_testvid_frames/train.txt, ../data/n78_tel8070_application_frames/train.txt] # 6450 + 2875
+test: [../data/n78_testvid_frames/train.txt, ../data/n78_tel8070_application_frames/train.txt] # 6450 + 2875
 
 # number of classes
 nc: 3

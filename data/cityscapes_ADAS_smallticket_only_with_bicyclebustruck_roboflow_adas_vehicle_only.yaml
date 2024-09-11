@@ -1,6 +1,6 @@
 # train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
 train: [
-    ../data/ADAS_only_with_bicycle_and_bustruck.txt, #20000
+    ../data/ADAS_only_with_bicycle_and_bustruck.txt, #81000
     ../data/small_ticket_testset_addition_ready_only_with_bicycle_and_bustruck.txt, #12000
     ../data/roboflow_adas/train.txt,
     ../data/roboflow_adas/val.txt
