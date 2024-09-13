@@ -45,6 +45,96 @@ for orientation in ExifTags.TAGS.keys():
     if ExifTags.TAGS[orientation] == 'Orientation':
         break
 
+def fix_label(l):
+    #fix label out of bounds
+    l_fix = []
+    for x_line in l:
+        line_fixed_temp = [(round(float(x_item),6)) for x_item in x_line[1:]]
+        x_temp, y_temp, w_temp, h_temp = line_fixed_temp
+        x1_temp = max(min(x_temp - w_temp/2,1),0)
+        y1_temp = max(min(y_temp - h_temp/2,1),0)
+        x2_temp = max(min(x_temp + w_temp/2,1),0)
+        y2_temp = max(min(y_temp + h_temp/2,1),0)
+        x_fixed = str(round(float((x1_temp+x2_temp)/2),6))
+        y_fixed = str(round(float((y1_temp+y2_temp)/2),6))
+        w_fixed = str(round(float(x2_temp-x1_temp),6))
+        h_fixed = str(round(float(y2_temp-y1_temp),6))
+        line_fixed = [x_line[0], x_fixed, y_fixed, w_fixed, h_fixed]
+
+        l_fix.append(line_fixed)
+    l = l_fix
+    l = np.unique(l, axis=0)
+    return l
+
+def fix_segment(l):
+    #fix label out of bounds
+    l_fix = []
+    for x_line in l:
+        line_fixed = [x_line[0]]
+        line_fixed_temp = [(round(float(x_item),6)) for x_item in x_line[1:]]
+        for item in line_fixed_temp:
+            item_fixed = str(round(float(max(min(item,1),0)),6))
+            line_fixed.append(item_fixed)
+
+        l_fix.append(line_fixed)
+    l = l_fix
+    l = np.unique(l, axis=0)
+    return l
+
+def random_distortion(im, label, size, k1_range=0.2, k2_range=0.1):
+    k1 = random.random()*k1_range*2 - k1_range
+    k2 = random.random()*k2_range
+    k3 = 0
+
+    h, w = size
+
+    # 매핑 배열 생성 ---②
+    mapy, mapx = np.indices((h, w),dtype=np.float32)
+
+    # 중앙점 좌표로 -1~1 정규화 및 극좌표 변환 ---③
+    mapx = 2*mapx/(w-1)-1
+    mapy = 2*mapy/(h-1)-1
+    r, theta = cv2.cartToPolar(mapx, mapy)
+
+    # 방사 왜곡 변영 연산 ---④
+    ru = r*(1+k1*(r**2) + k2*(r**4) + k3*(r**6)) 
+
+    # 직교좌표 및 좌상단 기준으로 복원 ---⑤
+    mapx, mapy = cv2.polarToCart(ru, theta)
+    mapx = ((mapx + 1)*w-1)/2
+    mapy = ((mapy + 1)*h-1)/2
+    # 리매핑 ---⑥
+    im = cv2.remap(im,mapx,mapy,cv2.INTER_LINEAR)
+
+    xywhs = label[:, 1:].copy()
+    xyxys = label[:, 1:].copy()
+    xyxys[:, 0] = (xywhs[:, 0] - xywhs[:, 2]*0.5) * w
+    xyxys[:, 1] = (xywhs[:, 1] - xywhs[:, 3]*0.5) * h
+    xyxys[:, 2] = (xywhs[:, 0] + xywhs[:, 2]*0.5) * w 
+    xyxys[:, 3] = (xywhs[:, 1] + xywhs[:, 3]*0.5) * h
+
+    '''
+    for i, xyxy in enumerate(xyxys):
+        x1 = max(min(int(xyxy[0]), w-1), 0)
+        y1 = max(min(int(xyxy[1]), h-1), 0)
+        x2 = max(min(int(xyxy[2]), w-1), 0)
+        y2 = max(min(int(xyxy[3]), h-1), 0)
+        x1_dist = max(min((mapx[y1, x1]+mapx[y2, x1])/2, w-1), 0)
+        y1_dist = max(min((mapy[y1, x1]+mapy[y1, x2])/2, h-1), 0)
+        x2_dist = max(min((mapx[y1, x2]+mapx[y2, x2])/2, w-1), 0)
+        y2_dist = max(min((mapy[y2, x1]+mapy[y2, x2])/2, h-1), 0)
+        x_dist = ((x1_dist + x2_dist)/2) / w
+        y_dist = ((y1_dist + y2_dist)/2) / h
+        w_dist = (x2_dist - x1_dist) / w
+        h_dist = (y2_dist - y1_dist) / h
+        label[i, 1] = x_dist
+        label[i, 2] = y_dist
+        label[i, 3] = w_dist
+        label[i, 4] = h_dist
+    '''
+
+    return im, label
+
 def natural_minmax_crop(image, targets, base_size, min_label_size_limit=None, max_label_size_limit=None):#16, 96
     base_h, base_w = base_size
     height, width = image.shape[:2]
@@ -478,8 +568,6 @@ class LoadImages:  # for inference
             img0 = cv2.imread(path)  # BGR
             #assert img0 is not None, 'Image Not Found ' + path
         
-        img0 = img0[:, 285:1635, :]
-        
         if img0 is None:
             return None, None, None, None
 
@@ -488,7 +576,6 @@ class LoadImages:  # for inference
             img = letterbox(img0, self.img_size, stride=self.stride)[0]
         else:
             img = cv2.resize(img0, (self.img_size[1], self.img_size[0]))
-
 
         # Convert
         img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
@@ -914,9 +1001,12 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     x[np.isin(x[:, 0], np.array(merge_label_chunk)), 0] = merge_label_idx - 100
 
             labels_new = []
-            for x in self.labels:
+            segs_new = []
+            for x, seg_x in zip(self.labels, self.segments):
                 labels_new.append(x[x[:, 0] < 0])
+                segs_new.append(seg_x[x[:, 0] < 0])
             self.labels = labels_new
+            self.segments = segs_new
 
             for x in self.labels:
                 x[:, 0] += 100
@@ -999,32 +1089,15 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 if os.path.isfile(lb_file):
                     nf += 1  # label found
                     with open(lb_file, 'r') as f:
-                        l = [x.split() for x in f.read().strip().splitlines()]       
-
-                        #fix label out of bounds
-                        l_fix = []
-                        for x_line in l:
-                            line_fixed_temp = [(round(float(x_item),6)) for x_item in x_line[1:]]
-                            x_temp, y_temp, w_temp, h_temp = line_fixed_temp
-                            x1_temp = max(min(x_temp - w_temp/2,1),0)
-                            y1_temp = max(min(y_temp - h_temp/2,1),0)
-                            x2_temp = max(min(x_temp + w_temp/2,1),0)
-                            y2_temp = max(min(y_temp + h_temp/2,1),0)
-                            x_fixed = str(round(float((x1_temp+x2_temp)/2),6))
-                            y_fixed = str(round(float((y1_temp+y2_temp)/2),6))
-                            w_fixed = str(round(float(x2_temp-x1_temp),6))
-                            h_fixed = str(round(float(y2_temp-y1_temp),6))
-                            line_fixed = [x_line[0], x_fixed, y_fixed, w_fixed, h_fixed]
-
-                            l_fix.append(line_fixed)
-                        l = l_fix
-
+                        l = [x.split() for x in f.read().strip().splitlines()]
                         if load_seg:  # is segment
                             if any([len(x) > 8 for x in l]):  # is segment
                                 classes = np.array([x[0] for x in l], dtype=np.float32)
                                 segments = [np.array(x[1:], dtype=np.float32).reshape(-1, 2) for x in l]  # (cls, xy1...)
                                 l = np.concatenate((classes.reshape(-1, 1), segments2boxes(segments)), 1)  # (cls, xywh)
+                                l = fix_segment(l)
                             else:
+                                l = fix_label(l)
                                 segments = [np.array([
                                     [float(x_line[1])-float(x_line[3])/2, float(x_line[2])-float(x_line[4])/2], 
                                     [float(x_line[1])+float(x_line[3])/2, float(x_line[2])-float(x_line[4])/2],  
@@ -1032,6 +1105,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                     [float(x_line[1])-float(x_line[3])/2, float(x_line[2])+float(x_line[4])/2]
                                     ]) for x_line in l]
                         else:
+                            l = fix_label(l)
                             segments = [np.array([
                                     [float(x_line[1])-float(x_line[3])/2, float(x_line[2])-float(x_line[4])/2], 
                                     [float(x_line[1])+float(x_line[3])/2, float(x_line[2])-float(x_line[4])/2],  
@@ -1134,6 +1208,9 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
             img, (h0, w0), (h, w), labels = load_image_and_label(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
+            if hyp is not None and 'distortion' in hyp: 
+                img, labels = random_distortion(img, labels, (h, w), k1_range=hyp['distortion'][0], k2_range=hyp['distortion'][1])
+
             segments = self.segments[index].copy()
             #labels = self.labels[index].copy()
 
@@ -1185,7 +1262,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                                  translate=hyp['translate'],
                                                  scale=hyp['scale'],
                                                  shear=hyp['shear'],
-                                                 perspective=hyp['perspective'])
+                                                 perspective=hyp['perspective'],
+                                                 rot90=hyp.get('rot90', 0))
             
             
             #img, labels = self.albumentations(img, labels)
@@ -1992,7 +2070,23 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         segments_after_filter.append(segments[ciga_idx])
                 labels = np.array(labels_after_filter)
                 segments = segments_after_filter
-                        
+        
+        if hyp is not None and hyp.get('remove_horizontal_lanes', None):
+            nL = len(labels)  # number of labels
+            if nL:
+                labels_after_filter = []
+                segments_after_filter = []
+                
+                for lane_idx, lane_label in enumerate(labels):#enumerate(labels[labels[:, 0]==2]):
+                    lane_w = lane_label[3] - lane_label[1]
+                    lane_h = lane_label[4] - lane_label[2]
+                    if lane_w > 0:
+                        lane_ratio = lane_h / lane_w
+                        if lane_ratio > hyp['remove_horizontal_lanes']:
+                            labels_after_filter.append(lane_label)
+                            segments_after_filter.append(segments[lane_idx])
+                labels = np.array(labels_after_filter)
+                segments = segments_after_filter
                         
         if hyp is not None and hyp.get('render_fire', None) is not None:
             nL = len(labels)  # number of labels
@@ -2166,6 +2260,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                 img[crop_y1:crop_y2,crop_x1:crop_x2, 1] = (1-random_mask)*img[crop_y1:crop_y2,crop_x1:crop_x2, 1] + random_mask*burn_crop[:,:,1]
                                 img[crop_y1:crop_y2,crop_x1:crop_x2, 2] = (1-random_mask)*img[crop_y1:crop_y2,crop_x1:crop_x2, 2] + random_mask*burn_crop[:,:,2]
                             labels[idx][0] = 0
+        
+
 
         nL = len(labels)  # number of labels
         if nL:
@@ -2295,7 +2391,15 @@ def load_image_and_label(self, index, ratio_maintain=True, hyp=None):
 
         if hyp is not None and 'contrast' in hyp:                
             img = apply_brightness_contrast(img, brightness = 0, contrast = random.random()*(hyp['contrast'][1]-hyp['contrast'][0])+hyp['contrast'][0])
+        
+        if hyp is not None and 'color_inversion' in hyp:
+            if random.random() < hyp['color_inversion']:
+                img = 255 - img
 
+        if hyp is not None and 'color_inversion' in hyp:
+            if random.random() < hyp['color_inversion']:
+                img = 255 - img
+                
         if self.gray:
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
@@ -2418,6 +2522,9 @@ def load_mosaic(self, hyp, index):
         #img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
         img, _, (h, w), labels = load_image_and_label(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
+
+        if hyp is not None and 'distortion' in hyp: 
+            img, labels = random_distortion(img, labels, (h, w), k1_range=hyp['distortion'][0], k2_range=hyp['distortion'][1])
 
         # Labels
         #labels, segments = self.labels[index].copy(), self.segments[index].copy()
@@ -2625,7 +2732,8 @@ def load_mosaic(self, hyp, index):
                                         scale=self.hyp['scale'],
                                         shear=self.hyp['shear'],
                                         perspective=self.hyp['perspective'],
-                                        border=self.mosaic_border)  # border to remove
+                                        border=self.mosaic_border,
+                                        rot90=hyp.get('rot90', 0))  # border to remove
 
 
     return img4, labels4, poses4, segments4
@@ -2646,6 +2754,10 @@ def load_mosaic9(self, hyp, index):
         #img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
         img, _, (h, w), labels = load_image_and_label(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
+
+        if hyp is not None and 'distortion' in hyp: 
+            img, labels = random_distortion(img, labels, (h, w), k1_range=hyp['distortion'][0], k2_range=hyp['distortion'][1])
+
         # Labels
         #labels, segments = self.labels[index].copy(), self.segments[index].copy()
         segments = self.segments[index].copy()
@@ -2864,7 +2976,8 @@ def load_mosaic9(self, hyp, index):
                                         scale=self.hyp['scale'],
                                         shear=self.hyp['shear'],
                                         perspective=self.hyp['perspective'],
-                                        border=self.mosaic_border)  # border to remove
+                                        border=self.mosaic_border,
+                                        rot90=hyp.get('rot90', 0))  # border to remove
 
 
     return img9, labels9, poses9, segments9
@@ -3052,7 +3165,7 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
 
 
 def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, translate=.1, scale=.1, shear=10, perspective=0.0,
-                       border=(0, 0)):
+                       border=(0, 0), rot90=0.0):
     # torchvision.transforms.RandomAffine(degrees=(-10, 10), translate=(.1, .1), scale=(.9, 1.1), shear=(-10, 10))
     # targets = [cls, xyxy]
 
@@ -3071,7 +3184,10 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
 
     # Rotation and Scale
     R = np.eye(3)
-    a = random.uniform(-degrees, degrees)
+    if random.random() < rot90:
+        a = random.uniform(90-degrees, 90+degrees)
+    else:
+        a = random.uniform(-degrees, degrees)
     # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
 
     if isinstance(scale, float):
