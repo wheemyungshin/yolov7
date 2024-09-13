@@ -45,6 +45,72 @@ for orientation in ExifTags.TAGS.keys():
     if ExifTags.TAGS[orientation] == 'Orientation':
         break
 
+def self_overlap(A,B): # not IoU!
+    A_volume = (A[0, 2]-A[0, 0])*(A[0, 3]-A[0, 1])
+    low = np.s_[...,:2]
+    high = np.s_[...,2:4]
+    A,B = A[:, None].copy(),B[None].copy()
+    A[high] += 1; B[high] += 1
+    intrs = (np.maximum(0,np.minimum(A[high],B[high])
+                        -np.maximum(A[low],B[low]))).prod(-1)
+    return intrs / A_volume
+
+def front_label(l, seg, shape): # 차량 detection 용도
+    l_fix = []
+    s_fix = []
+    l_box = []
+
+    l_sorted_all = sorted(enumerate(l), key = lambda x : -(float(x[1][2]) + float(x[1][4])/2))
+    l_ids = [l_i for l_i, l_item in l_sorted_all]
+
+    for l_id in l_ids:
+        x_line = l[l_id]
+        x_seg = seg[l_id]
+        line_front_temp = [(round(float(x_item),6)) for x_item in x_line[1:]]
+        x_temp, y_temp, w_temp, h_temp = line_front_temp
+
+        x1_temp = int(max(min(x_temp - w_temp/2,1),0)*shape[1])
+        y1_temp = int(max(min(y_temp - h_temp/2,1),0)*shape[0])
+        x2_temp = int(max(min(x_temp + w_temp/2,1),0)*shape[1])
+        y2_temp = int(max(min(y_temp + h_temp/2,1),0)*shape[0])
+        box_temp = [x1_temp, y1_temp, x2_temp, y2_temp]
+
+        if len(l_box) > 0:
+            iou_matrix = self_overlap(np.array([box_temp]), np.array(l_box))
+            if np.max(iou_matrix[0]) < 0.75:
+                l_fix.append(x_line)
+                s_fix.append(x_seg)
+                l_box.append(box_temp)
+        else:
+            l_fix.append(x_line)
+            s_fix.append(x_seg)
+            l_box.append(box_temp)
+
+    l = l_fix
+    seg = s_fix
+    return l, seg
+
+def easy_label(l, seg): # 차량 detection 용도
+    l_fix = []
+    s_fix = []
+    for x_line, x_seg in zip(l, seg):
+        line_easy_temp = [(round(float(x_item),6)) for x_item in x_line[1:]]
+        x_temp, y_temp, w_temp, h_temp = line_easy_temp
+        if x_line[0] in [6, 12 ,13]:
+            min_box_size = 0.01
+        else:
+            min_box_size = 0.03
+
+        #is_long_box = h_temp > w_temp*5 or w_temp > h_temp*5
+
+        if (h_temp > min_box_size and w_temp > min_box_size): # small boxes
+            l_fix.append(x_line)
+            s_fix.append(x_seg)
+    l = l_fix
+    seg = s_fix
+    return l, seg
+
+
 def fix_label(l):
     #fix label out of bounds
     l_fix = []
@@ -873,7 +939,15 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             #if cache['hash'] != get_hash(self.label_files + self.img_files) or 'version' not in cache:  # changed
             #    cache, exists = self.cache_labels(cache_path, prefix), False  # re-cache
         else:
-            cache, exists = self.cache_labels(cache_path, prefix, load_seg=load_seg), False  # cache
+            if hyp is not None:
+                do_easy_label = self.hyp.get('do_easy_label', False)
+                do_front_label = self.hyp.get('do_front_label', False)
+            else:
+                do_easy_label = False
+                do_front_label = False
+            cache, exists = self.cache_labels(cache_path, prefix, load_seg=load_seg,
+                                 do_easy_label=do_easy_label,
+                                 do_front_label=do_front_label), False  # cache
 
         # Display cache
         nf, nm, ne, nc, n = cache.pop('results')  # found, missing, empty, corrupted, total
@@ -1070,7 +1144,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 pbar.desc = f'{prefix}Caching images ({gb / 1E9:.1f}GB)'
             pbar.close()
 
-    def cache_labels(self, path=Path('./labels.cache'), prefix='', load_seg=False):
+    def cache_labels(self, path=Path('./labels.cache'), prefix='', load_seg=False, do_easy_label=False, do_front_label=False):
+        print(do_easy_label, do_front_label)
         # Cache dataset labels, check images and read shapes
         x = {}  # dict
         nm, nf, ne, nc = 0, 0, 0, 0  # number missing, found, empty, duplicate
@@ -1096,6 +1171,10 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                 segments = [np.array(x[1:], dtype=np.float32).reshape(-1, 2) for x in l]  # (cls, xy1...)
                                 l = np.concatenate((classes.reshape(-1, 1), segments2boxes(segments)), 1)  # (cls, xywh)
                                 l = fix_segment(l)
+                                if do_easy_label:
+                                    l, segments = easy_label(l, segments)
+                                if do_front_label:
+                                    l, segments = front_label(l, segments, [im.size[1], im.size[0]])
                             else:
                                 l = fix_label(l)
                                 segments = [np.array([
@@ -1104,6 +1183,10 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                     [float(x_line[1])+float(x_line[3])/2, float(x_line[2])+float(x_line[4])/2],
                                     [float(x_line[1])-float(x_line[3])/2, float(x_line[2])+float(x_line[4])/2]
                                     ]) for x_line in l]
+                                if do_easy_label:
+                                    l, segments = easy_label(l, segments)
+                                if do_front_label:
+                                    l, segments = front_label(l, segments, [im.size[1], im.size[0]])
                         else:
                             l = fix_label(l)
                             segments = [np.array([
@@ -1112,6 +1195,10 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                     [float(x_line[1])+float(x_line[3])/2, float(x_line[2])+float(x_line[4])/2],
                                     [float(x_line[1])-float(x_line[3])/2, float(x_line[2])+float(x_line[4])/2]
                                     ]) for x_line in l]
+                            if do_easy_label:
+                                l, segments = easy_label(l, segments)
+                            if do_front_label:
+                                l, segments = front_label(l, segments, [im.size[1], im.size[0]])
                         l = np.array(l, dtype=np.float32)
                     if len(l):
                         assert l.shape[1] == 5, 'labels require 5 columns each'

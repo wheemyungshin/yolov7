@@ -796,7 +796,7 @@ if __name__ == '__main__':
     parser.add_argument('--gray', action='store_true', help='Load all data as grayscale')
     parser.add_argument('--merge-label', type=int, nargs='+', action='append', default=[], help='list of merge label list chunk. --merge-label 0 1 --merge-label 2 3 4')
     parser.add_argument('--no-ratio-maintain', action='store_true', help='do not maintain input ratio')
-    parser.add_argument('--minmax-label-size-limit', nargs='+', type=int, default=[-1, -1], help='labels to include when calculating segmentation loss')
+    parser.add_argument('--minmax-label-size-limit', nargs='+', type=int, default=[-1, -1], help='minmax box limit during augmentation')
     
     opt = parser.parse_args()
 
