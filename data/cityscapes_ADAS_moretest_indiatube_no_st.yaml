@@ -13,7 +13,7 @@ train: [
     ../data/AIHUB_dirtroad_nothing/train.txt, # 19568
     ../data/roboflow_autorickshaw/train.txt, # 957
     ../data/ADAS_india_youtubes_nothing/train.txt, # 933
-    ../data/ADAS_india_youtubes_only_3cls/train.txt # ~19000
+    ../data/ADAS_india_youtubes_only_3cls/train.txt # ~11800
 ]
 val: [../data/IDD_FGVD/train.txt, # 787 images
         ../data/IDDAW/train.txt, # 3905
