@@ -97,10 +97,10 @@ def easy_label(l, seg): # 차량 detection 용도
     for x_line, x_seg in zip(l, seg):
         line_easy_temp = [(round(float(x_item),6)) for x_item in x_line[1:]]
         x_temp, y_temp, w_temp, h_temp = line_easy_temp
-        if x_line[0] in [6, 12 ,13]:
-            min_box_size = 0.005
-        else:
+        if x_line[0] in [6, 7, 12 ,13]:
             min_box_size = 0.01
+        else:
+            min_box_size = 0.04
 
         is_long_box = h_temp > w_temp*5 or w_temp > h_temp*5
 

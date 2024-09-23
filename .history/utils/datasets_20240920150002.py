@@ -75,7 +75,7 @@ def front_label(l, seg, shape): # 차량 detection 용도
         y2_temp = int(max(min(y_temp + h_temp/2,1),0)*shape[0])
         box_temp = [x1_temp, y1_temp, x2_temp, y2_temp]
 
-        if x_line[0] in ['6', '7', '8', '9', '10', '12', '13', '999']:
+        if x_line[0] in ['0', '1', '6', '7', '8', '9', '10', '12', '13', '999']:# 0, 1 : Fence , GuardRail
             if len(l_box) > 0:
                 iou_matrix = self_overlap(np.array([box_temp]), np.array(l_box))
                 if np.max(iou_matrix[0]) < 0.5:
@@ -98,9 +98,9 @@ def easy_label(l, seg): # 차량 detection 용도
         line_easy_temp = [(round(float(x_item),6)) for x_item in x_line[1:]]
         x_temp, y_temp, w_temp, h_temp = line_easy_temp
         if x_line[0] in [6, 12 ,13]:
-            min_box_size = 0.005
-        else:
             min_box_size = 0.01
+        else:
+            min_box_size = 0.03
 
         is_long_box = h_temp > w_temp*5 or w_temp > h_temp*5
 
@@ -110,6 +110,7 @@ def easy_label(l, seg): # 차량 detection 용도
     l = l_fix
     seg = s_fix
     return l, seg
+
 
 
 def fix_label(l):
