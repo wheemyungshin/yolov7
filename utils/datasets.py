@@ -1001,9 +1001,12 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     x[np.isin(x[:, 0], np.array(merge_label_chunk)), 0] = merge_label_idx - 100
 
             labels_new = []
-            for x in self.labels:
+            segs_new = []
+            for x, seg_x in zip(self.labels, self.segments):
                 labels_new.append(x[x[:, 0] < 0])
+                segs_new.append(seg_x[x[:, 0] < 0])
             self.labels = labels_new
+            self.segments = segs_new
 
             for x in self.labels:
                 x[:, 0] += 100
