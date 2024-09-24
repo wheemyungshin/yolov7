@@ -33,7 +33,7 @@ def detect(save_img=False):
     bbox_num_per_size[1] = 0
     print(bbox_num_per_size)
     '''
-    source, weights, view_img, save_txt, imgsz, trace, qat = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, not opt.no_trace, opt.qat
+    source, weights, view_img, save_txt, imgsz, trace = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, not opt.no_trace
     cfg, nc = opt.cfg, opt.nc
     save_img = not opt.nosave and not source.endswith('.txt')  # save inference images
     webcam = source.isnumeric() or source.endswith('.txt') or source.lower().startswith(
@@ -61,7 +61,7 @@ def detect(save_img=False):
         else:
             assert (type(ckpt_weights['ema']) is Model or type(ckpt_weights['ema']) is collections.OrderedDict), "Invalid model types to load"
 
-        ckpt = Model(cfg, ch=3, nc=nc, qat=qat).to(device)  # create#, nm=nm).to(device)  # create
+        ckpt = Model(cfg, ch=3, nc=nc, qat=False).to(device)  # create#, nm=nm).to(device)  # create
         #if opt.qat:
         #    fuse_modules(ckpt)
         model = attempt_load_v2(ckpt, state_dict, map_location=device)  # load FP32 model
@@ -448,7 +448,6 @@ if __name__ == '__main__':
     parser.add_argument('--min-size', default=0, type=int, help='save frame ratio')
     parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
     parser.add_argument('--nc', type=int, default=0, help='number of class')
-    parser.add_argument('--qat', action='store_true', help='Quantization-Aware-Training')
     
     opt = parser.parse_args()
     print(opt)

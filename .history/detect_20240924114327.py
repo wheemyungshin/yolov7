@@ -448,7 +448,6 @@ if __name__ == '__main__':
     parser.add_argument('--min-size', default=0, type=int, help='save frame ratio')
     parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
     parser.add_argument('--nc', type=int, default=0, help='number of class')
-    parser.add_argument('--qat', action='store_true', help='Quantization-Aware-Training')
     
     opt = parser.parse_args()
     print(opt)

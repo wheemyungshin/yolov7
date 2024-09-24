@@ -75,17 +75,16 @@ def front_label(l, seg, shape): # 차량 detection 용도
         y2_temp = int(max(min(y_temp + h_temp/2,1),0)*shape[0])
         box_temp = [x1_temp, y1_temp, x2_temp, y2_temp]
 
-        if x_line[0] in ['6', '7', '8', '9', '10', '12', '13', '999']:
-            if len(l_box) > 0:
-                iou_matrix = self_overlap(np.array([box_temp]), np.array(l_box))
-                if np.max(iou_matrix[0]) < 0.5:
-                    l_fix.append(x_line)
-                    s_fix.append(x_seg)
-                    l_box.append(box_temp)
-            else:
+        if len(l_box) > 0:
+            iou_matrix = self_overlap(np.array([box_temp]), np.array(l_box))
+            if np.max(iou_matrix[0]) < 0.25:
                 l_fix.append(x_line)
                 s_fix.append(x_seg)
                 l_box.append(box_temp)
+        else:
+            l_fix.append(x_line)
+            s_fix.append(x_seg)
+            l_box.append(box_temp)
 
     l = l_fix
     seg = s_fix
@@ -98,19 +97,13 @@ def easy_label(l, seg): # 차량 detection 용도
         line_easy_temp = [(round(float(x_item),6)) for x_item in x_line[1:]]
         x_temp, y_temp, w_temp, h_temp = line_easy_temp
         if x_line[0] in [6, 12 ,13]:
-            min_box_size = 0.005
-        else:
             min_box_size = 0.01
+        else:
+            min_box_size = 0.03
 
-<<<<<<< HEAD
+        #is_long_box = h_temp > w_temp*5 or w_temp > h_temp*5
 
-        is_long_box = h_temp > w_temp*5 or w_temp > h_temp*5
-
-=======
-        is_long_box = h_temp > w_temp*5 or w_temp > h_temp*5
-
->>>>>>> 48fbd7c235c8b7d41b752d502172ae987c21f0e8
-        if (not is_long_box) and (h_temp > min_box_size and w_temp > min_box_size): # small boxes
+        if (h_temp > min_box_size and w_temp > min_box_size): # small boxes
             l_fix.append(x_line)
             s_fix.append(x_seg)
     l = l_fix
@@ -1081,13 +1074,22 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 for merge_label_idx, merge_label_chunk in enumerate(merge_label):
                     x[np.isin(x[:, 0], np.array(merge_label_chunk)), 0] = merge_label_idx - 100
 
+            label_files_new = []
+            img_files_new = []
+            shapes_new = []
+            segments_new = []
+            sampling_ratios_new = []
             labels_new = []
-            segs_new = []
-            for x, seg_x in zip(self.labels, self.segments):
+            for x, seg_x in zip(self.label_files, self.img_files, self.labels, self.segments):
                 labels_new.append(x[x[:, 0] < 0])
-                segs_new.append(seg_x[x[:, 0] < 0])
+                segments_new.append(seg_x[x[:, 0] < 0])
+
+            self.label_files = label_files_new
+            self.img_files = img_files_new
+            self.shapes = shapes_new
+            self.segments = segments_new
+            self.sampling_ratios = sampling_ratios_new
             self.labels = labels_new
-            self.segments = segs_new
 
             for x in self.labels:
                 x[:, 0] += 100
@@ -2319,6 +2321,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                 fire_img_position_x + int(fire_img.shape[1]* 0.13), fire_img_position_y + int(fire_img.shape[0]* 0.13), 
                                 fire_img_position_x + fire_img.shape[1] -int(fire_img.shape[1]*0.13), fire_img_position_y + fire_img.shape[0] -int(fire_img.shape[0]*0.13)]], axis=0)
 
+
         if hyp is not None and hyp.get('glitter_for_burn', 0) > 0:
             nL = len(labels)  # number of labels
             if nL:
@@ -2352,30 +2355,9 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                 img[crop_y1:crop_y2,crop_x1:crop_x2, 0] = (1-random_mask)*img[crop_y1:crop_y2,crop_x1:crop_x2, 0] + random_mask*burn_crop[:,:,0]
                                 img[crop_y1:crop_y2,crop_x1:crop_x2, 1] = (1-random_mask)*img[crop_y1:crop_y2,crop_x1:crop_x2, 1] + random_mask*burn_crop[:,:,1]
                                 img[crop_y1:crop_y2,crop_x1:crop_x2, 2] = (1-random_mask)*img[crop_y1:crop_y2,crop_x1:crop_x2, 2] + random_mask*burn_crop[:,:,2]
-                            labels[idx][0] = 0        
+                            labels[idx][0] = 0
+        
 
-        if hyp is not None and hyp.get('randomerase', 0) > 0:
-            nL = len(labels)  # number of labels
-            if nL:
-                for label in labels:
-                    if random.random() < hyp['randomerase']:
-                        ore_x1 = int(label[1])
-                        ore_y1 = int(label[2])
-                        ore_x2 = int(label[3])
-                        ore_y2 = int(label[4])
-                        area = (ore_x2-ore_x1) * (ore_y2-ore_y1)
-                
-                        sl = 0.02
-                        sh = 0.4
-                        r1 = 0.3
-                        target_area = random.uniform(sl, sh) * area
-                        aspect_ratio = random.uniform(r1, 1/r1)
-
-                        w = min(int(round(math.sqrt(target_area * aspect_ratio))), (ore_x2-ore_x1))
-                        h = min(int(round(math.sqrt(target_area / aspect_ratio))), (ore_y2-ore_y1))                    
-                        ore_x1_ = random.randint(ore_x1, ore_x2 - w)
-                        ore_y1_ = random.randint(ore_y1, ore_y2 - h)
-                        img[ore_y1_:ore_y1_+h, ore_x1_:ore_x1_+w, :] = torch.from_numpy(np.random.rand(h, w, 3)*255)
 
         nL = len(labels)  # number of labels
         if nL:

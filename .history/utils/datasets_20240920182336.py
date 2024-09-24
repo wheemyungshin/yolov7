@@ -97,19 +97,13 @@ def easy_label(l, seg): # 차량 detection 용도
     for x_line, x_seg in zip(l, seg):
         line_easy_temp = [(round(float(x_item),6)) for x_item in x_line[1:]]
         x_temp, y_temp, w_temp, h_temp = line_easy_temp
-        if x_line[0] in [6, 12 ,13]:
-            min_box_size = 0.005
-        else:
+        if x_line[0] in [6, 7, 12 ,13]:
             min_box_size = 0.01
-
-<<<<<<< HEAD
+        else:
+            min_box_size = 0.04
 
         is_long_box = h_temp > w_temp*5 or w_temp > h_temp*5
 
-=======
-        is_long_box = h_temp > w_temp*5 or w_temp > h_temp*5
-
->>>>>>> 48fbd7c235c8b7d41b752d502172ae987c21f0e8
         if (not is_long_box) and (h_temp > min_box_size and w_temp > min_box_size): # small boxes
             l_fix.append(x_line)
             s_fix.append(x_seg)
@@ -2319,6 +2313,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                 fire_img_position_x + int(fire_img.shape[1]* 0.13), fire_img_position_y + int(fire_img.shape[0]* 0.13), 
                                 fire_img_position_x + fire_img.shape[1] -int(fire_img.shape[1]*0.13), fire_img_position_y + fire_img.shape[0] -int(fire_img.shape[0]*0.13)]], axis=0)
 
+
         if hyp is not None and hyp.get('glitter_for_burn', 0) > 0:
             nL = len(labels)  # number of labels
             if nL:
@@ -2352,30 +2347,9 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                 img[crop_y1:crop_y2,crop_x1:crop_x2, 0] = (1-random_mask)*img[crop_y1:crop_y2,crop_x1:crop_x2, 0] + random_mask*burn_crop[:,:,0]
                                 img[crop_y1:crop_y2,crop_x1:crop_x2, 1] = (1-random_mask)*img[crop_y1:crop_y2,crop_x1:crop_x2, 1] + random_mask*burn_crop[:,:,1]
                                 img[crop_y1:crop_y2,crop_x1:crop_x2, 2] = (1-random_mask)*img[crop_y1:crop_y2,crop_x1:crop_x2, 2] + random_mask*burn_crop[:,:,2]
-                            labels[idx][0] = 0        
+                            labels[idx][0] = 0
+        
 
-        if hyp is not None and hyp.get('randomerase', 0) > 0:
-            nL = len(labels)  # number of labels
-            if nL:
-                for label in labels:
-                    if random.random() < hyp['randomerase']:
-                        ore_x1 = int(label[1])
-                        ore_y1 = int(label[2])
-                        ore_x2 = int(label[3])
-                        ore_y2 = int(label[4])
-                        area = (ore_x2-ore_x1) * (ore_y2-ore_y1)
-                
-                        sl = 0.02
-                        sh = 0.4
-                        r1 = 0.3
-                        target_area = random.uniform(sl, sh) * area
-                        aspect_ratio = random.uniform(r1, 1/r1)
-
-                        w = min(int(round(math.sqrt(target_area * aspect_ratio))), (ore_x2-ore_x1))
-                        h = min(int(round(math.sqrt(target_area / aspect_ratio))), (ore_y2-ore_y1))                    
-                        ore_x1_ = random.randint(ore_x1, ore_x2 - w)
-                        ore_y1_ = random.randint(ore_y1, ore_y2 - h)
-                        img[ore_y1_:ore_y1_+h, ore_x1_:ore_x1_+w, :] = torch.from_numpy(np.random.rand(h, w, 3)*255)
 
         nL = len(labels)  # number of labels
         if nL:
