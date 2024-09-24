@@ -101,15 +101,7 @@ def easy_label(l, seg): # 차량 detection 용도
             min_box_size = 0.005
         else:
             min_box_size = 0.01
-
-<<<<<<< HEAD
-
         is_long_box = h_temp > w_temp*5 or w_temp > h_temp*5
-
-=======
-        is_long_box = h_temp > w_temp*5 or w_temp > h_temp*5
-
->>>>>>> 48fbd7c235c8b7d41b752d502172ae987c21f0e8
         if (not is_long_box) and (h_temp > min_box_size and w_temp > min_box_size): # small boxes
             l_fix.append(x_line)
             s_fix.append(x_seg)
