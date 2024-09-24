@@ -124,7 +124,7 @@ if __name__ == '__main__':
     cap = cv2.VideoCapture(opt.source)
 
     vid_name = opt.save
-    vid_writer = cv2.VideoWriter(vid_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, (480, 480))
+    vid_writer = cv2.VideoWriter(vid_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, (1080, 1080))
     frame_id = 0
     unique_confidences = []
     voting_que = [0] * 60
@@ -133,8 +133,9 @@ if __name__ == '__main__':
         _, frame = cap.read()
 
         if frame is not None:
-            #frame = frame[:, 500:1580]
-            frame = frame[:, :, :]#.transpose(1, 0, 2)
+            print(frame.shape)
+            frame = frame[:, 420:1500]
+            #frame = frame[:, :, :]#.transpose(1, 0, 2)
             frame_vis = frame.copy()
 
             print(fd_model.get_input_details()[0]["shape"])
@@ -207,10 +208,10 @@ if __name__ == '__main__':
                 if scores[idx] > 0.1 :
                     size = (boxes[idx][2] - boxes[idx][0]) * (boxes[idx][3] - boxes[idx][1])
                     max_fd = boxes[idx]
-                    max_fd[0] = int(max_fd[0] * (480 / fd_model.get_input_details()[0]["shape"][2]))
-                    max_fd[2] = int(max_fd[2] * (480 / fd_model.get_input_details()[0]["shape"][2]))
-                    max_fd[1] = int(max_fd[1] * (480 / fd_model.get_input_details()[0]["shape"][1]))
-                    max_fd[3] = int(max_fd[3] * (480 / fd_model.get_input_details()[0]["shape"][1]))
+                    max_fd[0] = int(max_fd[0] * (1080 / fd_model.get_input_details()[0]["shape"][2]))
+                    max_fd[2] = int(max_fd[2] * (1080 / fd_model.get_input_details()[0]["shape"][2]))
+                    max_fd[1] = int(max_fd[1] * (1080 / fd_model.get_input_details()[0]["shape"][1]))
+                    max_fd[3] = int(max_fd[3] * (1080 / fd_model.get_input_details()[0]["shape"][1]))
                     max_fd = max_fd.astype(np.int32)
                     frame_vis = cv2.rectangle(frame_vis, (max_fd[0],max_fd[1]), (max_fd[2],max_fd[3]), (255,255,0), 2)            
                     cv2.putText(frame_vis, str(round(scores[idx], 5)), (max_fd[0],max_fd[1] - 2), 0, 1, [225, 255, 255], thickness=2, lineType=cv2.LINE_AA)
