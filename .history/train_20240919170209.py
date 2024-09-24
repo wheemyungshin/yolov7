@@ -496,6 +496,9 @@ def train(hyp, opt, device, tb_writer=None):
                     if divis_num <= target_size < divis_num+4:
                         target_size_division[divis_num] +=1
 
+            if len(targets) == 0:
+                print(targets)
+
             # Forward
             '''
             if epoch < 5:
