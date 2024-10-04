@@ -182,8 +182,6 @@ class GroupNormalize(object):
 
 
 def detect(save_img=False):
-    v_count_idx = 0
-    vehicle_count = np.array([[0,0,0,0]]*150)
     vanishing_points = [[0,0]]*100
     vanishing_point_idx = 0
 
@@ -281,16 +279,13 @@ def detect(save_img=False):
 
     t0 = time.time()
     for path, img, im0s, vid_cap in dataset:
-        v_count_idx = v_count_idx + 1
-        v_count_temp = [0,0,0,0]
-
         img_shape_bef_crop = img.shape
 
         square_crop_margin = int((img.shape[2] - img.shape[1]) / 2)
-        crop_x1 = 0#int(img.shape[2]/2 - 96)
-        crop_x2 = img.shape[2]-1#int(img.shape[2]/2 + 96)
+        crop_x1 = int(img.shape[2]/2 - 96)
+        crop_x2 = int(img.shape[2]/2 + 96)
         crop_y1 = 0#int(img.shape[1] - 160)
-        crop_y2 = img.shape[1]-1#int(img.shape[1])
+        crop_y2 = int(img.shape[1])
         img = img[:, crop_y1 : crop_y2, crop_x1 : crop_x2]
 
         t0_each = time.time()
@@ -308,6 +303,8 @@ def detect(save_img=False):
         # Process detections
         p, s, im0, frame = path, '', im0s, getattr(dataset, 'frame', 0)
         clean_im0 = im0.copy()
+
+        center_xy = [im0.shape[1], im0.shape[0]]
 
         # Inference
         pred = model(img, augment=opt.augment)[0]
@@ -333,7 +330,7 @@ def detect(save_img=False):
         
         print("scores: ", pred[0][:, 4])        
 
-        pred_lane = non_max_suppression(pred_lane, conf_thres=0.15, iou_thres=0.85, classes=opt.classes, agnostic=opt.agnostic_nms)
+        pred_lane = non_max_suppression(pred_lane, conf_thres=0.15, iou_thres=0.9, classes=opt.classes, agnostic=opt.agnostic_nms)
         pred_lane[0][:, 0] = pred_lane[0][:, 0] + crop_x1
         pred_lane[0][:, 1] = pred_lane[0][:, 1] + crop_y1
         pred_lane[0][:, 2] = pred_lane[0][:, 2] + crop_x1
@@ -349,6 +346,9 @@ def detect(save_img=False):
             prev_left_xyxy = default_left_xyxy
         if len(prev_right_xyxy) == 0:
             prev_right_xyxy = default_right_xyxy
+
+        left_lanes = []
+        right_lanes = []
         for i, det in enumerate(pred_lane):
             if len(det):
                 scores = det[:, 4]
@@ -371,12 +371,14 @@ def detect(save_img=False):
                             best_ratio_right = (im0.shape[1]-x)
                             best_ratio_right_idx = i
                             right_xyxy = [lane_box[0], lane_box[1], lane_box[2], lane_box[3]]
+                        right_lanes.append([lane_box[0], lane_box[1], lane_box[2], lane_box[3]])
                     else:
                         if x > best_ratio_left :
                             best_ratio_left = x
                             best_ratio_left_idx = i
                             left_xyxy = [lane_box[0], lane_box[1], lane_box[2], lane_box[3]]
-
+                        left_lanes.append([lane_box[0], lane_box[1], lane_box[2], lane_box[3]])
+                        
         if len(pred[0]) and len(pred_person[0]):
             pred = [torch.cat((pred[0], pred_person[0]), 0)]
         elif len(pred_person[0]):
@@ -386,25 +388,7 @@ def detect(save_img=False):
         pred[0][:, 1] = pred[0][:, 1] + crop_y1
         pred[0][:, 2] = pred[0][:, 2] + crop_x1
         pred[0][:, 3] = pred[0][:, 3] + crop_y1
-
         
-        '''
-        cv2.line(im0, (int(roi_polygon[0]),
-                        int(roi_polygon[1])), 
-                        (int(roi_polygon[2]),
-                        int(roi_polygon[3])),
-                        (255,0,255), thickness=1) 
-        cv2.line(im0, (int(roi_polygon[0]),
-                        int(roi_polygon[1])), 
-                        (int(roi_polygon[4]),
-                        int(roi_polygon[5])),
-                        (255,0,255), thickness=1) 
-        cv2.line(im0, (int(roi_polygon[2]),
-                        int(roi_polygon[3])), 
-                        (int(roi_polygon[4]),
-                        int(roi_polygon[5])),
-                        (255,0,255), thickness=1) 
-        '''
         center_polygon = [
             int(im0.shape[1]*0.5), int(im0.shape[0]*0.9),
             int(im0.shape[1]*0.52), int(im0.shape[0]-1),
@@ -452,10 +436,7 @@ def detect(save_img=False):
         left_xyxy[0] = (left_xyxy[3] - b_l) / a_l
         right_xyxy[3] = im0s.shape[0]-1
         right_xyxy[2] = (right_xyxy[3] - b_r) / a_r
-            
-        #if left_xyxy[2] > right_xyxy[0]:
-        #   left_xyxy = default_left_xyxy
-        #   right_xyxy = default_right_xyxy
+                    
         x_cross = (b_r - b_l) / (a_l - a_r)
         y_cross = a_l * x_cross + b_l
         left_xyxy[2] = x_cross
@@ -466,6 +447,9 @@ def detect(save_img=False):
         vanishing_point = [int(x_cross), int(y_cross)]
         vanishing_point_idx = vanishing_point_idx + 1
         vanishing_points[vanishing_point_idx%len(vanishing_points)] = vanishing_point
+
+        #LDWS Validation
+        is_lane_valid = True
 
         #LDWS
         global_x_center = int(im0.shape[1]*0.5)
@@ -497,7 +481,7 @@ def detect(save_img=False):
         if left_dist > right_dist*4:
             right_close = close_max
         else:
-            right_close = max(right_close-1, 0)
+            right_close = max(right_close-1, 0)        
 
         roi_polygon = [
             int(left_xyxy[0]), int(left_xyxy[3]),
@@ -508,109 +492,8 @@ def detect(save_img=False):
 
         prev_left_xyxy = left_xyxy
         prev_right_xyxy = right_xyxy
-        
-        draw_polygons = np.asarray([roi_polygon])
-        draw_polygons = draw_polygons.astype(np.int32)
-        draw_polygons = draw_polygons.reshape(1, -1, 2)
-        fill_image = im0.copy()
-        fill_image = cv2.fillPoly(fill_image, pts=draw_polygons, color=(255, 0, 255))
 
-        draw_polygons = np.asarray([center_polygon])
-        draw_polygons = draw_polygons.astype(np.int32)
-        draw_polygons = draw_polygons.reshape(1, -1, 2)
-        fill_image = cv2.fillPoly(fill_image, pts=draw_polygons, color=(196, 0, 128))
-
-        #LDWS Warning
-        '''
-        if left_warning > 0:
-            print_txt = "LDWS left: " + str(left_warning)
-            lane_warning_color = [0,0,255]
-        elif left_close > 0:
-            print_txt = "LDWS left: " + str(left_close)
-            lane_warning_color = [0,255,255]
-        else:
-            print_txt = "LDWS left: " + str(left_close)
-            lane_warning_color = [255,255,255]
-
-        tl = 3
-        tf = max(tl - 1, 1)  # font thickness
-        t_size = cv2.getTextSize(print_txt, 0, fontScale=tl / 3, thickness=tf)[0]
-        c1 = (1, 30)
-        c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
-        cv2.rectangle(im0, c1, c2, (0,0,0), -1, cv2.LINE_AA)  # filled
-        cv2.putText(im0, print_txt, (c1[0], c1[1] - 2), 0, tl / 3, lane_warning_color, thickness=tf, lineType=cv2.LINE_AA)
-
-        if right_warning > 0:
-            print_txt = "LDWS right: " + str(right_warning)
-            lane_warning_color = [0,0,255]
-        elif right_close > 0:
-            print_txt = "LDWS right: " + str(right_close)
-            lane_warning_color = [0,255,255]
-        else:
-            print_txt = "LDWS right: " + str(right_close)
-            lane_warning_color = [255,255,255]
-        tl = 3
-        tf = max(tl - 1, 1)  # font thickness
-        t_size = cv2.getTextSize(print_txt, 0, fontScale=tl / 3, thickness=tf)[0]
-        c1 = (1, 60)
-        c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
-        cv2.rectangle(im0, c1, c2, (0,0,0), -1, cv2.LINE_AA)  # filled
-        cv2.putText(im0, print_txt, (c1[0], c1[1] - 2), 0, tl / 3, lane_warning_color, thickness=tf, lineType=cv2.LINE_AA)
-        '''
-
-
-        '''
-        radius = 20
-        fill_image = cv2.circle(fill_image, (int(global_x_center), int(im0.shape[0]*0.9)), radius, [224,0,48], -1)
-        if left_warning > 0:
-            fill_image = cv2.ellipse(fill_image, (int(global_x_center), int(im0.shape[0]*0.9)),
-                (radius, radius), 90, 0, int(180*left_warning/warning_max), [0,0,255], -1)
-        elif left_close > 0:
-            fill_image = cv2.ellipse(fill_image, (int(global_x_center), int(im0.shape[0]*0.9)),
-                (radius, radius), 90, 0, int(180*left_close/close_max), [24,180,196], -1)
-        if right_warning > 0:
-            fill_image = cv2.ellipse(fill_image, (int(global_x_center), int(im0.shape[0]*0.9)),
-                (radius, radius), 90, int(180+180*(1-right_warning/warning_max)), 360, [0,0,255], -1)
-        elif right_close > 0:
-            fill_image = cv2.ellipse(fill_image, (int(global_x_center), int(im0.shape[0]*0.9)),
-                (radius, radius), 90, int(180+180*(1-right_warning/warning_max)), 360, [24,180,196], -1)
-        '''
-
-        '''
-        if left_close > 0 or right_close > 0:
-            fill_image = cv2.circle(fill_image, (int(lane_x_center), int(im0.shape[0]*0.9)), radius, [24,180,196], -1)
-        elif left_warning > 0 or right_warning > 0:
-            fill_image = cv2.circle(fill_image, (int(lane_x_center), int(im0.shape[0]*0.9)), radius, [0,0,255], -1)
-        else:
-            fill_image = cv2.circle(fill_image, (int(lane_x_center), int(im0.shape[0]*0.9)), radius, [224,0,48], -1)
-        '''
-        
-        for vanishing_point_i, vanishing_point in enumerate(vanishing_points):
-            if vanishing_point_i <= vanishing_point_idx % len(vanishing_points):
-                point_power = len(vanishing_points) - (vanishing_point_idx%len(vanishing_points) - vanishing_point_i)
-            else:
-                point_power = (vanishing_point_i - vanishing_point_idx%len(vanishing_points))
-            fill_image = cv2.circle(fill_image, (vanishing_point[0], vanishing_point[1]), int(point_power*0.15)+1, [point_power, point_power+150, point_power], -1)  
-        vanishing_point_idx = vanishing_point_idx + 1
-
-        alpha = 0.5
-        im0 = cv2.addWeighted(fill_image, alpha, im0, 1 - alpha, 0)
-        cv2.line(im0, (int(right_xyxy[0]),int(right_xyxy[1])), (int(right_xyxy[2]),int(right_xyxy[3])), [255, 0, 255], 3)
-        cv2.line(im0, (int(left_xyxy[2]),int(left_xyxy[1])), (int(left_xyxy[0]),int(left_xyxy[3])), [255, 0, 255], 3)
-
-        if save_txt:
-            lines_rightxyxy_to_draw = [str(int(right_xyxy[0])), str(int(right_xyxy[1])), str(int(right_xyxy[2])), str(int(right_xyxy[3]))]
-            lines_leftxyxy_to_draw = [str(int(left_xyxy[0])), str(int(left_xyxy[1])), str(int(left_xyxy[2])), str(int(left_xyxy[3]))]
-            with open(txt_path + '.txt', 'a') as f:
-                f.write('Right line before processing : ' + ' '.join(lines_rightxyxy_origin))
-                f.write('\n')
-                f.write('Left line before processing : ' + ' '.join(lines_leftxyxy_origin))
-                f.write('\n')
-                f.write('Right line after processing : ' + ' '.join(lines_rightxyxy_to_draw))
-                f.write('\n')
-                f.write('Left line after processing : ' + ' '.join(lines_leftxyxy_to_draw))
-                f.write('\n')
-
+        #box tracking
         prev_boxes = prev_boxes_list[-1]
 
         if dataset.mode != 'image' and frame % frame_ratio != 0:
@@ -618,217 +501,234 @@ def detect(save_img=False):
         else:
             max_person_size = 0 # (1080 x 1920)
             closest_pedestrian_distance = -1
-            for i, det in enumerate(pred):  # detections per image
-                short_side = min(im0.shape[0], im0.shape[1])
-                if opt.square:
-                    if im0.shape[0] == short_side:
-                        square_crop_margin = int((im0.shape[1] - short_side) / 2)
-                        im0 = im0[:, square_crop_margin : square_crop_margin+short_side, :]
-                    elif im0.shape[1] == short_side:
-                        square_crop_margin = int((im0.shape[0] - short_side) / 2)
-                        im0 = im0[square_crop_margin : square_crop_margin+short_side, :, :]
-                        
-                if len(det):
-                    prev_det = det[:, :4].clone().detach().cpu().float().numpy()
-
-                    prev_det[:, 0] = prev_det[:, 0] - crop_x1
-                    prev_det[:, 1] = prev_det[:, 1] - crop_y1
-                    prev_det[:, 2] = prev_det[:, 2] - crop_x1
-                    prev_det[:, 3] = prev_det[:, 3] - crop_y1
-
-                    scores = det[:, 4]
-                    # Rescale boxes from img_size to im0 size
-                    det[:, :4] = scale_coords(img_shape_bef_crop[1:], det[:, :4], im0.shape)
-
-                    temp_boxes = det[:, :4].detach().cpu().float().numpy()
-                    if len(prev_boxes) and len(temp_boxes):
-                        iou_matrix = _iou(prev_boxes, temp_boxes)
-                    else:
-                        iou_matrix = np.array([])
+            det = pred[0] # detections per image
+            short_side = min(im0.shape[0], im0.shape[1])
+            if opt.square:
+                if im0.shape[0] == short_side:
+                    square_crop_margin = int((im0.shape[1] - short_side) / 2)
+                    im0 = im0[:, square_crop_margin : square_crop_margin+short_side, :]
+                elif im0.shape[1] == short_side:
+                    square_crop_margin = int((im0.shape[0] - short_side) / 2)
+                    im0 = im0[square_crop_margin : square_crop_margin+short_side, :, :]
                     
-                    if len(iou_matrix):
-                        thr_score = 0.7
-                        valid_idx = np.nonzero(np.max(iou_matrix, axis=0)>=thr_score)[0]
-                        match_box_ids_y = np.argmax(iou_matrix, axis=0)
-                    else:
-                        valid_idx = np.array([])
-                        match_box_ids_y = np.array([])
-                    
-                    '''
-                    if len(prev_boxes) > len(valid_idx):
-                        for box_idx in range(len(prev_boxes)):
-                            if box_idx not in valid_idx:
-                                temp_boxes.append(prev_boxes[box_idx])
-                    '''
+            if len(det):
+                prev_det = det[:, :4].clone().detach().cpu().float().numpy()
 
-                    valid_idx_list = update_list(valid_idx_list, valid_idx)
-                    match_box_ids_y_list = update_list(match_box_ids_y_list, match_box_ids_y)
+                prev_det[:, 0] = prev_det[:, 0] - crop_x1
+                prev_det[:, 1] = prev_det[:, 1] - crop_y1
+                prev_det[:, 2] = prev_det[:, 2] - crop_x1
+                prev_det[:, 3] = prev_det[:, 3] - crop_y1
 
+                scores = det[:, 4]
+                # Rescale boxes from img_size to im0 size
+                det[:, :4] = scale_coords(img_shape_bef_crop[1:], det[:, :4], im0.shape)
 
-                    print("temp_boxes")
-                    print(len(temp_boxes))
-                    print("valid_idx_list")
-                    print(valid_idx_list)
-                    print("match_box_ids_y_list")
-                    print(match_box_ids_y_list)
-
-                    # Print results
-                    for c in det[:, 5].unique():
-                        n = (det[:, 5] == c).sum()  # detections per class
-                        s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
-                    
-                    # Write results
-                    temp_distances = []
-                    for temp_box_id, (*xyxy, conf, cls) in enumerate(det[:, :6]):
-                        v_count_temp[int(cls)] = v_count_temp[int(cls)]+1
-
-                        warning = "Safe"
-                        xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
-                        temp_distance = calculate_distance([int(cls), float(xywh[0]), float(xywh[1]), float(xywh[2]), float(xywh[3])],
-                            [crop_x1/imgsz[1], crop_y1/imgsz[0], crop_x2/imgsz[1], crop_y2/imgsz[0]])
-                        temp_distances.append(temp_distance)
-                        
-                        all_prev_distances = []
-                        if temp_box_id in valid_idx:
-                            prev_box_ids = []
-                            for prev_frame_idx in range(max_prev_frame,0,-1):
-                                prev_box_id, prev_distance = investigate_prev_distance(match_box_ids_y_list, valid_idx_list, prev_distances_list, temp_box_id, maxiter=prev_frame_idx)
-                                if prev_box_id is None:
-                                    prev_box_ids.append(None)
-                                    all_prev_distances.append(temp_distance)
-                                else:
-                                    prev_box_ids.append(prev_box_id)
-                                    all_prev_distances.append(prev_distance)
-                            distance = round(prev_average_value(all_prev_distances, temp_distance), 3)
-                            
-                            x1_list, y1_list, x2_list,y2_list = [], [], [], []
-                            for prev_frame_idx in range(max_prev_frame,0,-1):
-                                if len(prev_boxes_list) >= prev_frame_idx and len(prev_box_ids) >= prev_frame_idx and \
-                                    prev_box_ids[-prev_frame_idx] is not None and len(prev_boxes_list[-prev_frame_idx] > prev_box_ids[-prev_frame_idx]):
-                                    x1_list.append(prev_boxes_list[-prev_frame_idx][prev_box_ids[-prev_frame_idx]][0])
-                                    y1_list.append(prev_boxes_list[-prev_frame_idx][prev_box_ids[-prev_frame_idx]][1])
-                                    x2_list.append(prev_boxes_list[-prev_frame_idx][prev_box_ids[-prev_frame_idx]][2])
-                                    y2_list.append(prev_boxes_list[-prev_frame_idx][prev_box_ids[-prev_frame_idx]][3])
-                                else:
-                                    x1_list.append(xyxy[0].item())
-                                    y1_list.append(xyxy[1].item())
-                                    x2_list.append(xyxy[2].item())
-                                    y2_list.append(xyxy[3].item())
-
-                            xyxy = np.array([
-                                prev_average_value(x1_list, xyxy[0].item()),
-                                prev_average_value(y1_list, xyxy[1].item()),
-                                prev_average_value(x2_list, xyxy[2].item()),
-                                prev_average_value(y2_list, xyxy[3].item()),
-                                ])
-                        else:
-                            distance = round(temp_distance, 3)
-                        
-                        if cls < 3:
-                            calibration_dict, distance = distance_calibration(im0.shape[0], calibration_dict, xyxy[3].item(), distance)
-
-                        if save_img or view_img:  # Add bbox to image
-                            distance_str = str(distance) + 'm'
-                            if opt.debug:
-                                label = f'{names[int(cls)]} {conf:.2f} {distance_str}'
-                                plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
-                            else:                           
-                                if is_in_polygon(im0.shape[:2], roi_polygon, xyxy):
-                                    if distance < distance_thr and len(all_prev_distances) and max(all_prev_distances) - distance > 1:
-                                        warning_color = [16, 32, 160]
-                                        warning = "Warning"
-                                    else:
-                                        warning_color = [64, 128, 16]
-                                        warning = "Safe"
-                                else:
-                                    warning_color = [160, 48, 16]
-                                    warning = "Out"
-
-                                label = distance_str
-                                plot_one_box(xyxy, im0, label=label, color=warning_color, line_thickness=3)
-
-                                line = [str(xyxy[0].item()), 
-                                    str(xyxy[1].item()),
-                                    str(xyxy[2].item()),
-                                    str(xyxy[3].item()),
-                                    str(cls.item()), distance_str, warning]
-                                if save_txt:
-                                    with open(txt_path + '.txt', 'a') as f:
-                                        f.write(' '.join(line))
-                                        f.write('\n')
-                        
-                            for pix_stride, distance_list in calibration_dict.items():
-                                if len(distance_list) > 0:
-                                    mean_distance = sum(distance_list) / len(distance_list)
-                                    print_txt = str(pix_stride) + " : " + str(round(mean_distance, 2))
-
-                                    tl = 1
-                                    tf = max(tl - 1, 1)  # font thickness
-                                    t_size = cv2.getTextSize(print_txt, 0, fontScale=tl / 3, thickness=tf)[0]
-                                    c1 = (1, pix_stride)
-                                    c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
-                                    #cv2.rectangle(im0, c1, c2, (0,0,0), -1, cv2.LINE_AA)  # filled
-                                    #cv2.putText(im0, print_txt, (c1[0], c1[1] - 2), 0, tl / 3, [225, 255, 255], thickness=tf, lineType=cv2.LINE_AA)
-
-                    prev_boxes = temp_boxes
-                    prev_distances = temp_distances
+                temp_boxes = det[:, :4].detach().cpu().float().numpy()
+                if len(prev_boxes) and len(temp_boxes):
+                    iou_matrix = _iou(prev_boxes, temp_boxes)
                 else:
-                    prev_boxes = np.array([])
-                    prev_distances = []
+                    iou_matrix = np.array([])
                 
-                prev_distances_list = update_list(prev_distances_list, prev_distances)
-                prev_boxes_list = update_list(prev_boxes_list, prev_boxes)
-
-                vehicle_count[v_count_idx%len(vehicle_count)] = v_count_temp
+                if len(iou_matrix):
+                    thr_score = 0.7
+                    valid_idx = np.nonzero(np.max(iou_matrix, axis=0)>=thr_score)[0]
+                    match_box_ids_y = np.argmax(iou_matrix, axis=0)
+                else:
+                    valid_idx = np.array([])
+                    match_box_ids_y = np.array([])
                 
-                for vehicle_count_cls in range(vehicle_count.shape[1]):
-                    v_count_cls = np.sum(vehicle_count[:, vehicle_count_cls])
-                    print_txt = str(vehicle_count_cls) + " : " + str(v_count_cls)
+                '''
+                if len(prev_boxes) > len(valid_idx):
+                    for box_idx in range(len(prev_boxes)):
+                        if box_idx not in valid_idx:
+                            temp_boxes.append(prev_boxes[box_idx])
+                '''
 
-                    tl = 3
-                    tf = max(tl - 1, 1)  # font thickness
-                    t_size = cv2.getTextSize(print_txt, 0, fontScale=tl / 3, thickness=tf)[0]
-                    c1 = (1, 30*(vehicle_count_cls+1))
-                    c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
-                    #cv2.rectangle(im0, c1, c2, (0,0,0), -1, cv2.LINE_AA)  # filled
-                    #cv2.putText(im0, print_txt, (c1[0], c1[1] - 2), 0, tl / 3, [255,255,255], thickness=tf, lineType=cv2.LINE_AA)
+                valid_idx_list = update_list(valid_idx_list, valid_idx)
+                match_box_ids_y_list = update_list(match_box_ids_y_list, match_box_ids_y)
+
+
+                print("temp_boxes")
+                print(len(temp_boxes))
+                print("valid_idx_list")
+                print(valid_idx_list)
+                print("match_box_ids_y_list")
+                print(match_box_ids_y_list)
+
+                # Print results
+                for c in det[:, 5].unique():
+                    n = (det[:, 5] == c).sum()  # detections per class
+                    s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
                 
-                # Stream results
-                if view_img:
-                    cv2.imshow(str(p), im0)
-                    cv2.waitKey(1)  # 1 millisecond
+                # Write results
+                temp_distances = []
+                for temp_box_id, (*xyxy, conf, cls) in enumerate(det[:, :6]):
+                    warning = "Safe"
+                    xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
+                    temp_distance = calculate_distance([int(cls), float(xywh[0]), float(xywh[1]), float(xywh[2]), float(xywh[3])],
+                        [crop_x1/imgsz[1], crop_y1/imgsz[0], crop_x2/imgsz[1], crop_y2/imgsz[0]])
+                    temp_distances.append(temp_distance)
+                    
+                    all_prev_distances = []
+                    if temp_box_id in valid_idx:
+                        prev_box_ids = []
+                        for prev_frame_idx in range(max_prev_frame,0,-1):
+                            prev_box_id, prev_distance = investigate_prev_distance(match_box_ids_y_list, valid_idx_list, prev_distances_list, temp_box_id, maxiter=prev_frame_idx)
+                            if prev_box_id is None:
+                                prev_box_ids.append(None)
+                                all_prev_distances.append(temp_distance)
+                            else:
+                                prev_box_ids.append(prev_box_id)
+                                all_prev_distances.append(prev_distance)
+                        distance = round(prev_average_value(all_prev_distances, temp_distance), 3)
+                        
+                        x1_list, y1_list, x2_list,y2_list = [], [], [], []
+                        for prev_frame_idx in range(max_prev_frame,0,-1):
+                            if len(prev_boxes_list) >= prev_frame_idx and len(prev_box_ids) >= prev_frame_idx and \
+                                prev_box_ids[-prev_frame_idx] is not None and len(prev_boxes_list[-prev_frame_idx] > prev_box_ids[-prev_frame_idx]):
+                                x1_list.append(prev_boxes_list[-prev_frame_idx][prev_box_ids[-prev_frame_idx]][0])
+                                y1_list.append(prev_boxes_list[-prev_frame_idx][prev_box_ids[-prev_frame_idx]][1])
+                                x2_list.append(prev_boxes_list[-prev_frame_idx][prev_box_ids[-prev_frame_idx]][2])
+                                y2_list.append(prev_boxes_list[-prev_frame_idx][prev_box_ids[-prev_frame_idx]][3])
+                            else:
+                                x1_list.append(xyxy[0].item())
+                                y1_list.append(xyxy[1].item())
+                                x2_list.append(xyxy[2].item())
+                                y2_list.append(xyxy[3].item())
 
-                # Save results (image with detections)
-                if save_img:
-                    if dataset.mode == 'image':
-                        #cv2.imwrite(save_path, im0)
-                        print(f" The image with the result is saved in: {save_path}")
-                        if opt.save_frame:
-                            print(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0]))
-                            if len(det) > 0:
-                                cv2.imwrite(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'.jpg', im0)
-                                cv2.imwrite(os.path.join(save_dir, 'images', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'_clean.jpg', clean_im0)
-                    else:  # 'video' or 'stream'
-                        if vid_path != save_path:  # new video
-                            vid_path = save_path
-                            if isinstance(vid_writer, cv2.VideoWriter):
-                                vid_writer.release()  # release previous video writer
-                            if vid_cap:  # video
-                                fps = vid_cap.get(cv2.CAP_PROP_FPS)
-                                w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                                h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                            else:  # stream
-                                fps, w, h = 30, im0.shape[1], im0.shape[0]
-                                save_path += '.mp4'
-                            if opt.square:
-                                w = min(w, h)
-                                h = min(w, h)
-                            vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (im0.shape[1], im0.shape[0]))
-                        if opt.save_frame:
+                        xyxy = np.array([
+                            prev_average_value(x1_list, xyxy[0].item()),
+                            prev_average_value(y1_list, xyxy[1].item()),
+                            prev_average_value(x2_list, xyxy[2].item()),
+                            prev_average_value(y2_list, xyxy[3].item()),
+                            ])
+                    else:
+                        distance = round(temp_distance, 3)
+                    
+                    if cls < 3:
+                        calibration_dict, distance = distance_calibration(im0.shape[0], calibration_dict, xyxy[3].item(), distance)
+
+                    if save_img or view_img:  # Add bbox to image
+                        distance_str = str(distance) + 'm'
+                        if opt.debug:
+                            label = f'{names[int(cls)]} {conf:.2f} {distance_str}'
+                            plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
+                        else:                           
+                            if is_in_polygon(im0.shape[:2], roi_polygon, xyxy):
+                                if distance < distance_thr and len(all_prev_distances) and max(all_prev_distances) - distance > 1:
+                                    warning_color = [16, 32, 160]
+                                    warning = "Warning"
+                                else:
+                                    warning_color = [64, 128, 16]
+                                    warning = "Safe"
+                            else:
+                                warning_color = [160, 48, 16]
+                                warning = "Out"
+
+                            label = distance_str
+                            plot_one_box(xyxy, im0, label=label, color=warning_color, line_thickness=3)
+
+                            line = [str(xyxy[0].item()), 
+                                str(xyxy[1].item()),
+                                str(xyxy[2].item()),
+                                str(xyxy[3].item()),
+                                str(cls.item()), distance_str, warning]
+                            if save_txt:
+                                with open(txt_path + '.txt', 'a') as f:
+                                    f.write(' '.join(line))
+                                    f.write('\n')
+                    
+                        for pix_stride, distance_list in calibration_dict.items():
+                            if len(distance_list) > 0:
+                                mean_distance = sum(distance_list) / len(distance_list)
+                                print_txt = str(pix_stride) + " : " + str(round(mean_distance, 2))
+
+                                tl = 1
+                                tf = max(tl - 1, 1)  # font thickness
+                                t_size = cv2.getTextSize(print_txt, 0, fontScale=tl / 3, thickness=tf)[0]
+                                c1 = (1, pix_stride)
+                                c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
+                                cv2.rectangle(im0, c1, c2, (0,0,0), -1, cv2.LINE_AA)  # filled
+                                cv2.putText(im0, print_txt, (c1[0], c1[1] - 2), 0, tl / 3, [225, 255, 255], thickness=tf, lineType=cv2.LINE_AA)
+
+                prev_boxes = temp_boxes
+                prev_distances = temp_distances
+            else:
+                prev_boxes = np.array([])
+                prev_distances = []
+            
+            prev_distances_list = update_list(prev_distances_list, prev_distances)
+            prev_boxes_list = update_list(prev_boxes_list, prev_boxes)
+            # Tracking Ends
+
+            
+            #LDWS Drawing
+            draw_polygons = np.asarray([roi_polygon])
+            draw_polygons = draw_polygons.astype(np.int32)
+            draw_polygons = draw_polygons.reshape(1, -1, 2)
+            fill_image = im0.copy()
+            fill_image = cv2.fillPoly(fill_image, pts=draw_polygons, color=(255, 0, 255))
+
+            draw_polygons = np.asarray([center_polygon])
+            draw_polygons = draw_polygons.astype(np.int32)
+            draw_polygons = draw_polygons.reshape(1, -1, 2)
+            fill_image = cv2.fillPoly(fill_image, pts=draw_polygons, color=(196, 0, 128))
+                
+            for vanishing_point_i, vanishing_point in enumerate(vanishing_points):
+                if vanishing_point_i <= vanishing_point_idx % len(vanishing_points):
+                    point_power = len(vanishing_points) - (vanishing_point_idx%len(vanishing_points) - vanishing_point_i)
+                else:
+                    point_power = (vanishing_point_i - vanishing_point_idx%len(vanishing_points))
+                fill_image = cv2.circle(fill_image, (vanishing_point[0], vanishing_point[1]), int(point_power*0.15)+1, [point_power, point_power+150, point_power], -1)  
+            vanishing_point_idx = vanishing_point_idx + 1
+
+            alpha = 0.5
+            im0 = cv2.addWeighted(fill_image, alpha, im0, 1 - alpha, 0)
+            cv2.line(im0, (int(right_xyxy[0]),int(right_xyxy[1])), (int(right_xyxy[2]),int(right_xyxy[3])), [255, 0, 255], 3)
+            cv2.line(im0, (int(left_xyxy[2]),int(left_xyxy[1])), (int(left_xyxy[0]),int(left_xyxy[3])), [255, 0, 255], 3)
+
+            for left_lane in left_lanes:
+                cv2.line(im0, (int(left_lane[2]),int(left_lane[1])), (int(left_lane[0]),int(left_lane[3])), [0, 255, 255], 2)
+            for right_lane in right_lanes:
+                cv2.line(im0, (int(right_xyxy[0]),int(right_xyxy[1])), (int(right_xyxy[2]),int(right_xyxy[3])), [0, 255, 255], 2)
+
+
+            # Stream results
+            if view_img:
+                cv2.imshow(str(p), im0)
+                cv2.waitKey(1)  # 1 millisecond
+
+            # Save results (image with detections)
+            if save_img:
+                if dataset.mode == 'image':
+                    #cv2.imwrite(save_path, im0)
+                    print(f" The image with the result is saved in: {save_path}")
+                    if opt.save_frame:
+                        print(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0]))
+                        if len(det) > 0:
                             cv2.imwrite(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'.jpg', im0)
-                            if len(det) > 0:
-                                cv2.imwrite(os.path.join(save_dir, 'images', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'_clean.jpg', clean_im0)
-                        vid_writer.write(im0)
+                            cv2.imwrite(os.path.join(save_dir, 'images', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'_clean.jpg', clean_im0)
+                else:  # 'video' or 'stream'
+                    if vid_path != save_path:  # new video
+                        vid_path = save_path
+                        if isinstance(vid_writer, cv2.VideoWriter):
+                            vid_writer.release()  # release previous video writer
+                        if vid_cap:  # video
+                            fps = vid_cap.get(cv2.CAP_PROP_FPS)
+                            w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                            h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                        else:  # stream
+                            fps, w, h = 30, im0.shape[1], im0.shape[0]
+                            save_path += '.mp4'
+                        if opt.square:
+                            w = min(w, h)
+                            h = min(w, h)
+                        vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (im0.shape[1], im0.shape[0]))
+                    if opt.save_frame:
+                        cv2.imwrite(os.path.join(save_dir, 'vis_frames', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'.jpg', im0)
+                        if len(det) > 0:
+                            cv2.imwrite(os.path.join(save_dir, 'images', p.name.split('.')[0])+'_'+'0'*(6-len(str(frame)))+str(frame)+'_clean.jpg', clean_im0)
+                    vid_writer.write(im0)
         print(f'Each. ({time.time() - t0_each:.3f}s)')
 
     if save_txt or save_img:

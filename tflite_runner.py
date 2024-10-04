@@ -5,6 +5,17 @@ import tensorflow as tf
 import skimage.io
 import argparse
 
+def output_matching(model2_input, fd_outputs):    
+    if model2_input["shape"][1] == fd_outputs[0].shape[1]:
+        fd_output = fd_outputs[0]
+    elif model2_input["shape"][1] == fd_outputs[1].shape[1]:
+        fd_output = fd_outputs[1]
+    elif model2_input["shape"][1] == fd_outputs[2].shape[1]:
+        fd_output = fd_outputs[2]
+    else:
+        print("wrong input shape: ", model2_input.shape)
+    return fd_output
+
 def xywh2xyxy(x):
     # Convert bounding box (x, y, w, h) to bounding box (x1, y1, x2, y2)
     y = np.copy(x)
@@ -124,6 +135,7 @@ if __name__ == '__main__':
     cap = cv2.VideoCapture(opt.source)
 
     vid_name = opt.save
+    #vid_writer = cv2.VideoWriter(vid_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, (1296, 1080))
     vid_writer = cv2.VideoWriter(vid_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, (1080, 1080))
     frame_id = 0
     unique_confidences = []
@@ -146,16 +158,22 @@ if __name__ == '__main__':
             fd_model.set_tensor(fd_model.get_input_details()[0]['index'], crop_img)
             fd_model.invoke()
 
-            fd_output_0_0 = fd_model.get_tensor(fd_model.get_output_details()[0]['index'])
-            fd_output_0_1 = fd_model.get_tensor(fd_model.get_output_details()[1]['index'])
-            fd_output_0_2= fd_model.get_tensor(fd_model.get_output_details()[2]['index'])
+            fd_output_0_0_ = fd_model.get_tensor(fd_model.get_output_details()[0]['index'])
+            fd_output_0_1_ = fd_model.get_tensor(fd_model.get_output_details()[1]['index'])
+            fd_output_0_2_ = fd_model.get_tensor(fd_model.get_output_details()[2]['index'])
 
-            print(fd_output_0_0.shape, fd_model2.get_input_details()[0]["shape"])
-            print(fd_output_0_1.shape, fd_model2.get_input_details()[1]["shape"])
-            print(fd_output_0_2.shape, fd_model2.get_input_details()[2]["shape"])
+            #fd_output_0_0_ = np.reshape(fd_output_0_0_, (1, 16, 16, 18))
+            #fd_output_0_1_ = np.reshape(fd_output_0_1_, (1, 32, 32, 18))
+            #fd_output_0_2_ = np.reshape(fd_output_0_2_, (1, 8, 8, 18))
+
+            fd_output_0_0 = output_matching(fd_model2.get_input_details()[0], [fd_output_0_0_, fd_output_0_1_, fd_output_0_2_])
+            fd_output_0_1 = output_matching(fd_model2.get_input_details()[1], [fd_output_0_0_, fd_output_0_1_, fd_output_0_2_])
+            fd_output_0_2 = output_matching(fd_model2.get_input_details()[2], [fd_output_0_0_, fd_output_0_1_, fd_output_0_2_])
+            
+
             fd_model2.set_tensor(fd_model2.get_input_details()[0]['index'], fd_output_0_0)
-            fd_model2.set_tensor(fd_model2.get_input_details()[1]['index'], fd_output_0_2)
-            fd_model2.set_tensor(fd_model2.get_input_details()[2]['index'], fd_output_0_1)
+            fd_model2.set_tensor(fd_model2.get_input_details()[1]['index'], fd_output_0_1)
+            fd_model2.set_tensor(fd_model2.get_input_details()[2]['index'], fd_output_0_2)
             fd_model2.invoke()
 
             fd_output_1 = fd_model2.get_tensor(fd_model2.get_output_details()[0]['index'])
