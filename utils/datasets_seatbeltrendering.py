@@ -151,6 +151,44 @@ def fix_segment(l):
     l = np.unique(l, axis=0)
     return l
 
+def double_belt(l):
+    #fix label out of bounds
+    l_fix = []
+    for x_line in l:
+        line_fixed_temp = [(round(float(x_item),6)) for x_item in x_line[1:]]
+        x_temp, y_temp, w_temp, h_temp = line_fixed_temp
+        x1_temp = max(min(x_temp - w_temp/2,1),0)
+        y1_temp = max(min(y_temp - h_temp/2,1),0)
+        x2_temp = max(min(x_temp + w_temp/2,1),0)
+        y2_temp = max(min(y_temp + h_temp/2,1),0)
+
+        x_fixed = str(round(float((x1_temp+x2_temp)/2),6))
+        y_fixed = str(round(float((y1_temp+y2_temp)/2),6))
+        w_fixed = str(round(float(x2_temp-x1_temp),6))
+        h_fixed = str(round(float(y2_temp-y1_temp),6))
+
+        line1_fixed = [x_line[0], str(round(float((x_temp*0.4+x2_temp*0.6)),6)), 
+                        str(round(float((y1_temp*0.6+y_temp*0.4)),6)), 
+                        str(round(float(w_temp*0.6),6)), 
+                        str(round(float(h_temp*0.6),6))]
+                        
+        line2_fixed = [x_line[0], str(round(float(x_temp),6)), 
+                        str(round(float(y_temp),6)), 
+                        str(round(float(w_temp*0.6),6)), 
+                        str(round(float(h_temp*0.6),6))]
+
+        line3_fixed = [x_line[0], str(round(float((x1_temp*0.4+x_temp*0.6)),6)), 
+                        str(round(float((y_temp*0.6+y2_temp*0.4)),6)), 
+                        str(round(float(w_temp*0.6),6)), 
+                        str(round(float(h_temp*0.6),6))]
+
+        l_fix.append(line1_fixed)
+        l_fix.append(line2_fixed)
+        l_fix.append(line3_fixed)
+    l = l_fix
+    l = np.unique(l, axis=0)
+    return l
+    
 def random_distortion(im, label, size, k1_range=0.2, k2_range=0.1):
     k1 = random.random()*k1_range*2 - k1_range
     k2 = random.random()*k2_range
@@ -1194,7 +1232,17 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                     l, segments = front_label(l, segments, [im.size[1], im.size[0]])
                         else:
                             l = fix_label(l)
-                            segments = [np.array([
+                            right_belt_segment = True
+                            if right_belt_segment:
+                                l = double_belt(l)
+                                segments = [np.array([
+                                    [float(x_line[1])+float(x_line[3])*0.3, float(x_line[2])-float(x_line[4])/2], 
+                                    [float(x_line[1])+float(x_line[3])/2, float(x_line[2])-float(x_line[4])*0.3],
+                                    [float(x_line[1])-float(x_line[3])*0.3, float(x_line[2])+float(x_line[4])/2],
+                                    [float(x_line[1])-float(x_line[3])/2, float(x_line[2])+float(x_line[4])*0.3],
+                                    ]) for x_line in l]
+                            else:
+                                segments = [np.array([
                                     [float(x_line[1])-float(x_line[3])/2, float(x_line[2])-float(x_line[4])/2], 
                                     [float(x_line[1])+float(x_line[3])/2, float(x_line[2])-float(x_line[4])/2],  
                                     [float(x_line[1])+float(x_line[3])/2, float(x_line[2])+float(x_line[4])/2],
@@ -1298,12 +1346,12 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             # Load image
             #img, (h0, w0), (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
-            img, (h0, w0), (h, w), labels = load_image_and_label(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
+            img, (h0, w0), (h, w), labels, segments = load_image_and_label(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
             if hyp is not None and 'distortion' in hyp: 
                 img, labels = random_distortion(img, labels, (h, w), k1_range=hyp['distortion'][0], k2_range=hyp['distortion'][1])
 
-            segments = self.segments[index].copy()
+            #segments = self.segments[index].copy()
             #labels = self.labels[index].copy()
 
             #img, labels = natural_minmax_crop(img, labels, img.shape[:2], self.min_label_size_limit, self.max_label_size_limit)
@@ -1507,26 +1555,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 if len(labels) > 0:
                     if 1 in labels[:, 0]:#face exists
                         face_label = labels[0]
-
-                        '''
-                        check_image = np.zeros([192, 192, 4])
-                        check_part_total = random.randint(2, 12)
-                        mosaic_patch_size = (img.shape[1]*img.shape[0])**0.5
-                        for check_num in range(1, check_part_total):
-                            thickness = int((mosaic_patch_size/64) + random.random()*(mosaic_patch_size/32))                    
-                            check_color = (random.randint(16, 200)*b*3, random.randint(16, 200)*g*3, random.randint(16, 200)*r*3, random.randint(50, 200))
-                            check_x_coord = int((check_num / check_part_total) * check_image.shape[1])
-                            check_image = cv2.line(check_image, [check_x_coord+random.randint(-3, 3), 10], [check_x_coord+random.randint(-3, 3), check_image.shape[0]-10], 
-                                check_color, thickness, lineType=cv2.LINE_AA)
-                        check_part_total = random.randint(2, 6)
-                        for check_num in range(1, check_part_total):
-                            thickness = int((mosaic_patch_size/64) + random.random()*(mosaic_patch_size/32))                    
-                            check_color = (random.randint(16, 200)*b*3, random.randint(16, 200)*g*3, random.randint(16, 200)*r*3, random.randint(50, 200))
-                            check_y_coord = int((check_num / check_part_total) * check_image.shape[0])
-                            check_image = cv2.line(check_image, [10, check_y_coord+random.randint(-3, 3)], [check_image.shape[1]-10, check_y_coord+random.randint(-3, 3)], 
-                                check_color, thickness, lineType=cv2.LINE_AA)
-                        print(check_image.dtype)
-                        '''
                         
                         check_imgs = os.listdir(hyp.get('check_clothes', [None, 0])[0])      
                         check_filename = check_imgs[random.randint(0, len(check_imgs) - 1)]
@@ -2457,46 +2485,425 @@ def load_image_and_label(self, index, ratio_maintain=True, hyp=None):
     # loads 1 image from dataset, returns img, original hw, resized hw
     img = self.imgs[index]
     labels = self.labels[index].copy()
+    segments = self.segments[index].copy()
 
-    # erase rider
-    '''
     if img is not None:
         if random.random() < 0.5:
             h0, w0 = img.shape[:2]  # orig hw
             label_path = path.replace('/images/', '/labels/').replace('.jpg', '.txt').replace('.png', '.txt')
             with open(label_path, 'r') as f:
                 xyxy_lines = f.readlines()     
+                face_label = []
                 for xyxy_line in xyxy_lines:
                     c, x, y, w, h = xyxy_line.split(' ')
-                    if c in ['7']:
+                    if c in ['1']:
                         x1_vis = (max(min((float(x)-float(w)/2)*w0, w0), 0))
                         y1_vis = (max(min((float(y)-float(h)/2)*h0, h0), 0))
                         x2_vis = (max(min((float(x)+float(w)/2)*w0, w0), 0))
                         y2_vis = (max(min((float(y)+float(h)/random.randint(3,6))*h0, h0), 0))
-                        img[y1_vis:y2_vis, x1_vis:x2_vis, :] = torch.from_numpy(np.random.rand(y2_vis-y1_vis, x2_vis-x1_vis, 3)*255)
-    '''
+                        face_label.append([int(c), x1_vis, y1_vis, x2_vis, y2_vis])
+
+                    if len(face_label) > 0:#face exists, seatbelt does not exist
+                        seatbelt_filename = None
+                    
+                        color_element = random.randint(16, 100)
+                        alpha_element = random.randint(50, 200)
+                        mosaic_patch_size = 192
+                        thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
+                        semi_x = random.randint(50, 80)
+                        semi_y = random.randint(80, 110)
+                        end_x = random.randint(112, 180)
+                        end_y = random.randint(128, 192)
+                        seatbelt_img = np.ones([192, 192, 4])
+                        seatbelt_mask = np.zeros([192, 192, 4])
+                        if random.random() < 0.5:
+                            seatbelt_mask = cv2.line(seatbelt_mask, [0, 0], [semi_x, semi_y], 
+                                (1, 1, 1, 1), thickness, lineType=cv2.LINE_AA) 
+                        else:
+                            seatbelt_mask = cv2.line(seatbelt_mask, [random.randint(20, 45), random.randint(30, 70)], [semi_x, semi_y], 
+                                (1, 1, 1, 1), thickness, lineType=cv2.LINE_AA) 
+
+                        seatbelt_mask = cv2.line(seatbelt_mask, [semi_x, semi_y], [end_x, end_y], 
+                                (1, 1, 1, 1) , thickness, lineType=cv2.LINE_AA)
+                        seatbelt_mask = random_wave(seatbelt_mask)
+                        seatbelt_mask = seatbelt_mask.astype(bool)
+
+                        #seatbelt_img[:, :, 0] = color_element*b*3
+                        #seatbelt_img[:, :, 1] = color_element*g*3
+                        #seatbelt_img[:, :, 2] = color_element*r*3
+                        seatbelt_img[:, :, 3] = alpha_element
+                        seatbelt_img[: ,:, :3] = gaussian_illumination(seatbelt_img[: ,:, :3])
+
+                        seatbelt_img = np.where(seatbelt_mask, seatbelt_img, [0, 0, 0, 0])
+                        
+                        #obstacle
+                        if random.random() < hyp.get('obstacle', 0):
+                            obstacle_mask = np.zeros([seatbelt_img.shape[0], seatbelt_img.shape[1]])
+                            mosaic_patch_size = 192
+                            obstacle_thickness = int((mosaic_patch_size/8) + random.random()*(mosaic_patch_size/8))
+                            obstacle_mask = cv2.line(obstacle_mask, [random.randint(int(seatbelt_img.shape[1]/2), seatbelt_img.shape[1]), random.randint(0, int(seatbelt_img.shape[0]/2))], 
+                                    [random.randint(0, int(seatbelt_img.shape[1]/2)), random.randint(int(seatbelt_img.shape[0]/2), seatbelt_img.shape[0])], 
+                                    (1), obstacle_thickness, lineType=cv2.LINE_AA) 
+                            seatbelt_img[obstacle_mask==1, :] = 0
+
+                        face_label = face_label[0]
+                        if int(face_label[4]) < img.shape[0]*0.8:
+                            random_x_transpose = (random.random()-0.5)*(face_label[3]-face_label[1])
+                            seat_x1_range = min(max(face_label[1]-(face_label[3]-face_label[1])+random_x_transpose, 0), img.shape[1])
+                            seat_y1_range = min(max(face_label[4]-(face_label[4]-face_label[2])*random.random()*0.2, 0), img.shape[0])
+                            seat_x2_range = min(max(face_label[3]+(face_label[3]-face_label[1])*(1.1)+random_x_transpose, 0), img.shape[1])
+                            if face_label[2] < 1:                                
+                                seat_y2_range = min(max(face_label[4]+(face_label[3]-face_label[1])*(1+random.random()), 0), img.shape[0])
+                            else:
+                                seat_y2_range = min(max(face_label[4]+(face_label[4]-face_label[2])*(1+random.random()), 0), img.shape[0])
+
+                            if seatbelt_filename is not None and (seatbelt_filename.startswith('03') or seatbelt_filename.startswith('04')):
+                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*1.5+random_x_transpose, 0), img.shape[1]))
+                                seat_y1_start = int(seat_y1_range)
+                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*1.5+random_x_transpose, 0), img.shape[1]))
+                                seat_y2_start = int(seat_y2_range)
+                            else:
+                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*(0.25+random.random()*0.5)+random_x_transpose, 0), img.shape[1]))
+                                seat_y1_start = int(min(max(random.randint(int(face_label[2]), int(seat_y1_range)), 0), img.shape[0]))
+                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*(-0.25+random.random())+random_x_transpose, 0), img.shape[1]))
+                                seat_y2_start = int(seat_y2_range)
+
+                            color_element = 32+int(random.random()*128)
+                            mosaic_patch_size = 192
+                            thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
+
+                            x1 = int(seat_x1_range)
+                            y1 = int(seat_y1_range)
+                            x2 = min(max(int(seat_x1_range+(seat_x2_range-seat_x1_range)*(end_x/seatbelt_img.shape[1])), 0), img.shape[1])      
+                            y2 = min(max(int(seat_y1_range+(seat_y2_range-seat_y1_range)*(end_y/seatbelt_img.shape[0])), 0), img.shape[0])     
+                            
+                            if (seat_x2_start-seat_x1_start) > 0 and (seat_y2_start-seat_y1_start) > 0 :
+                                seatbelt_img = cv2.resize(seatbelt_img, ((seat_x2_start-seat_x1_start), (seat_y2_start-seat_y1_start)), interpolation=cv2.INTER_LINEAR)
+
+                                if random.randint(0,1) == 0 :
+                                    reverse_belt = False
+                                    seatbelt_img = cv2.flip(seatbelt_img, 1)
+                                    seatbet_center_x = (seat_x1_start+seat_x2_start)/2
+                                    x1 = seatbet_center_x + (seatbet_center_x - x1)
+                                    x2 = seatbet_center_x + (seatbet_center_x - x2)
+                                else:
+                                    reverse_belt = True
+
+                                img_crop = img[seat_y1_start:seat_y2_start, seat_x1_start:seat_x2_start]
+                                img_crop = cv2.cvtColor(img_crop, cv2.COLOR_RGB2RGBA)
+
+                                # Pillow 에서 Alpha Blending
+                                seatbelt_img_pillow = Image.fromarray(seatbelt_img.astype(np.uint8))
+                                img_crop_pillow = Image.fromarray(img_crop)
+                                blended_pillow = Image.alpha_composite(img_crop_pillow, seatbelt_img_pillow)
+                                blended_img=np.array(blended_pillow)  
+
+                                # 원본 이미지에 다시 합치기
+                                blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
+                                img[seat_y1_start:seat_y2_start, seat_x1_start:seat_x2_start] = blended_img
+
+                                non_zero_indices = np.nonzero(blended_img)
+                                if len(non_zero_indices[0]) > 0 and len(non_zero_indices[1]) > 0:
+                                    min_x = np.min(non_zero_indices[1])
+                                    min_y = np.min(non_zero_indices[0])
+                                    max_x = np.max(non_zero_indices[1])
+                                    max_y = np.max(non_zero_indices[0])
+
+                                x1 = (seat_x1_start + min_x) / w0
+                                y1 = (seat_y1_start + min_y) / h0
+                                x2 = (seat_x1_start + max_x) / w0
+                                y2 = (seat_y1_start + max_y) / h0
+                                if reverse_belt:
+                                    line1_fixed = [0, x1,
+                                                    y1, 
+                                                    x1*0.4+x2*0.6, 
+                                                    y1*0.4+y2*0.6]
+                                                    
+                                    line2_fixed = [0, x1*0.8+x2*0.2,
+                                                    y1*0.8+y2*0.2,
+                                                    x1*0.2+x2*0.8,
+                                                    y1*0.2+y2*0.8]
+
+                                    line3_fixed = [0, x1*0.6+x2*0.4, 
+                                                    y1*0.6+y2*0.4, 
+                                                    x2, 
+                                                    y2]
+
+                                else:
+                                    line1_fixed = [0, x1*0.6+x2*0.4,
+                                                    y1, 
+                                                    x2, 
+                                                    y1*0.4+y2*0.6]
+                                                    
+                                    line2_fixed = [0, x1*0.8+x2*0.2,
+                                                    y1*0.8+y2*0.2,
+                                                    x1*0.2+x2*0.8,
+                                                    y1*0.2+y2*0.8]
+
+                                    line3_fixed = [0, x1, 
+                                                    y1*0.6+y2*0.4, 
+                                                    x1*0.4+x2*0.6, 
+                                                    y2]
+
+                                if len(labels):
+                                    labels = np.append(labels, np.array([[0, 
+                                                (line1_fixed[1] + line1_fixed[3])/2, 
+                                                (line1_fixed[2] + line1_fixed[4])/2, 
+                                                line1_fixed[3] - line1_fixed[1],
+                                                line1_fixed[4] - line1_fixed[2]]]), axis=0)
+                                    labels = np.append(labels, np.array([[0,  
+                                                (line2_fixed[1] + line2_fixed[3])/2, 
+                                                (line2_fixed[2] + line2_fixed[4])/2, 
+                                                line2_fixed[3] - line2_fixed[1],
+                                                line2_fixed[4] - line2_fixed[2]]]), axis=0)
+                                    labels = np.append(labels, np.array([[0,  
+                                                (line3_fixed[1] + line3_fixed[3])/2, 
+                                                (line3_fixed[2] + line3_fixed[4])/2, 
+                                                line3_fixed[3] - line3_fixed[1],
+                                                line3_fixed[4] - line3_fixed[2]]]), axis=0)
+                                else:
+                                    labels = np.array([[0, 
+                                                (line1_fixed[1] + line1_fixed[3])/2, 
+                                                (line1_fixed[2] + line1_fixed[4])/2, 
+                                                line1_fixed[3] - line1_fixed[1],
+                                                line1_fixed[4] - line1_fixed[2]]])
+                                    labels = np.append(labels, np.array([[0,  
+                                                (line2_fixed[1] + line2_fixed[3])/2, 
+                                                (line2_fixed[2] + line2_fixed[4])/2, 
+                                                line2_fixed[3] - line2_fixed[1],
+                                                line2_fixed[4] - line2_fixed[2]]]), axis=0)
+                                    labels = np.append(labels, np.array([[0,  
+                                                (line3_fixed[1] + line3_fixed[3])/2, 
+                                                (line3_fixed[2] + line3_fixed[4])/2, 
+                                                line3_fixed[3] - line3_fixed[1],
+                                                line3_fixed[4] - line3_fixed[2]]]), axis=0)
+                                
+                                #right_belt_segment
+                                for _, x1, y1, x2, y2 in [line1_fixed, line2_fixed, line3_fixed]:
+                                    if reverse_belt:
+                                        segments = np.append(segments, np.array([[
+                                            [x1*0.8+x2*0.2, y1], 
+                                            [x2, y1*0.2+y2*0.8],
+                                            [x1*0.2+x2*0.8, y2],
+                                            [x1, y1*0.8+y2*0.2]]]), axis=0)
+                                    else:
+                                        segments = np.append(segments, np.array([[
+                                            [x1*0.2+x2*0.8, y1], 
+                                            [x2, y1*0.8+y2*0.2],
+                                            [x1*0.8+x2*0.2, y2],
+                                            [x1, y1*0.2+y2*0.8]]]), axis=0)
 
     if img is None:  # not cached
         path = self.img_files[index]
         img = cv2.imread(path)  # BGR
 
-        # erase rider
-        '''
         if random.random() < 0.5:
             h0, w0 = img.shape[:2]  # orig hw
             label_path = path.replace('/images/', '/labels/').replace('.jpg', '.txt').replace('.png', '.txt')
             with open(label_path, 'r') as f:
                 xyxy_lines = f.readlines()     
+                face_label = []
+                have_seatbelt = False
                 for xyxy_line in xyxy_lines:
                     c, x, y, w, h = xyxy_line.split(' ')
-                    if c in ['7']:
-                        x1_vis = int((max(min((float(x)-float(w)/2)*w0, w0), 0)))
-                        y1_vis = int((max(min((float(y)-float(h)/2)*h0, h0), 0)))
-                        x2_vis = int((max(min((float(x)+float(w)/2)*w0, w0), 0)))
-                        y2_vis = int((max(min((float(y)+float(h)/random.randint(3,6))*h0, h0), 0)))
-                        img[y1_vis:y2_vis, x1_vis:x2_vis, :] = torch.from_numpy(np.random.rand(y2_vis-y1_vis, x2_vis-x1_vis, 3)*255)
-        '''
-        
+                    if c in ['0']:
+                        have_seatbelt = True
+                    if c in ['1']:
+                        x1_vis = (max(min((float(x)-float(w)/2)*w0, w0), 0))
+                        y1_vis = (max(min((float(y)-float(h)/2)*h0, h0), 0))
+                        x2_vis = (max(min((float(x)+float(w)/2)*w0, w0), 0))
+                        y2_vis = (max(min((float(y)+float(h)/random.randint(3,6))*h0, h0), 0))
+                        face_label = [int(c), x1_vis, y1_vis, x2_vis, y2_vis]
+
+                    if len(face_label) > 0 and (not have_seatbelt):#face exists, seatbelt does not exist
+                        seatbelt_filename = None
+                    
+                        color_element = random.randint(16, 100)
+                        alpha_element = random.randint(50, 200)
+                        mosaic_patch_size = 192
+                        thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
+                        semi_x = random.randint(50, 80)
+                        semi_y = random.randint(80, 110)
+                        end_x = random.randint(112, 180)
+                        end_y = random.randint(128, 192)
+                        seatbelt_img = np.ones([192, 192, 4])
+                        seatbelt_mask = np.zeros([192, 192, 4])
+                        if random.random() < 0.5:
+                            seatbelt_mask = cv2.line(seatbelt_mask, [0, 0], [semi_x, semi_y], 
+                                (1, 1, 1, 1), thickness, lineType=cv2.LINE_AA) 
+                        else:
+                            seatbelt_mask = cv2.line(seatbelt_mask, [random.randint(20, 45), random.randint(30, 70)], [semi_x, semi_y], 
+                                (1, 1, 1, 1), thickness, lineType=cv2.LINE_AA) 
+
+                        seatbelt_mask = cv2.line(seatbelt_mask, [semi_x, semi_y], [end_x, end_y], 
+                                (1, 1, 1, 1) , thickness, lineType=cv2.LINE_AA)
+                        seatbelt_mask = random_wave(seatbelt_mask)
+                        seatbelt_mask = seatbelt_mask.astype(bool)
+
+                        #seatbelt_img[:, :, 0] = color_element*b*3
+                        #seatbelt_img[:, :, 1] = color_element*g*3
+                        #seatbelt_img[:, :, 2] = color_element*r*3
+                        seatbelt_img[:, :, 3] = alpha_element
+                        seatbelt_img[: ,:, :3] = gaussian_illumination(seatbelt_img[: ,:, :3])
+
+                        seatbelt_img = np.where(seatbelt_mask, seatbelt_img, [0, 0, 0, 0])
+                        
+                        #obstacle
+                        if random.random() < hyp.get('obstacle', 0):
+                            obstacle_mask = np.zeros([seatbelt_img.shape[0], seatbelt_img.shape[1]])
+                            mosaic_patch_size = 192
+                            obstacle_thickness = int((mosaic_patch_size/8) + random.random()*(mosaic_patch_size/8))
+                            obstacle_mask = cv2.line(obstacle_mask, [random.randint(int(seatbelt_img.shape[1]/2), seatbelt_img.shape[1]), random.randint(0, int(seatbelt_img.shape[0]/2))], 
+                                    [random.randint(0, int(seatbelt_img.shape[1]/2)), random.randint(int(seatbelt_img.shape[0]/2), seatbelt_img.shape[0])], 
+                                    (1), obstacle_thickness, lineType=cv2.LINE_AA) 
+                            seatbelt_img[obstacle_mask==1, :] = 0
+
+                        if int(face_label[4]) < img.shape[0]*0.8:
+                            random_x_transpose = (random.random()-0.5)*(face_label[3]-face_label[1])
+                            seat_x1_range = min(max(face_label[1]-(face_label[3]-face_label[1])+random_x_transpose, 0), img.shape[1])
+                            seat_y1_range = min(max(face_label[4]-(face_label[4]-face_label[2])*random.random()*0.2, 0), img.shape[0])
+                            seat_x2_range = min(max(face_label[3]+(face_label[3]-face_label[1])*(1.1)+random_x_transpose, 0), img.shape[1])
+                            if face_label[2] < 1:                                
+                                seat_y2_range = min(max(face_label[4]+(face_label[3]-face_label[1])*(1+random.random()), 0), img.shape[0])
+                            else:
+                                seat_y2_range = min(max(face_label[4]+(face_label[4]-face_label[2])*(1+random.random()), 0), img.shape[0])
+
+                            if seatbelt_filename is not None and (seatbelt_filename.startswith('03') or seatbelt_filename.startswith('04')):
+                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*1.5+random_x_transpose, 0), img.shape[1]))
+                                seat_y1_start = int(seat_y1_range)
+                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*1.5+random_x_transpose, 0), img.shape[1]))
+                                seat_y2_start = int(seat_y2_range)
+                            else:
+                                seat_x1_start = int(min(max(face_label[1]-(face_label[3]-face_label[1])*(0.25+random.random()*0.5)+random_x_transpose, 0), img.shape[1]))
+                                seat_y1_start = int(min(max(random.randint(int(face_label[2]), int(seat_y1_range)), 0), img.shape[0]))
+                                seat_x2_start = int(min(max(face_label[3]+(face_label[3]-face_label[1])*(-0.25+random.random())+random_x_transpose, 0), img.shape[1]))
+                                seat_y2_start = int(seat_y2_range)
+
+                            color_element = 32+int(random.random()*128)
+                            mosaic_patch_size = 192
+                            thickness = int((mosaic_patch_size/16) + random.random()*(mosaic_patch_size/16))
+
+                            x1 = int(seat_x1_range)
+                            y1 = int(seat_y1_range)
+                            x2 = min(max(int(seat_x1_range+(seat_x2_range-seat_x1_range)*(end_x/seatbelt_img.shape[1])), 0), img.shape[1])      
+                            y2 = min(max(int(seat_y1_range+(seat_y2_range-seat_y1_range)*(end_y/seatbelt_img.shape[0])), 0), img.shape[0])     
+                            
+                            if (seat_x2_start-seat_x1_start) > 0 and (seat_y2_start-seat_y1_start) > 0 :
+                                seatbelt_img = cv2.resize(seatbelt_img, ((seat_x2_start-seat_x1_start), (seat_y2_start-seat_y1_start)), interpolation=cv2.INTER_LINEAR)
+
+                                if random.randint(0,1) == 0 :
+                                    reverse_belt = False
+                                    seatbelt_img = cv2.flip(seatbelt_img, 1)
+                                    seatbet_center_x = (seat_x1_start+seat_x2_start)/2
+                                    x1 = seatbet_center_x + (seatbet_center_x - x1)
+                                    x2 = seatbet_center_x + (seatbet_center_x - x2)
+                                else:
+                                    reverse_belt = True
+
+                                img_crop = img[seat_y1_start:seat_y2_start, seat_x1_start:seat_x2_start]
+                                img_crop = cv2.cvtColor(img_crop, cv2.COLOR_RGB2RGBA)
+
+                                # Pillow 에서 Alpha Blending
+                                seatbelt_img_pillow = Image.fromarray(seatbelt_img.astype(np.uint8))
+                                img_crop_pillow = Image.fromarray(img_crop)
+                                blended_pillow = Image.alpha_composite(img_crop_pillow, seatbelt_img_pillow)
+                                blended_img=np.array(blended_pillow)  
+
+                                # 원본 이미지에 다시 합치기
+                                blended_img = cv2.cvtColor(blended_img, cv2.COLOR_RGBA2RGB)
+                                img[seat_y1_start:seat_y2_start, seat_x1_start:seat_x2_start] = blended_img
+
+                                non_zero_indices = np.nonzero(blended_img)
+                                if len(non_zero_indices[0]) > 0 and len(non_zero_indices[1]) > 0:
+                                    min_x = np.min(non_zero_indices[1])
+                                    min_y = np.min(non_zero_indices[0])
+                                    max_x = np.max(non_zero_indices[1])
+                                    max_y = np.max(non_zero_indices[0])
+
+                                x1 = (seat_x1_start + min_x) / w0
+                                y1 = (seat_y1_start + min_y) / h0
+                                x2 = (seat_x1_start + max_x) / w0
+                                y2 = (seat_y1_start + max_y) / h0
+                                if reverse_belt:
+                                    line1_fixed = [0, x1,
+                                                    y1, 
+                                                    x1*0.4+x2*0.6, 
+                                                    y1*0.4+y2*0.6]
+                                                    
+                                    line2_fixed = [0, x1*0.8+x2*0.2,
+                                                    y1*0.8+y2*0.2,
+                                                    x1*0.2+x2*0.8,
+                                                    y1*0.2+y2*0.8]
+
+                                    line3_fixed = [0, x1*0.6+x2*0.4, 
+                                                    y1*0.6+y2*0.4, 
+                                                    x2, 
+                                                    y2]
+
+                                else:
+                                    line1_fixed = [0, x1*0.6+x2*0.4,
+                                                    y1, 
+                                                    x2, 
+                                                    y1*0.4+y2*0.6]
+                                                    
+                                    line2_fixed = [0, x1*0.8+x2*0.2,
+                                                    y1*0.8+y2*0.2,
+                                                    x1*0.2+x2*0.8,
+                                                    y1*0.2+y2*0.8]
+
+                                    line3_fixed = [0, x1, 
+                                                    y1*0.6+y2*0.4, 
+                                                    x1*0.4+x2*0.6, 
+                                                    y2]
+
+                                if len(labels):
+                                    labels = np.append(labels, np.array([[0, 
+                                                (line1_fixed[1] + line1_fixed[3])/2, 
+                                                (line1_fixed[2] + line1_fixed[4])/2, 
+                                                line1_fixed[3] - line1_fixed[1],
+                                                line1_fixed[4] - line1_fixed[2]]]), axis=0)
+                                    labels = np.append(labels, np.array([[0,  
+                                                (line2_fixed[1] + line2_fixed[3])/2, 
+                                                (line2_fixed[2] + line2_fixed[4])/2, 
+                                                line2_fixed[3] - line2_fixed[1],
+                                                line2_fixed[4] - line2_fixed[2]]]), axis=0)
+                                    labels = np.append(labels, np.array([[0,  
+                                                (line3_fixed[1] + line3_fixed[3])/2, 
+                                                (line3_fixed[2] + line3_fixed[4])/2, 
+                                                line3_fixed[3] - line3_fixed[1],
+                                                line3_fixed[4] - line3_fixed[2]]]), axis=0)
+                                else:
+                                    labels = np.array([[0, 
+                                                (line1_fixed[1] + line1_fixed[3])/2, 
+                                                (line1_fixed[2] + line1_fixed[4])/2, 
+                                                line1_fixed[3] - line1_fixed[1],
+                                                line1_fixed[4] - line1_fixed[2]]])
+                                    labels = np.append(labels, np.array([[0,  
+                                                (line2_fixed[1] + line2_fixed[3])/2, 
+                                                (line2_fixed[2] + line2_fixed[4])/2, 
+                                                line2_fixed[3] - line2_fixed[1],
+                                                line2_fixed[4] - line2_fixed[2]]]), axis=0)
+                                    labels = np.append(labels, np.array([[0,  
+                                                (line3_fixed[1] + line3_fixed[3])/2, 
+                                                (line3_fixed[2] + line3_fixed[4])/2, 
+                                                line3_fixed[3] - line3_fixed[1],
+                                                line3_fixed[4] - line3_fixed[2]]]), axis=0)
+                                
+                                #right_belt_segment
+                                for _, x1, y1, x2, y2 in [line1_fixed, line2_fixed, line3_fixed]:
+                                    if reverse_belt:
+                                        segments = np.append(segments, np.array([[
+                                            [x1*0.8+x2*0.2, y1], 
+                                            [x2, y1*0.2+y2*0.8],
+                                            [x1*0.2+x2*0.8, y2],
+                                            [x1, y1*0.8+y2*0.2]]]), axis=0)
+                                    else:
+                                        segments = np.append(segments, np.array([[
+                                            [x1*0.2+x2*0.8, y1], 
+                                            [x2, y1*0.8+y2*0.2],
+                                            [x1*0.8+x2*0.2, y2],
+                                            [x1, y1*0.2+y2*0.8]]]), axis=0)
+
         if isinstance(self.img_size, tuple):
             base_size = [self.img_size[0], self.img_size[1]]
         else:
@@ -2532,7 +2939,7 @@ def load_image_and_label(self, index, ratio_maintain=True, hyp=None):
                 if r != 1:  # always resize down, only resize up if training with augmentation
                     interp = cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR
                     img = cv2.resize(img, (int(w0 * r), int(h0 * r)), interpolation=interp)
-            return img, (h0, w0), img.shape[:2], labels  # img, hw_original, hw_resized
+            return img, (h0, w0), img.shape[:2], labels, segments  # img, hw_original, hw_resized
         else:
             if isinstance(self.img_size, tuple):
                 img = cv2.resize(img, (int(self.img_size[1]), int(self.img_size[0])), interpolation=cv2.INTER_LINEAR)
@@ -2541,9 +2948,9 @@ def load_image_and_label(self, index, ratio_maintain=True, hyp=None):
                 if r != 1:  # always resize down, only resize up if training with augmentation
                     interp = cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR
                     img = cv2.resize(img, (int(w0 * r), int(h0 * r)), interpolation=interp)
-            return img, (h0, w0), img.shape[:2]  # img, hw_original, hw_resized
+            return img, (h0, w0), img.shape[:2], segments  # img, hw_original, hw_resized
     else:
-        return self.imgs[index], self.img_hw0[index], self.img_hw[index], labels  # img, hw_original, hw_resized
+        return self.imgs[index], self.img_hw0[index], self.img_hw[index], labels, segments  # img, hw_original, hw_resized
 
 
 # Ancillary functions --------------------------------------------------------------------------------------------------
@@ -2638,14 +3045,14 @@ def load_mosaic(self, hyp, index):
         # Load image
         #img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
-        img, _, (h, w), labels = load_image_and_label(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
+        img, _, (h, w), labels, segments = load_image_and_label(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
         if hyp is not None and 'distortion' in hyp: 
             img, labels = random_distortion(img, labels, (h, w), k1_range=hyp['distortion'][0], k2_range=hyp['distortion'][1])
 
         # Labels
         #labels, segments = self.labels[index].copy(), self.segments[index].copy()
-        segments = self.segments[index].copy()
+        #segments = self.segments[index].copy()
 
         #img, labels = natural_minmax_crop(img, labels, img.shape[:2], self.min_label_size_limit, self.max_label_size_limit)
 
@@ -2870,14 +3277,14 @@ def load_mosaic9(self, hyp, index):
         # Load image
         #img, _, (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
-        img, _, (h, w), labels = load_image_and_label(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
+        img, _, (h, w), labels, segments = load_image_and_label(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
 
         if hyp is not None and 'distortion' in hyp: 
             img, labels = random_distortion(img, labels, (h, w), k1_range=hyp['distortion'][0], k2_range=hyp['distortion'][1])
 
         # Labels
         #labels, segments = self.labels[index].copy(), self.segments[index].copy()
-        segments = self.segments[index].copy()
+        #segments = self.segments[index].copy()
 
         #img, labels = natural_minmax_crop(img, labels, img.shape[:2], self.min_label_size_limit, self.max_label_size_limit)
 
@@ -3375,7 +3782,7 @@ def random_perspective(img, targets=(), segments=(), poses=(), degrees=10, trans
         new[:, [1, 3]] = new[:, [1, 3]].clip(0, height)
             
         # filter candidates
-        i = box_candidates(box1=targets[:, 1:5].T * s, box2=new.T, area_thr=0.25)# 0.01 if use_segments else 0.10)
+        i = box_candidates(box1=targets[:, 1:5].T * s, box2=new.T, area_thr=0.35)# 0.01 if use_segments else 0.10)
         targets = targets[i]
         targets[:, 1:5] = new[i]
 

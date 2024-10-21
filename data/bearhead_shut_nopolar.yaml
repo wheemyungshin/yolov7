@@ -1,0 +1,19 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+    ../data/bearhead_after_inspection/train_exclude_polar.txt, # 28997
+    ../data/animals_10/train.txt # 25840
+]
+val: [../data/auto_coco_bearhead_aftinspec/train.txt] # 550
+test: [../data/auto_coco_bearhead_aftinspec/train.txt] # 550
+
+# number of classes
+nc: 3
+
+# class names
+names: [
+    'bear',
+    'bear head',
+    'nothing',
+]
+
+valid_idx: [0, 1, 999]

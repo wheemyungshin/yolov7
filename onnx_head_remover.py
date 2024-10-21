@@ -328,3 +328,74 @@ if __name__ == '__main__':
             print(node.name, ' : ', node.output)
 
         onnx.save(onnx_model, os.path.join(path, opt.save_tag+model_name))
+
+    elif opt.type == 'mobilenet_t_128_128':
+        graph.output.remove(graph.output[2])
+        graph.output.remove(graph.output[1])
+        graph.output.remove(graph.output[0])
+
+        print(dir(onnx.TensorProto))
+
+        output_output = onnx.helper.make_tensor_value_info('output', onnx.TensorProto.FLOAT, [1, 32, 32, 6, 3])
+        output_705 = onnx.helper.make_tensor_value_info('705', onnx.TensorProto.FLOAT, [1, 16, 16, 6, 3])
+        output_725 = onnx.helper.make_tensor_value_info('725', onnx.TensorProto.FLOAT, [1, 8, 8, 6, 3])
+
+        for i in range(len(nodes)-1, 0, -1) :
+            if nodes[i].name == 'Transpose_242':
+                graph.node.remove(nodes[i])
+
+                new_transpose = onnx.NodeProto()
+                new_transpose_attribute = onnx.AttributeProto()
+                new_transpose_attribute.name = "perm"
+                new_transpose_attribute.ints.extend([0,3,4,2,1])
+                new_transpose.attribute.extend([new_transpose_attribute])
+
+                new_transpose.name = "Transpose_242"
+                new_transpose.input.extend(['724'])
+                new_transpose.output.extend(['725'])
+                new_transpose.op_type = "Transpose"
+
+                graph.node.extend([new_transpose])
+
+                graph.output.insert(i, output_725)
+
+            elif nodes[i].name == 'Transpose_226':
+                graph.node.remove(nodes[i])
+
+                new_transpose = onnx.NodeProto()
+                new_transpose_attribute = onnx.AttributeProto()
+                new_transpose_attribute.name = "perm"
+                new_transpose_attribute.ints.extend([0,3,4,2,1])
+                new_transpose.attribute.extend([new_transpose_attribute])
+
+                new_transpose.name = "Transpose_226"
+                new_transpose.input.extend(['704'])
+                new_transpose.output.extend(['705'])
+                new_transpose.op_type = "Transpose"
+                
+                graph.node.extend([new_transpose])
+
+                graph.output.insert(i, output_705)
+
+            elif nodes[i].name == 'Transpose_210':
+                graph.node.remove(nodes[i])
+
+                new_transpose = onnx.NodeProto()
+                new_transpose_attribute = onnx.AttributeProto()
+                new_transpose_attribute.name = "perm"
+                new_transpose_attribute.ints.extend([0,3,4,2,1])
+                new_transpose.attribute.extend([new_transpose_attribute])
+
+                new_transpose.name = "Transpose_210"
+                new_transpose.input.extend(['684'])
+                new_transpose.output.extend(['output'])
+                new_transpose.op_type = "Transpose"
+                
+                graph.node.extend([new_transpose])
+
+                graph.output.insert(i, output_output)
+
+        for node in nodes:
+            print(node.name, ' : ', node.output)
+
+        onnx.save(onnx_model, os.path.join(path, opt.save_tag+model_name))
