@@ -39,7 +39,6 @@ head:
     [ -1, 1, DWConvblock, [48, 3, 2]],
     [[ -1, 7], 1, ADD, [1]],  # cat head P5
     [ -1, 1, DWConvblock, [48, 3, 1]],  # 20 (P5/32-large)
-
     [[ 14, 17, 20], 1, IDetect, [nc, anchors]],  # Detect(P3, P4, P5)
 
    ]
