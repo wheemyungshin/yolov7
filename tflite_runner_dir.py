@@ -130,25 +130,24 @@ if __name__ == '__main__':
     
     fd_model = tf.lite.Interpreter(opt.weights)    
     fd_model2= tf.lite.Interpreter(opt.weights2)
+    nms_part = tf.lite.Interpreter("weights_n78_tflite_nms_sep/nms_float32.tflite")
     fd_model.allocate_tensors()
     fd_model2.allocate_tensors()
+    nms_part.allocate_tensors()
 
-    #cap = cv2.VideoCapture("../data/n78_testvid.mp4")
-    cap = cv2.VideoCapture(opt.source)
-
-    vid_name = opt.save
-    #vid_writer = cv2.VideoWriter(vid_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, (1296, 1080))
-    vid_writer = cv2.VideoWriter(vid_name, cv2.VideoWriter_fourcc(*'mp4v'), 30, (960, 960))
+    os.makedirs(opt.save, exist_ok=True)
+    
     frame_id = 0
     unique_confidences = []
     voting_que = [0] * 60
     voting_idx = 0
-    while True :
-        _, frame = cap.read()
+    
+    for vid_name in os.listdir(opt.source):
+        frame = cv2.imread(os.path.join(opt.source, vid_name))
 
         if frame is not None:
             print(frame.shape)
-            frame = frame[:960, 600:1560]
+            frame = frame[:, 312:1608]
             #frame = frame[:, 420:1500]
             #frame = frame[:, :, :]#.transpose(1, 0, 2)
             frame_vis = frame.copy()
@@ -160,8 +159,7 @@ if __name__ == '__main__':
             crop_img = np.expand_dims(crop_img.astype(np.float32), axis=0)
             fd_model.set_tensor(fd_model.get_input_details()[0]['index'], crop_img)
             fd_model.invoke()
-
-            #fd_output_1 = fd_model.get_tensor(fd_model.get_output_details()[0]['index'])
+            '''
 
             fd_output_0_0_ = fd_model.get_tensor(fd_model.get_output_details()[0]['index'])
             fd_output_0_1_ = fd_model.get_tensor(fd_model.get_output_details()[1]['index'])
@@ -180,8 +178,9 @@ if __name__ == '__main__':
             fd_model2.set_tensor(fd_model2.get_input_details()[1]['index'], fd_output_0_1)
             fd_model2.set_tensor(fd_model2.get_input_details()[2]['index'], fd_output_0_2)
             fd_model2.invoke()
+            '''
 
-            fd_output_1 = fd_model2.get_tensor(fd_model2.get_output_details()[0]['index'])
+            fd_output_1 = fd_model.get_tensor(fd_model.get_output_details()[0]['index'])#fd_model2.get_tensor(fd_model2.get_output_details()[0]['index'])
             
             for unique_c in np.unique(fd_output_1[:,-1]):
                 if unique_c not in unique_confidences:
@@ -193,9 +192,13 @@ if __name__ == '__main__':
             #scores = fd_output_0[fd_output_0[:, -1] > 0, -1]
             #fd_output_1 = np.expand_dims(fd_output_1[:, 1:], 0)
             #print(fd_output_1)
-            print(fd_output_1)
             print(fd_output_1.shape)
-
+            #print(nms_part.get_input_details()[0]['shape'])
+            
+            #nms_part.set_tensor(nms_part.get_input_details()[0]['index'], np.transpose(fd_output_0, (0,2,1)))
+            #nms_part.invoke()
+            #nms_output = nms_part.get_tensor(nms_part.get_output_details()[0]['index'])
+            
             boxes = fd_output_1[fd_output_1[:, -1] > opt.conf, 1:5]
             classes = fd_output_1[fd_output_1[:, -1] > opt.conf, 5]
             scores = fd_output_1[fd_output_1[:, -1] > opt.conf, -1]
@@ -229,10 +232,10 @@ if __name__ == '__main__':
                 if scores[idx] > 0.1 :
                     size = (boxes[idx][2] - boxes[idx][0]) * (boxes[idx][3] - boxes[idx][1])
                     max_fd = boxes[idx]
-                    max_fd[0] = int(max_fd[0] * (960 / fd_model.get_input_details()[0]["shape"][2]))
-                    max_fd[2] = int(max_fd[2] * (960 / fd_model.get_input_details()[0]["shape"][2]))
-                    max_fd[1] = int(max_fd[1] * (960 / fd_model.get_input_details()[0]["shape"][1]))
-                    max_fd[3] = int(max_fd[3] * (960 / fd_model.get_input_details()[0]["shape"][1]))
+                    max_fd[0] = int(max_fd[0] * (1296 / fd_model.get_input_details()[0]["shape"][2]))
+                    max_fd[2] = int(max_fd[2] * (1296 / fd_model.get_input_details()[0]["shape"][2]))
+                    max_fd[1] = int(max_fd[1] * (1080 / fd_model.get_input_details()[0]["shape"][1]))
+                    max_fd[3] = int(max_fd[3] * (1080 / fd_model.get_input_details()[0]["shape"][1]))
                     max_fd = max_fd.astype(np.int32)
                     frame_vis = cv2.rectangle(frame_vis, (max_fd[0],max_fd[1]), (max_fd[2],max_fd[3]), colors[int(classes[idx])], 2)            
                     cv2.putText(frame_vis, str(round(scores[idx], 5)), (max_fd[0],max_fd[1] - 2), 0, 1, [225, 255, 255], thickness=2, lineType=cv2.LINE_AA)
@@ -243,12 +246,10 @@ if __name__ == '__main__':
             else:
                 cv2.putText(frame_vis, str(round(voting_score, 5)), (10, 30), 0, 1, [225, 255, 255], thickness=2, lineType=cv2.LINE_AA)
 
-            vid_writer.write(frame_vis)
+            cv2.imwrite(os.path.join(opt.save, vid_name), frame_vis)
         else:
             break
         frame_id += 1
-
-    vid_writer.release()
 
 unique_confidences.sort()
 print("unique_confidences : ", unique_confidences)

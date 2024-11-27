@@ -1,0 +1,38 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+                                                                              # Segmentation numbers
+      [../data/shutterstock_belt_allright/allright/train.txt, 900], # 1435          # O
+      [../data/Pitta2ND_DB_allright/allright/train.txt, 10000], # 14235        # O
+      [../data/smoke_non_seatbelt_filter/smoke_data_BFC/train.txt, 4200], # 20720          # X
+      [../data/smoke_non_seatbelt_filter/valid_pitta_smoke_BFC2/train.txt, 120], # 929             # X
+      [/mnt/nas/people/wheemyung.shin/data/AVATAR_Game_Beauty_Youtuber_body_crops/1-002/train.txt, 800], # 5784        # X
+      [/mnt/nas/people/wheemyung.shin/data/AVATAR_Game_Beauty_Youtuber_body_crops/2-001/train.txt, 2600], # 17230       # X
+      /mnt/nas/people/wheemyung.shin/data/seatbelt_TANG_after_inspection/train.txt, # 2483              # O
+      [/mnt/nas/people/wheemyung.shin/data/auto_BF_checks/auto_BF_check_0/train.txt, 160], # 1262                      # X
+      [/mnt/nas/people/wheemyung.shin/data/auto_BF_checks/auto_BF_check_1/train.txt, 240], # 1457                      # X
+      [/mnt/nas/people/wheemyung.shin/data/auto_BF_checks/auto_BF_check_2/train.txt, 80], # 540                       # X
+      /mnt/nas/people/wheemyung.shin/data/auto_det_seatbelt1_after_inspection/train.txt, # 1501                 # O
+      [/mnt/nas/people/wheemyung.shin/data/auto_det_seatbelt2_after_inspection/train.txt, 6154], # 9154        # O
+      /mnt/nas/people/wheemyung.shin/data/auto_det_seatbelt4_after_inspection/train.txt, # 1222                 # O
+      ../data/auto_seatbelt_data0429_day1_O/train.txt, # 6235                 # O
+      ../data/auto_seatbelt_data0429_day2_O/train_with_face.txt, # 2215   # O
+      [../data/roboflow_seatbelt_merge_after_inspection_allright/allright/train.txt, 5000], # 7589 # O
+      [../data/MAFA_concat_faceonly/train.txt, 2000], # 25876
+      [../data/MAFA_concat_faceonly/val.txt, 200], # 4935
+      [../data/crawl_person_faces/train.txt, 4000], # 33100
+
+      [../data/auto_seatbelt_1121_true/train.txt, 1500], # 1813
+      [../data/auto_seatbelt_pittaqasmoke_true/train.txt, 8500], # 13210
+      [../data/auto_seatbelt_1121_false/train.txt, 3000], # 6555
+      [../data/auto_seatbelt_pittaqasmoke_false/train.txt, 1000], # 2281
+      ] # 43069 + 10000 : 14400 + 4000 = 3 : 1
+val: [../data/auto_seatbelt_data0429_day1/test.txt]   
+test: [../data/auto_seatbelt_data0429_day1/test.txt]   
+
+# number of classes
+nc: 3
+
+# class names
+names: ['seatbelt', 'face', 'nothing']
+
+valid_idx: [0, 1, 999]

@@ -1,0 +1,39 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+    ../data/person_distortion_circular_crawl_person/train.txt, # 2490
+
+    ../data/fisheye_distortion_v2/ALL_distortion_ADAS_v2/train.txt, # 651
+    ../data/fisheye_distortion_v2/ALL_distortion_moreADAS_v2/train.txt, # 16476
+    ../data/fisheye_distortion_v2/person_distortion_coco_head_v2_v2/train.txt, # 6796
+    ../data/fisheye_distortion_v2/person_distortion_crowd_v2/train.txt, # 835
+    ../data/fisheye_distortion_v2/person_distortion_gangnam_street_BH_v2/train.txt, # 7941
+    ../data/fisheye_distortion_v2/person_distortion_wider_face_updated_v2/train.txt, # 258
+    ../data/fisheye_distortion_v2/person_distortion_widerperson_interpolated_v2/train.txt, # 2250
+
+    [../data/roboflow_topdownpeople/train.txt, 1000], # 1055
+    [../data/roboflow_fisheye/train.txt, 4400], #4576
+
+    [/mnt/nas/people/wheemyung.shin/data/coco_face_from_kpts_wholebody/train.txt, 8000], # 56673
+    [/mnt/nas/people/wheemyung.shin/data/coco_face_from_kpts_wholebody/val.txt, 400], # 2355
+    [/mnt/nas/people/wheemyung.shin/data/crawl_person/train.txt, 22000], # 37394
+
+    [../data/fisheye_person_telebit/train.txt, 14000], # 39336
+    ../data/telebit_person3/train.txt, # 9501
+
+    [../data/false_inside_youtubes_nothing/train.txt, 4000] # 7372
+] # 38000 + 4000
+
+val: [../data/auto_fisheye_telebit0930_person/train.txt]   # 8344
+test: [../data/auto_fisheye_telebit0930_person/train.txt]  # 8344
+
+# number of classes
+nc: 3
+
+# class names
+names: [
+    'fisheye_person',
+    'person',
+    'rider'
+]
+
+valid_idx: [0, 6, 7]

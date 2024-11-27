@@ -1,0 +1,30 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+    [../data/cityscapes_ADAS_moretest_indiatube_no_st_Fintube_advanced_easy09.txt, 9000], # 13059
+    [../data/false_inside_youtubes_hard/train.txt, 5500], # 71006
+    ../data/shutterstock_emptyhighway_frames/train.txt # 5548
+]
+val: [../data/IDD_FGVD/train.txt, # 787 images
+        ../data/IDDAW/train.txt, # 3905
+    ../data/idd20kII_v2/test.txt, # 8089
+    ../data/IDD_Segmentation_v2/test.txt] # 7974
+test: [../data/IDD_FGVD/train.txt, # 787 images
+        ../data/IDDAW/train.txt, # 3905
+    ../data/idd20kII_v2/test.txt, # 8089
+    ../data/IDD_Segmentation_v2/test.txt] # 7974
+
+# number of classes
+nc: 7
+
+# class names
+names: [
+    'person',
+    'car',
+    'truck',
+    'bus',
+    'motorcycle',
+    'bicycle',
+    'nothing'
+]
+
+valid_idx: [6, 8, 9, 10, 12, 13, 999]

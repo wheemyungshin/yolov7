@@ -125,7 +125,10 @@ def train(hyp, opt, device, tb_writer=None):
     test_path = data_dict['val']
 
     # Freeze
-    freeze = [f'model.{x}.' for x in (freeze if len(freeze) > 1 else range(freeze[0]))]  # parameter names to freeze (full or partial)
+    if len(freeze) > 0:
+        freeze = [f'model.{x}.' for x in freeze]  # parameter names to freeze (full or partial)
+    else:
+        freeze = []
     for k, v in model.named_parameters():
         v.requires_grad = True  # train all layers
         if any(x in k for x in freeze):
@@ -311,7 +314,7 @@ def train(hyp, opt, device, tb_writer=None):
                                             hyp=hyp, augment=True, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                             world_size=opt.world_size, workers=opt.workers,
                                             image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), 
-                                            valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg, gray=opt.gray,
+                                            valid_idx=valid_idx, pose_data=pose_data, load_seg=True, gray=opt.gray,
                                             ratio_maintain=(not opt.no_ratio_maintain), minmax_label_size_limit=minmax_label_size_limit)
     mlc = np.concatenate(dataset.labels, 0)[:, 0].max()  # max label class
     nb = len(dataloader)  # number of batches
@@ -323,7 +326,7 @@ def train(hyp, opt, device, tb_writer=None):
         testloader = create_dataloader(test_path, tuple(opt.test_size), batch_size * 2, gs, opt,  # testloader
                                        cache=opt.cache_images and not opt.notest, rect=opt.rect, rank=-1,
                                        world_size=opt.world_size, workers=opt.workers,
-                                       prefix=colorstr('val: '), valid_idx=valid_idx, load_seg=opt.seg, gray=opt.gray,
+                                       prefix=colorstr('val: '), valid_idx=valid_idx, load_seg=True, gray=opt.gray,
                                        ratio_maintain=(not opt.no_ratio_maintain))[0]
 
         if not opt.resume:
@@ -424,7 +427,7 @@ def train(hyp, opt, device, tb_writer=None):
                                             hyp=hyp, augment=True, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                             world_size=opt.world_size, workers=opt.workers,
                                             image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), 
-                                            valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg, gray=opt.gray,
+                                            valid_idx=valid_idx, pose_data=pose_data, load_seg=True, gray=opt.gray,
                                             ratio_maintain=(not opt.no_ratio_maintain), minmax_label_size_limit=minmax_label_size_limit)
         '''
         
@@ -434,7 +437,7 @@ def train(hyp, opt, device, tb_writer=None):
             dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, opt,
                                                     hyp=hyp, augment=False, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                                     world_size=opt.world_size, workers=opt.workers,
-                                                    image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg, gray=opt.gray,
+                                                    image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data, load_seg=True, gray=opt.gray,
                                                     ratio_maintain=(not opt.no_ratio_maintain))
             
             print("STOP DISTILLATION!")
@@ -451,7 +454,7 @@ def train(hyp, opt, device, tb_writer=None):
             dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, opt,
                                                     hyp=hyp, augment=False, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                                     world_size=opt.world_size, workers=opt.workers,
-                                                    image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data, load_seg=opt.seg, gray=opt.gray,
+                                                    image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '), valid_idx=valid_idx, pose_data=pose_data, load_seg=True, gray=opt.gray,
                                                     ratio_maintain=(not opt.no_ratio_maintain))
 
         mloss = torch.zeros(4, device=device)  # mean losses
@@ -784,7 +787,7 @@ if __name__ == '__main__':
     parser.add_argument('--bbox_interval', type=int, default=-1, help='Set bounding-box image logging interval for W&B')
     parser.add_argument('--save_period', type=int, default=-1, help='Log model after every "save_period" epoch')
     parser.add_argument('--artifact_alias', type=str, default="latest", help='version of dataset artifact to be used')
-    parser.add_argument('--freeze', nargs='+', type=int, default=[0], help='Freeze layers: backbone of yolov7=50, first3=0 1 2')
+    parser.add_argument('--freeze', nargs='+', type=int, default=[], help='Freeze layers: backbone of yolov7=50, first3=0 1 2')
     parser.add_argument('--v5-metric', action='store_true', help='assume maximum recall as 1.0 in AP calculation')
     parser.add_argument('--close-mosaic', type=int, default=0, help='stop mosaic augmentation and distillation')
     parser.add_argument('--close-data-generation', type=int, default=300, help='stop mosaic augmentation and distillation')

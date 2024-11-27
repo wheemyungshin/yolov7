@@ -1,0 +1,19 @@
+# train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
+train: [
+    ../data/person_distortion/train_nohuge.txt, # 24193
+    [../data/fisheye_person_telebit/train.txt, 18000],  # 39336
+]
+val: [../data/fisheye_person_telebit/val.txt]  # 13644
+test: [../data/fisheye_person_telebit/val.txt]  # 13644
+
+# number of classes
+nc: 3
+
+# class names
+names: [
+    'fisheye_person',
+    'person',
+    'rider'
+]
+
+valid_idx: [0, 6, 7]

@@ -23,6 +23,15 @@ import numpy as np
 
 from collections import defaultdict
 
+def _iou(A,B):
+    low = np.s_[...,:2]
+    high = np.s_[...,2:4]
+    A,B = A[:, None].copy(),B[None].copy()
+    A[high] += 1; B[high] += 1
+    intrs = (np.maximum(0,np.minimum(A[high],B[high])
+                        -np.maximum(A[low],B[low]))).prod(-1)
+    return intrs / ((A[high]-A[low]).prod(-1)+(B[high]-B[low]).prod(-1)-intrs)
+
 def detect(save_img=False):
     bbox_num = 0
     bbox_num_per_cls = defaultdict(int)
@@ -33,6 +42,8 @@ def detect(save_img=False):
     bbox_num_per_size[1] = 0
     print(bbox_num_per_size)
     '''
+    prev_det = None
+
     source, weights, view_img, save_txt, imgsz, trace, qat = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, not opt.no_trace, opt.qat
     cfg, nc = opt.cfg, opt.nc
     save_img = not opt.nosave and not source.endswith('.txt')  # save inference images
@@ -46,7 +57,7 @@ def detect(save_img=False):
     # Initialize
     set_logging()
     device = select_device(opt.device)
-    half = device.type != 'cpu'  # half precision only supported on CUDA
+    half = True #device.type != 'cpu'  # half precision only supported on CUDA
     print("HALF: ", half)
 
     # Load model
@@ -192,6 +203,19 @@ def detect(save_img=False):
         #pred = non_max_suppression_seg(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms, nm=len(names))#, nm=32)
         t3 = time_synchronized()
 
+        # score 보정
+        if opt.tracking:
+            score_update = 0.3
+            if prev_det is not None:
+                pred_xyxy = pred[0][:, :4].clone().detach().cpu().float().numpy()
+
+                tracking_iou_matrix = _iou(prev_det, pred_xyxy)
+                tracking_iou_thr = 0.5
+                tracking_valid_idx = np.nonzero(np.max(tracking_iou_matrix, axis=0)>=tracking_iou_thr)[0]
+                pred[0][tracking_valid_idx, 4] = pred[0][tracking_valid_idx, 4]+score_update
+                pred[0] = pred[0][pred[0][:,4] >= opt.conf_thres]
+        # score 보정 끝
+
         # Apply Classifier
         if classify:
             pred = apply_classifier(pred, modelc, img, im0s)
@@ -237,6 +261,7 @@ def detect(save_img=False):
                 gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
                 gn_to = torch.tensor(img.shape)[[3, 2, 3, 2]] 
                 if len(det):
+                    prev_det = det[:, :4].clone().detach().cpu().float().numpy()
                     print(det)
 
                     if opt.seg:
@@ -449,6 +474,7 @@ if __name__ == '__main__':
     parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
     parser.add_argument('--nc', type=int, default=0, help='number of class')
     parser.add_argument('--qat', action='store_true', help='Quantization-Aware-Training')
+    parser.add_argument('--tracking', action='store_true', help='Use IoU based score-rescaling')
     
     opt = parser.parse_args()
     print(opt)

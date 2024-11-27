@@ -28,6 +28,7 @@ converted_synthetic_cups/
 detected_cups_coco_and_surreal/
 Yolov7Tiny_Experiment/
 save_dir_per_map/
+weights*/
 
 storage.googleapis.com
 runs/*
