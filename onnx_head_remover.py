@@ -696,5 +696,4 @@ if __name__ == '__main__':
 
         for node in nodes:
             print(node.name, ' : ', node.output)
-
         onnx.save(onnx_model, os.path.join(path, opt.save_tag+model_name))

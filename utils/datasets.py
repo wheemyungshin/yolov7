@@ -45,32 +45,6 @@ for orientation in ExifTags.TAGS.keys():
     if ExifTags.TAGS[orientation] == 'Orientation':
         break
 
-# cv2.imread(path)
-def face_bottom_crop(path):
-    face_label_path = path.replace('/images/','/labels/').replace('.jpg','.txt').replace('.png','.txt')
-
-    top_face_y_center = 1
-    top_belt_y_top = 1
-    with open(face_label_path, 'r') as f:
-        xyxy_lines = f.readlines()
-        for xyxy_line in xyxy_lines:
-            c, x, y, w, h = xyxy_line.strip().split(' ')
-            if c == '1': # face
-                if float(y) < top_face_y_center:
-                    top_face_y_center = float(y)
-            if c == '0':
-                if float(y)-float(h)/2 < top_belt_y_top:
-                    top_belt_y_top = float(y)-float(h)/2
-
-    
-    if top_face_y_center >= 1:
-        if top_belt_y_top >= 1:
-            top_face_y_center = 0.2+random.random()*0.1
-        else:
-            top_face_y_center = max((0.3+random.random()*0.5)*top_belt_y_top, 0.2+random.random()*0.1)
-
-    return top_face_y_center
-
 def self_overlap(A,B): # not IoU!
     A_volume = (A[0, 2]-A[0, 0])*(A[0, 3]-A[0, 1])
     low = np.s_[...,:2]
@@ -916,7 +890,6 @@ class LoadImages:  # for inference
         if img0 is None:
             return None, None, None, None
         
-        #img0 = img0[int(img0.shape[0]*0.25):, int(img0.shape[1]*0.25):]
 
         # Padded resize
         if self.ratio_maintain:
@@ -1096,8 +1069,8 @@ def img2seg_paths(img_paths):
         is_seg = False
         for keyward in ["/auto_det_seatbelt", "/allright/", "/seatbelt_TANG_after_inspection/", "/auto_seatbelt_data0429_day1_O/", "/auto_seatbelt_data0429_day2_O/", "/belt_rendered/"]:
             if keyward in seg_path:
-                is_seg = True
-                #is_seg = False
+                #is_seg = True
+                is_seg = False
 
         if os.path.exists(seg_path):# and is_seg:
             seg_list.append(seg_path)
@@ -1459,7 +1432,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         is_g_images = False
                     nf += 1  # label found
                     with open(lb_file, 'r') as f:
-                        right_belt_segment = True
+                        right_belt_segment = False
                         l = [x.split() for x in f.read().strip().splitlines()]
                         if load_seg:  # is segment
                             if any([len(x) > 8 for x in l]):  # is segment
@@ -1607,24 +1580,18 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 poses = np.concatenate((poses, poses2), 0)
 
             if hyp is not None and random.random() < hyp.get('face_cut_out', 0):
-                for belt in labels[labels[:, 0]==0, 1:]:
-                    face = [
-                            belt[0]*0.8+belt[2]*0.2,
-                            belt[1]*0.5,
-                            belt[0]*0.2+belt[2]*0.8,
-                            belt[1],
-                            ]
+                for face in labels[labels[:, 0]==1, 1:]:
                     width_temp = face[2] - face[0]
                     height_temp = face[3] - face[1]
-                    cutx = face[0]+(0.8*random.random()+0.1)*width_temp
-                    cuty = face[1]+(0.8*random.random()+0.1)*height_temp
-                    cutw = 0.9*width_temp*random.random()
-                    cuth = 0.9*height_temp*random.random()
+                    cutx = face[0]+(1.2*random.random()-0.1)*width_temp
+                    cuty = face[1]+(1.2*random.random()-0.1)*height_temp
+                    cutw = 0.7*width_temp*random.random()
+                    cuth = 0.7*height_temp*random.random()
                     cutx_min = int(min(max(cutx - cutw/2, 0), img.shape[1]))
                     cuty_min = int(min(max(cuty - cuth/2, 0), img.shape[0]))
                     cutx_max = int(min(max(cutx + cutw/2, 0), img.shape[1]))
                     cuty_max = int(min(max(cuty + cuth/2, 0), img.shape[0]))
-                    img[cuty_min : cuty_max, cutx_min : cutx_max, :] = torch.from_numpy(np.random.rand(cuty_max-cuty_min, cutx_max-cutx_min, 3)*255)
+                    img[cuty_min : cuty_max, cutx_min : cutx_max, :] = random.random()*255
             elif hyp is not None and random.random() < hyp.get('cut_out', 0):
                 cutx = (0.8*random.random()+0.1)*img.shape[1]
                 cuty = (0.8*random.random()+0.1)*img.shape[0]
@@ -1635,6 +1602,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 cutx_max = int(min(max(cutx + cutw/2, 0), img.shape[1]))
                 cuty_max = int(min(max(cuty + cuth/2, 0), img.shape[0]))
                 img[cuty_min : cuty_max, cutx_min : cutx_max, :] = random.random()*255
+
         else:
             # Load image
             #img, (h0, w0), (h, w) = load_image(self, index, ratio_maintain=self.ratio_maintain, hyp=hyp)
@@ -1645,14 +1613,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 img, labels = random_distortion(img, labels, (h, w), k1_range=hyp['distortion'][0], k2_range=hyp['distortion'][1])
 
             segments = self.segments[index].copy()
-            top_face_y_center = face_bottom_crop(self.img_files[index])
-            if len(segments):
-                segments_new = []
-                for segment in segments:
-                    segment_new = segment.copy()
-                    segment_new[:, 1] = np.clip(segment_new[:, 1]-top_face_y_center, 0, 1)*1/(1-top_face_y_center)
-                    segments_new.append(segment_new)
-                segments = segments_new
             #labels = self.labels[index].copy()
 
             #img, labels = natural_minmax_crop(img, labels, img.shape[:2], self.min_label_size_limit, self.max_label_size_limit)
@@ -1675,8 +1635,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                         for face in labels[labels[:, 0]==1, 1:]:
                             width_temp = face[2] - face[0]
                             height_temp = face[3] - face[1]
-                            cutx = face[0]+(0.8*random.random()+0.1)*width_temp
-                            cuty = face[1]+(0.8*random.random()+0.1)*height_temp
+                            cutx = face[0]+(1.2*random.random()-0.1)*width_temp
+                            cuty = face[1]+(1.2*random.random()-0.1)*height_temp
                             cutw = 0.8*width_temp*random.random()
                             cuth = 0.8*height_temp*random.random()
                             cutx_min = int(min(max(cutx - cutw/2, 0), w))
@@ -2796,7 +2756,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             label_ratio = np.maximum((label_out[4]/label_out[5]).detach().cpu().numpy(), (label_out[5]/label_out[4]).detach().cpu().numpy())
             seg_size = np.sum(segment_out.detach().cpu().numpy() != 0)
             
-            if not (seg_size / label_size > 0.8 and label_ratio > 2):
+            if not (seg_size / label_size > 0.6 and label_ratio > 2):
                 valid_labels[valid_idx] = label_out
                 valid_segments[valid_idx] = segment_out
                 valid_num = valid_num + 1
@@ -2894,10 +2854,6 @@ def load_image_and_label(self, index, ratio_maintain=True, hyp=None):
         path = self.img_files[index]
         img = cv2.imread(path)  # BGR
 
-        top_face_y_center = face_bottom_crop(path)
-        h0, w0 = img.shape[:2]
-        img = img[int(top_face_y_center*h0):]
-
         # erase rider
         '''
         if random.random() < 0.5:
@@ -2920,7 +2876,7 @@ def load_image_and_label(self, index, ratio_maintain=True, hyp=None):
         else:
             base_size = [self.img_size, self.img_size]
 
-        #img, labels = natural_minmax_crop(img, labels, base_size, self.min_label_size_limit, self.max_label_size_limit)
+        img, labels = natural_minmax_crop(img, labels, base_size, self.min_label_size_limit, self.max_label_size_limit)
 
         assert img is not None, 'Image Not Found ' + path
 
@@ -3064,15 +3020,6 @@ def load_mosaic(self, hyp, index):
         # Labels
         #labels, segments = self.labels[index].copy(), self.segments[index].copy()
         segments = self.segments[index].copy()
-        top_face_y_center = face_bottom_crop(self.img_files[index])
-        if len(segments):
-            segments_new = []
-            for segment in segments:
-                segment_new = segment.copy()
-                segment_new[:, 1] = np.clip(segment_new[:, 1]-top_face_y_center, 0, 1)*1/(1-top_face_y_center)
-                segments_new.append(segment_new)
-            segments = segments_new
-
 
         #img, labels = natural_minmax_crop(img, labels, img.shape[:2], self.min_label_size_limit, self.max_label_size_limit)
 
@@ -3303,14 +3250,6 @@ def load_mosaic9(self, hyp, index):
         # Labels
         #labels, segments = self.labels[index].copy(), self.segments[index].copy()
         segments = self.segments[index].copy()
-        top_face_y_center = face_bottom_crop(self.img_files[index])
-        if len(segments):
-            segments_new = []
-            for segment in segments:
-                segment_new = segment.copy()
-                segment_new[:, 1] = np.clip(segment_new[:, 1]-top_face_y_center, 0, 1)*1/(1-top_face_y_center)
-                segments_new.append(segment_new)
-            segments = segments_new
 
         #img, labels = natural_minmax_crop(img, labels, img.shape[:2], self.min_label_size_limit, self.max_label_size_limit)
 
